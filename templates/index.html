@@ -124,7 +124,7 @@ http://www.templatemo.com/preview/templatemo_415_dashboard
         </div>
       </footer>
     </div>
-
+    {% block scripts %}
     <script src="{{ url_for('static', filename='template/js/jquery.min.js') }}"></script>
     <script src="{{ url_for('static', filename='template/js/bootstrap.min.js') }}"></script>
     <script src="{{ url_for('static', filename='template/js/Chart.min.js') }}"></script>
@@ -179,5 +179,6 @@ http://www.templatemo.com/preview/templatemo_415_dashboard
       // });
   });
   </script>
+  {% endblock %}
 </body>
 </html>

@@ -5,100 +5,31 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
-  <li><a href="{{ url_for('analysis.analysis') }}">Maps</a></li>
-  <li class="active">Location</li>
+  <li class="active">분석</li>
 </ol>
-<h1>analysis</h1>
+<h1>분석</h1>
 
-<div class="templatemo-maps">
-  <div class="row">
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_world" class="vmap"></div>
-        </div>
+<div class="row">
+  <!-- 왼쪽 차트 -->
+  <div class="col-md-6 col-sm-12 margin-bottom-30">
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        <h4 class="panel-title">주식 차트 1</h4>
       </div>
-    </div>
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_usa" class="vmap"></div>
-        </div>
+      <div class="panel-body" style="height: 400px;">
+        <canvas id="stockChartLeft" style="width:100%; height:100%;"></canvas>
       </div>
     </div>
   </div>
 
-  <div class="row">
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_asia" class="vmap"></div>
-        </div>
+  <!-- 오른쪽 차트 -->
+  <div class="col-md-6 col-sm-12 margin-bottom-30">
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        <h4 class="panel-title">주식 차트 2</h4>
       </div>
-    </div>
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_europe" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="row">
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_australia" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_africa" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="row">
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_northamerica" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_southamerica" class="vmap"></div>
-        </div>
+      <div class="panel-body" style="height: 400px;">
+        <canvas id="stockChartRight" style="width:100%; height:100%;"></canvas>
       </div>
     </div>
   </div>
@@ -107,15 +38,64 @@
 
 {% block scripts %}
 {{ super() }}
-<script src="{{ url_for('static', filename='jqvmap/jquery.vmap.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/jquery.vmap.world.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/jquery.vmap.usa.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.asia.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.europe.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.australia.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.africa.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.north-america.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.south-america.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/data/jquery.vmap.sampledata.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  // 왼쪽 차트 초기화
+  const ctxLeft = document.getElementById('stockChartLeft').getContext('2d');
+  const stockChartLeft = new Chart(ctxLeft, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: '차트 1 종가',
+        data: [],
+        borderColor: 'rgba(54, 162, 235, 1)',
+        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+        fill: true,
+        tension: 0.1
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: { x: { display: true }, y: { beginAtZero: false } }
+    }
+  });
 
+  // 오른쪽 차트 초기화
+  const ctxRight = document.getElementById('stockChartRight').getContext('2d');
+  const stockChartRight = new Chart(ctxRight, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: '차트 2 종가',
+        data: [],
+        borderColor: 'rgba(255, 99, 132, 1)',
+        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+        fill: true,
+        tension: 0.1
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: { x: { display: true }, y: { beginAtZero: false } }
+    }
+  });
+
+  // 차트 업데이트 함수 (차트명, data 객체)
+  // data = { labels: [...], prices: [...] }
+  function updateStockChart(chart, data) {
+    if (!data || !data.labels || !data.prices) {
+      console.error("올바른 데이터 객체를 넣어주세요.");
+      return;
+    }
+    chart.data.labels = data.labels;
+    chart.data.datasets[0].data = data.prices;
+    chart.update();
+  }
+
+  // 예시: {labels부분 받아온 데이터로 변경해주면 됨}
+  updateStockChart(stockChartLeft, {labels: ['1월','2월'], prices: [100, 200]});
+  updateStockChart(stockChartRight, {labels: ['1월','2월'], prices: [150, 250]});
+</script>
 {% endblock %}
