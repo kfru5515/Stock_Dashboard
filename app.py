@@ -5,43 +5,50 @@ from blueprints.join import join_bp
 from blueprints.data import data_bp
 from blueprints.auth import auth_bp
 import FinanceDataReader as fdr
+import pandas as pd
 
 
-data_bp = Blueprint('data', __name__, url_prefix='/data')
-
-@data_bp.route('/stocks')
-def stocks():
-    # 예시: 코스피 지수 데이터 가져오기
-    df = fdr.DataReader('KS11')
-    # 데이터 일부만 json 변환 (예: 최근 5개)
-    data = df.tail(5).reset_index().to_dict(orient='records')
-    return jsonify(data)
-
-@data_bp.route('/stock')
-def stock():
-    # 특정 종목 예시: 삼성전자(005930)
-    df = fdr.DataReader('005930')
-    data = df.tail(5).reset_index().to_dict(orient='records')
-    return jsonify(data)
-
-@data_bp.route('/kospi')
-def kospi():
-    df = fdr.DataReader('KS11')
-    data = df.tail(5).reset_index().to_dict(orient='records')
-    return jsonify(data)
 
 
 app = Flask(__name__)
 app.secret_key = '1234'
 
 @app.route('/')
-def home():
-    return render_template('index_main.html')
-
 @app.route('/index')
 def index():
-    return render_template('index.html')
+    # 1. 데이터 가져오기 (최근 180일 정도)
+    kospi_df = fdr.DataReader('KS11').tail(180).reset_index()
+    kosdaq_df = fdr.DataReader('KQ11').tail(180).reset_index()
 
+    # 2. 함수로 일/주/월봉 구성
+    def resample_data(df, rule):
+        df['Date'] = pd.to_datetime(df['Date'])
+        df.set_index('Date', inplace=True)
+        df_resampled = df['Close'].resample(rule).last().dropna()
+        return [{'Date': d.strftime('%Y-%m-%d'), 'Close': float(c)} for d, c in df_resampled.items()]
+
+    # 3. 데이터 포맷팅 (30개만 잘라서 사용)
+    kospi_daily = kospi_df.tail(30)[['Date', 'Close']]
+    kosdaq_daily = kosdaq_df.tail(30)[['Date', 'Close']]
+
+    kospi_data = kospi_daily.to_dict(orient='records')
+    kosdaq_data = kosdaq_daily.to_dict(orient='records')
+    kospi_weekly_data = resample_data(kospi_df.copy(), 'W')
+    kosdaq_weekly_data = resample_data(kosdaq_df.copy(), 'W')
+    kospi_monthly_data = resample_data(kospi_df.copy(), 'M')
+    kosdaq_monthly_data = resample_data(kosdaq_df.copy(), 'M')
+
+    return render_template('index.html',
+        kospi_data=kospi_data,
+        kosdaq_data=kosdaq_data,
+        kospi_weekly_data=kospi_weekly_data,
+        kosdaq_weekly_data=kosdaq_weekly_data,
+        kospi_monthly_data=kospi_monthly_data,
+        kosdaq_monthly_data=kosdaq_monthly_data
+    )
+
+
+    
 app.register_blueprint(auth_bp, url_prefix='/auth')
 
 app.register_blueprint(analysis_bp)

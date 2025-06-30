@@ -1,16 +1,14 @@
 <!DOCTYPE html>
+<html lang="ko">
 <head>
   <meta charset="utf-8">
-  <!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"><![endif]-->
   <title>Dashboard, Free HTML5 Admin Template</title>
-  <meta name="keywords" content="" />
-  <meta name="description" content="" />
   <meta name="viewport" content="width=device-width">        
   <link rel="stylesheet" href="{{ url_for('static', filename='template/css/templatemo_main.css') }}">
-  <!-- 
-Dashboard Template 
-http://www.templatemo.com/preview/templatemo_415_dashboard
--->
+  <!-- Dashboard Template http://www.templatemo.com/preview/templatemo_415_dashboard -->
+  
+  <!-- Chart.js CDN (최신 3.x 버전) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 {% with messages = get_flashed_messages(with_categories=True) %}
@@ -23,161 +21,175 @@ http://www.templatemo.com/preview/templatemo_415_dashboard
   {% endif %}
 {% endwith %}
 
+<div class="navbar navbar-inverse" role="navigation">
+  <div class="navbar-header">
+    <div class="logo"><h1>Final Project</h1></div>
+    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+      <span class="sr-only">Toggle navigation</span>
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+    </button> 
+  </div>   
+</div>
 
-  <div class="navbar navbar-inverse" role="navigation">
-      <div class="navbar-header">
-        <div class="logo"><h1>Final Project</h1></div>
-        <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
-          <span class="sr-only">Toggle navigation</span>
-          <span class="icon-bar"></span>
-          <span class="icon-bar"></span>
-          <span class="icon-bar"></span>
-        </button> 
-      </div>   
-    </div>
-    <div class="template-page-wrapper">
-      <div class="navbar-collapse collapse templatemo-sidebar">
-        <ul class="templatemo-sidebar-menu">
-          <li>
-            <form class="navbar-form">
-              <input type="text" class="form-control" id="templatemo_search_box" placeholder="Search...">
-              <span class="btn btn-default">검색</span>
-            </form>
-          </li>
-          <li class="active"><a href="{{ url_for('index') }}"><i class="fa fa-home"></i>HOME</a></li>
-          <li class="sub">
-            <a href="javascript:;">
-              <i class="fa fa-database"></i> 종목정보 <div class="pull-right"><span class="caret"></span></div>
-            </a>
-            <ul class="templatemo-submenu">
-              <li><a href="#">1</a></li>
-              <li><a href="#">2</a></li>
-              <li><a href="#">3</a></li>
-            </ul>
-          </li>
-          <li><a href="{{ url_for('data.data') }}"><i class="fa fa-cubes"></i>차트</a></li>
-          <li><a href="{{ url_for('analysis.analysis') }}"><i class="fa fa-map-marker"></i>비교분석</a></li>
-          <li><a href="{{ url_for('tables.tables') }}"><i class="fa fa-users"></i>사용자 정보</a></li>
-          <li><a href="{{ url_for('join.join') }}"><i class="fa fa-cog"></i>회원가입</a></li>
-          {% if session.get('user') %}
-            <li>
-              <a href="{{ url_for('auth.logout') }}" onclick="return confirm('로그아웃 하시겠어요?');">
-                <i class="fa fa-sign-out"></i> 로그아웃
-              </a>
-            </li>
-          {% else %}
-            <li>
-              <a href="{{ url_for('auth.login') }}">
-                <i class="fa fa-sign-in"></i> 로그인
-              </a>
-            </li>
-          {% endif %}
-
+<div class="template-page-wrapper">
+  <div class="navbar-collapse collapse templatemo-sidebar">
+    <ul class="templatemo-sidebar-menu">
+      <li>
+        <form class="navbar-form">
+          <input type="text" class="form-control" id="templatemo_search_box" placeholder="Search...">
+          <span class="btn btn-default">검색</span>
+        </form>
+      </li>
+      <li class="active"><a href="{{ url_for('index') }}"><i class="fa fa-home"></i>HOME</a></li>
+      <li class="sub">
+        <a href="javascript:;">
+          <i class="fa fa-database"></i> 종목정보 <div class="pull-right"><span class="caret"></span></div>
+        </a>
+        <ul class="templatemo-submenu">
+          <li><a href="#">1</a></li>
+          <li><a href="#">2</a></li>
+          <li><a href="#">3</a></li>
         </ul>
-      </div><!--/.navbar-collapse -->
+      </li>
+      <li><a href="{{ url_for('data.data_main') }}"><i class="fa fa-cubes"></i>차트</a></li>
+      <li><a href="{{ url_for('analysis.analysis') }}"><i class="fa fa-map-marker"></i>비교분석</a></li>
+      <li><a href="{{ url_for('tables.tables') }}"><i class="fa fa-users"></i>사용자 정보</a></li>
+      <li><a href="{{ url_for('join.join') }}"><i class="fa fa-cog"></i>회원가입</a></li>
+      {% if session.get('user') %}
+        <li>
+          <a href="{{ url_for('auth.logout') }}" onclick="return confirm('로그아웃 하시겠어요?');">
+            <i class="fa fa-sign-out"></i> 로그아웃
+          </a>
+        </li>
+      {% else %}
+        <li>
+          <a href="{{ url_for('auth.login') }}">
+            <i class="fa fa-sign-in"></i> 로그인
+          </a>
+        </li>
+      {% endif %}
+    </ul>
+  </div><!--/.navbar-collapse -->
 
-      <div class="templatemo-content-wrapper">
-        <div class="templatemo-content">
-          {% block content %}
-          <ol class="breadcrumb">
-            <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
-            <li><a href="{{ url_for('index') }}">Dashboard</a></li>
-            <li class="active">Overview</li>
-            <li><a href="{{ url_for('auth.login') }}">Sign In Form</a></li>
-          </ol>
-          <h1>Dashboard</h1>
+  <div class="templatemo-content-wrapper">
+    <div class="templatemo-content">
+      {% block content %}
+      <ol class="breadcrumb">
+        <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
+        <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+        <li class="active">Overview</li>
+      </ol>
+      <h1>Dashboard</h1>
 
-          <div style="display: flex; flex-direction: column; gap: 20px; height: 600px;">
-            <!-- 위쪽 영역 -->
-            <div style="flex: 1; display: flex; gap: 20px;">
-              <div style="flex: 1; border: 1px solid #ccc; padding: 10px;"></div>
-              <div style="flex: 1; border: 1px solid #ccc; padding: 10px;"></div>
-            </div>
-        
-            <!-- 아래쪽 영역 -->
-            <div style="flex: 1; display: flex; gap: 20px;">
-              <div style="flex: 1; border: 1px solid #ccc; padding: 10px;"></div>
-              <div style="flex: 1; border: 1px solid #ccc; padding: 10px;"></div>
-            </div>
-          </div>
-          {% endblock %}   
+      <div style="display: flex; gap: 30px;">
+        <div style="flex: 1;">
+          <h3>KOSPI 종가 (최근 30일)</h3>
+          <canvas id="kospiChart" width="600" height="300"></canvas>
+          <div style="margin-top: 10px;">
+            <button class="btn-kospi" data-type="daily">일봉</button>
+            <button class="btn-kospi" data-type="weekly">주봉</button>
+            <button class="btn-kospi" data-type="monthly">월봉</button>
+          </div> <!-- 버튼  -->
+        </div>
+        <div style="flex: 1;">
+          <h3>KOSDAQ 종가 (최근 30일)</h3>
+          <canvas id="kosdaqChart" width="600" height="300"></canvas>
+          <div style="margin-top: 10px;">
+            <button class="btn-kosdaq" data-type="daily">일봉</button>
+            <button class="btn-kosdaq" data-type="weekly">주봉</button>
+            <button class="btn-kosdaq" data-type="monthly">월봉</button>
+          </div> 
         </div>
       </div>
-      <!-- Modal -->
-      <div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-          <div class="modal-content">
-            <div class="modal-header">
-              <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
-              <h4 class="modal-title" id="myModalLabel">Are you sure you want to sign out?</h4>
-            </div>
-            <div class="modal-footer">
-              <a href="{{ url_for('auth.logout')}}" class="btn btn-primary">Yes</a>
-              <button type="button" class="btn btn-default" data-dismiss="modal">No</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <footer class="templatemo-footer">
-        <div class="templatemo-copyright">
-          <p>Copyright &copy; 2084 Your Company Name</p>
-        </div>
-      </footer>
+
+      {% endblock %}
     </div>
+  </div>
 
-    <script src="{{ url_for('static', filename='template/js/jquery.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='template/js/bootstrap.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='template/js/Chart.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='template/js/templatemo_script.js') }}"></script>
-    <script type="text/javascript">
-    // Line chart
-    var randomScalingFactor = function(){ return Math.round(Math.random()*100)};
-    var lineChartData = {
-      labels : ["January","February","March","April","May","June","July"],
-      datasets : [
-      {
-        label: "My First dataset",
-        fillColor : "rgba(220,220,220,0.2)",
-        strokeColor : "rgba(220,220,220,1)",
-        pointColor : "rgba(220,220,220,1)",
-        pointStrokeColor : "#fff",
-        pointHighlightFill : "#fff",
-        pointHighlightStroke : "rgba(220,220,220,1)",
-        data : [randomScalingFactor(),randomScalingFactor(),randomScalingFactor(),randomScalingFactor(),randomScalingFactor(),randomScalingFactor(),randomScalingFactor()]
-      },
-      {
-        label: "My Second dataset",
-        fillColor : "rgba(151,187,205,0.2)",
-        strokeColor : "rgba(151,187,205,1)",
-        pointColor : "rgba(151,187,205,1)",
-        pointStrokeColor : "#fff",
-        pointHighlightFill : "#fff",
-        pointHighlightStroke : "rgba(151,187,205,1)",
-        data : [randomScalingFactor(),randomScalingFactor(),randomScalingFactor(),randomScalingFactor(),randomScalingFactor(),randomScalingFactor(),randomScalingFactor()]
+  <footer class="templatemo-footer">
+    <div class="templatemo-copyright">
+      <p>Copyright &copy; 2084 Your Company Name</p>
+    </div>
+  </footer>
+</div>
+
+<script src="{{ url_for('static', filename='template/js/jquery.min.js') }}"></script>
+<script src="{{ url_for('static', filename='template/js/bootstrap.min.js') }}"></script>
+<script src="{{ url_for('static', filename='template/js/templatemo_script.js') }}"></script>
+
+<script>
+  // Flask에서 넘긴 데이터를 JS 객체로 변환
+  const kospiData = {{ kospi_data | tojson }};
+  const kosdaqData = {{ kosdaq_data | tojson }};
+
+  // 날짜(YYYY-MM-DD)만 추출 및 종가 배열 생성 함수
+  function parseChartData(data) {
+  return {
+    labels: data.map(item => {
+      const d = new Date(item.Date);
+      return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+    }),
+    closes: data.map(item => item.Close)
+  };
+}
+
+  const kospiChartData = parseChartData(kospiData);
+  const kosdaqChartData = parseChartData(kosdaqData);
+
+  // 코스피 차트 생성
+  const ctxKospi = document.getElementById('kospiChart').getContext('2d');
+  new Chart(ctxKospi, {
+    type: 'line',
+    data: {
+      labels: kospiChartData.labels,
+      datasets: [{
+        label: 'KOSPI 종가',
+        data: kospiChartData.closes,
+        borderColor: 'rgba(54, 162, 235, 1)',
+        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: false }
       }
-      ]
-
     }
-
-    window.onload = function(){
-      var ctx_line = document.getElementById("templatemo-line-chart").getContext("2d");
-      window.myLine = new Chart(ctx_line).Line(lineChartData, {
-        responsive: true
-      });
-    };
-
-    $('#myTab a').click(function (e) {
-      e.preventDefault();
-      $(this).tab('show');
-    });
-
-    $('#loading-example-btn').click(function () {
-      var btn = $(this);
-      btn.button('loading');
-      // $.ajax(...).always(function () {
-      //   btn.button('reset');
-      // });
   });
-  </script>
+
+  // 코스닥 차트 생성
+  const ctxKosdaq = document.getElementById('kosdaqChart').getContext('2d');
+  new Chart(ctxKosdaq, {
+    type: 'line',
+    data: {
+      labels: kosdaqChartData.labels,
+      datasets: [{
+        label: 'KOSDAQ 종가',
+        data: kosdaqChartData.closes,
+        borderColor: 'rgba(255, 99, 132, 1)',
+        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: false }
+      }
+    }
+  });
+</script>
+
 </body>
 </html>
