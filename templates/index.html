@@ -83,26 +83,88 @@
       </ol>
       <h1>Dashboard</h1>
 
-      <div style="display: flex; gap: 30px;">
-        <div style="flex: 1;">
+      <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+        <div style="flex: 1 1 300px; min-width: 300px;">
           <h3>KOSPI 종가 (최근 30일)</h3>
-          <canvas id="kospiChart" width="600" height="300"></canvas>
+          <canvas id="kospiChart" style="width: 100%; height: 300px;"></canvas>
           <div style="margin-top: 10px;">
             <button class="btn-kospi" data-type="daily">일봉</button>
             <button class="btn-kospi" data-type="weekly">주봉</button>
             <button class="btn-kospi" data-type="monthly">월봉</button>
           </div> <!-- 버튼  -->
         </div>
-        <div style="flex: 1;">
+        <div style="flex: 1 1 300px; min-width: 300px;">
           <h3>KOSDAQ 종가 (최근 30일)</h3>
-          <canvas id="kosdaqChart" width="600" height="300"></canvas>
+          <canvas id="kosdaqChart" style="width: 100%; height: 300px;"></canvas>
           <div style="margin-top: 10px;">
             <button class="btn-kosdaq" data-type="daily">일봉</button>
             <button class="btn-kosdaq" data-type="weekly">주봉</button>
             <button class="btn-kosdaq" data-type="monthly">월봉</button>
           </div> 
         </div>
+        <div style="flex: 1 1 300px; min-width: 300px;">
+          <label for="chartTypeSelect">차트 타입:</label>
+          <select id="chartTypeSelect">
+            <option value="daily">일봉</option>
+            <option value="weekly">주봉</option>
+            <option value="monthly">월봉</option>
+          </select>
+      
+          <label for="marketSelect" style="margin-left: 20px;">시장 선택:</label>
+          <select id="marketSelect">
+            <option value="kospi">KOSPI</option>
+            <option value="kosdaq">KOSDAQ</option>
+            <option value="usdkrw">USD/KRW 환율</option>
+          </select>
+      
+          <h3 id="chartTitle" style="margin-top: 20px;">KOSPI 종가</h3>
+          <canvas id="mainChart" style="width: 100%; height: 400px;"></canvas>
+        </div>
+
+        <hr>
+        
+        <div style="display: flex; gap: 40px; flex-wrap: wrap;">
+          <div style="flex: 1;">
+            <h4>{{ today }} KOSPI 거래량 상위 10 </h4>
+            <table class="table table-striped">
+              <thead>
+                <tr><th>종목명</th><th>종가</th><th>거래량</th><th>거래대금</th></tr>
+              </thead>
+              <tbody>
+                {% for item in kospi_top_volume %}
+                <tr>
+                  <td>{{ item.Name }}</td>
+                  <td>{{ item.Close | format_price }}</td>
+                  <td>{{ item.Volume|format_kr }}건</td>
+                  <td>{{ item.TradingValue|format_kr }}원</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        
+          <div style="flex: 1;">
+            <h4>{{ today }} KOSDAQ 거래 상위 10</h4>
+            <table class="table table-striped">
+              <thead>
+                <tr><th>종목명</th><th>종가</th><th>거래량</th><th>거래대금</th></tr>
+              </thead>
+              <tbody>
+                {% for item in kosdaq_top_volume %}
+                <tr>
+                  <td>{{ item.Name }}</td>
+                  <td>{{ item.Close | format_price }}</td>
+                  <td>{{ item.Volume|format_kr }}주</td>
+                  <td>{{ item.TradingValue|format_kr }}원</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
       </div>
+      
 
       {% endblock %}
     </div>
@@ -121,22 +183,38 @@
 
 <script>
   // Flask에서 넘긴 데이터를 JS 객체로 변환
-  const kospiData = {{ kospi_data | tojson }};
-  const kosdaqData = {{ kosdaq_data | tojson }};
+  const dataMap = {
+    daily: {
+      kospi: {{ kospi_data | tojson }},
+      kosdaq: {{ kosdaq_data | tojson }},
+      usdkrw: {{ usdkrw_data | tojson }}
+    },
+    weekly: {
+      kospi: {{ kospi_weekly_data | tojson }},
+      kosdaq: {{ kosdaq_weekly_data | tojson }},
+      usdkrw: {{ usdkrw_weekly_data | tojson }}
+    },
+    monthly: {
+      kospi: {{ kospi_monthly_data | tojson }},
+      kosdaq: {{ kosdaq_monthly_data | tojson }},
+      usdkrw: {{ usdkrw_monthly_data | tojson }}
+    }
+  };
 
   // 날짜(YYYY-MM-DD)만 추출 및 종가 배열 생성 함수
   function parseChartData(data) {
-  return {
-    labels: data.map(item => {
-      const d = new Date(item.Date);
-      return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
-    }),
-    closes: data.map(item => item.Close)
-  };
-}
+    return {
+      labels: data.map(item => {
+        const d = new Date(item.Date);
+        return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+      }),
+      closes: data.map(item => item.Close)
+    };
+  }
 
-  const kospiChartData = parseChartData(kospiData);
-  const kosdaqChartData = parseChartData(kosdaqData);
+  // 초기 데이터 파싱
+  const kospiChartData = parseChartData(dataMap.daily.kospi);
+  const kosdaqChartData = parseChartData(dataMap.daily.kosdaq);
 
   // 코스피 차트 생성
   const ctxKospi = document.getElementById('kospiChart').getContext('2d');
@@ -189,6 +267,68 @@
       }
     }
   });
+
+  let mainChart;
+
+  function createChart(ctx, label, color) {
+    return new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label,
+          data: [],
+          borderColor: color,
+          backgroundColor: color.replace('1)', '0.2)'),
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: false
+          }
+        }
+      }
+    });
+  }
+
+  function updateChart(chart, data, label) {
+    chart.data.labels = data.labels;
+    chart.data.datasets[0].data = data.closes;
+    chart.data.datasets[0].label = label;
+    chart.update();
+  }
+
+  function updateMainChart() {
+    const type = document.getElementById('chartTypeSelect').value;
+    const market = document.getElementById('marketSelect').value;
+
+    const data = parseChartData(dataMap[type][market]);
+    const labelMap = {
+      kospi: 'KOSPI 종가',
+      kosdaq: 'KOSDAQ 종가',
+      usdkrw: 'USD/KRW 환율'
+    };
+
+    document.getElementById('chartTitle').textContent = labelMap[market];
+    updateChart(mainChart, data, labelMap[market]);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const ctx = document.getElementById('mainChart').getContext('2d');
+    mainChart = createChart(ctx, 'KOSPI 종가', 'rgba(54, 162, 235, 1)');
+    updateMainChart();
+
+    document.getElementById('chartTypeSelect').addEventListener('change', updateMainChart);
+    document.getElementById('marketSelect').addEventListener('change', updateMainChart);
+  });
+
 </script>
 
 </body>
