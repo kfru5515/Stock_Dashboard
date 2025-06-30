@@ -1,0 +1,121 @@
+{% extends "index.html" %}
+
+{% block title %}analysis{% endblock %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
+  <li><a href="{{ url_for('analysis.analysis') }}">Maps</a></li>
+  <li class="active">Location</li>
+</ol>
+<h1>analysis</h1>
+
+<div class="templatemo-maps">
+  <div class="row">
+    <div class="col-md-6 col-sm-6 margin-bottom-30">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <h4 class="panel-title">default</h4>
+        </div>
+        <div class="panel-body">
+          <div id="vmap_world" class="vmap"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-sm-6 margin-bottom-30">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <h4 class="panel-title">default</h4>
+        </div>
+        <div class="panel-body">
+          <div id="vmap_usa" class="vmap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 col-sm-6 margin-bottom-30">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <h4 class="panel-title">default</h4>
+        </div>
+        <div class="panel-body">
+          <div id="vmap_asia" class="vmap"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-sm-6 margin-bottom-30">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <h4 class="panel-title">default</h4>
+        </div>
+        <div class="panel-body">
+          <div id="vmap_europe" class="vmap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 col-sm-6 margin-bottom-30">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <h4 class="panel-title">default</h4>
+        </div>
+        <div class="panel-body">
+          <div id="vmap_australia" class="vmap"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-sm-6 margin-bottom-30">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <h4 class="panel-title">default</h4>
+        </div>
+        <div class="panel-body">
+          <div id="vmap_africa" class="vmap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 col-sm-6 margin-bottom-30">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <h4 class="panel-title">default</h4>
+        </div>
+        <div class="panel-body">
+          <div id="vmap_northamerica" class="vmap"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-sm-6 margin-bottom-30">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <h4 class="panel-title">default</h4>
+        </div>
+        <div class="panel-body">
+          <div id="vmap_southamerica" class="vmap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="{{ url_for('static', filename='jqvmap/jquery.vmap.js') }}"></script>
+<script src="{{ url_for('static', filename='jqvmap/maps/jquery.vmap.world.js') }}"></script>
+<script src="{{ url_for('static', filename='jqvmap/maps/jquery.vmap.usa.js') }}"></script>
+<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.asia.js') }}"></script>
+<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.europe.js') }}"></script>
+<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.australia.js') }}"></script>
+<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.africa.js') }}"></script>
+<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.north-america.js') }}"></script>
+<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.south-america.js') }}"></script>
+<script src="{{ url_for('static', filename='jqvmap/data/jquery.vmap.sampledata.js') }}"></script>
+
+{% endblock %}

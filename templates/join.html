@@ -1,0 +1,77 @@
+{% extends "index.html" %}
+
+{% block content %}
+
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div>
+      {% for category, message in messages %}
+        {% if message != "회원가입이 완료되었습니다!" %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+    
+
+  <ol class="breadcrumb">
+    <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
+    <li><a href="{{ url_for('join.join') }}">회원가입</a></li>
+    <li class="active">Form Controls</li>
+  </ol>
+  <h1>회원가입</h1>
+  <div class="row">
+    <div class="col-md-12">
+      <form role="form" method="POST" id="templatemo-preferences-form">
+        <div class="row">
+          <div class="col-md-6 margin-bottom-15">
+            <label for="firstName" class="control-label">성</label>
+            <input type="text" class="form-control" id="firstName" name="firstName" placeholder="홍" value="{{first_name or ''}}">                  
+          </div>
+          <div class="col-md-6 margin-bottom-15">
+            <label for="lastName" class="control-label">이름</label>
+            <input type="text" class="form-control" id="lastName" name="lastName" placeholder="길동" value="{{last_name or ''}}">                 
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-6 margin-bottom-15">
+            <label>Username</label>
+            <input type="text" class="form-control" id="userName" name="username" placeholder="admin" value="{{username or ''}}">
+          </div>
+          <div class="col-md-6 margin-bottom-15">
+            <label>Email address</label>
+            <input type="text" class="form-control" id="email" name="email" placeholder="admin@naver.com" value="{{email or ''}}">
+          </div>
+        </div>
+        
+        <div class="row">
+          <div class="col-md-6 margin-bottom-15">
+            <label for="password_1">New Password</label>
+            <input type="password" class="form-control" id="password_1" name="password_1" placeholder="New Password">  
+          </div>
+          <div class="col-md-6 margin-bottom-15">
+            <label for="password_2">Confirm New Password</label>
+            <input type="password" class="form-control" id="password_2" name="password_2" placeholder="Confirm New Password">  
+          </div>
+        </div>
+      <div class="row">
+        <div class="col-md-12 margin-bottom-15">
+          <label for="notes">Notes</label>
+          <textarea class="form-control" rows="3" id="notes"></textarea>
+        </div>
+      </div>
+      
+      <div class="row templatemo-form-buttons">
+        <div class="col-md-12">
+          <button type="submit" class="btn btn-primary">join</button>
+          <button type="reset" class="btn btn-default">Reset</button>    
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+{% endblock %}
