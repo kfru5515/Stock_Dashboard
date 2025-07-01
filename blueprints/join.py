@@ -1,9 +1,22 @@
+<<<<<<< HEAD
 from flask import Blueprint, render_template, request, redirect, url_for, flash
+=======
+
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+>>>>>>> acfab3a (로그인시 회원가입 접근불가)
 
 join_bp = Blueprint('join', __name__, url_prefix='/join')
 
 @join_bp.route('/', methods=['GET', 'POST'])
 def join():
+<<<<<<< HEAD
+=======
+    # ✅ 로그인 상태라면 회원가입 불가
+    if 'user' in session:
+        flash("이미 로그인된 상태입니다.", "warning")
+        return redirect(url_for('index'))
+
+>>>>>>> acfab3a (로그인시 회원가입 접근불가)
     if request.method == 'POST':
         first_name = request.form.get('firstName')
         last_name = request.form.get('lastName')
