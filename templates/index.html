@@ -39,7 +39,7 @@
       <li>
         <form class="navbar-form">
           <input type="text" class="form-control" id="templatemo_search_box" placeholder="Search...">
-          <span class="btn btn-default">검색</span>
+          <span class="btn btn-default">검색</span>url_for('analys
         </form>
       </li>
       <li class="active"><a href="{{ url_for('index') }}"><i class="fa fa-home"></i>HOME</a></li>
@@ -54,7 +54,7 @@
         </ul>
       </li>
       <li><a href="{{ url_for('data.data_main') }}"><i class="fa fa-cubes"></i>차트</a></li>
-      <li><a href="{{ url_for('analysis.analysis') }}"><i class="fa fa-map-marker"></i>비교분석</a></li>
+      <li><a href="{{ url_for('analysis.analysis_page') }}"><i class="fa fa-map-marker"></i>비교분석</a></li>
       <li><a href="{{ url_for('tables.tables') }}"><i class="fa fa-users"></i>사용자 정보</a></li>
       <li><a href="{{ url_for('join.join') }}"><i class="fa fa-cog"></i>회원가입</a></li>
       {% if session.get('user') %}
@@ -184,6 +184,7 @@
 
 <script>
   // Flask에서 넘긴 데이터를 JS 객체로 변환
+    {% if kospi_data and kosdaq_data and usdkrw_data %}
   const dataMap = {
     daily: {
       kospi: {{ kospi_data | tojson }},
@@ -201,7 +202,8 @@
       usdkrw: {{ usdkrw_monthly_data | tojson }}
     }
   };
-
+  {% endif %}  
+  
   // 날짜(YYYY-MM-DD)만 추출 및 종가 배열 생성 함수
   function parseChartData(data) {
     return {

@@ -6,6 +6,7 @@ from blueprints.data import data_bp
 from blueprints.auth import auth_bp
 import FinanceDataReader as fdr
 import pandas as pd
+from dotenv import load_dotenv
 
 from pytz import timezone # 한국시간 사용 
 
@@ -196,7 +197,6 @@ top_kospi_volume = get_top_volume_with_cache('KOSPI')
 top_kosdaq_volume = get_top_volume_with_cache('KOSDAQ')
     
 app.register_blueprint(auth_bp, url_prefix='/auth')
-
 app.register_blueprint(analysis_bp)
 app.register_blueprint(tables_bp)
 app.register_blueprint(join_bp)

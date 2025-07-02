@@ -1,121 +1,91 @@
 {% extends "index.html" %}
 
-{% block title %}analysis{% endblock %}
-
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
-  <li><a href="{{ url_for('analysis.analysis') }}">Maps</a></li>
-  <li class="active">Location</li>
+  <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+  <li class="active">비교분석</li>
 </ol>
-<h1>analysis</h1>
 
-<div class="templatemo-maps">
-  <div class="row">
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_world" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_usa" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-  </div>
+<h1>비교분석 페이지</h1>
 
-  <div class="row">
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_asia" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_europe" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-  </div>
+<form id="compareForm" class="form-inline" style="margin-bottom: 20px;">
+  <label for="stock1">종목1:</label>
+  <input type="text" id="stock1" name="stock1" placeholder="종목코드 또는 이름" class="form-control" required>
 
-  <div class="row">
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_australia" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_africa" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <label for="stock2" style="margin-left: 15px;">종목2:</label>
+  <input type="text" id="stock2" name="stock2" placeholder="종목코드 또는 이름" class="form-control" required>
 
-  <div class="row">
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_northamerica" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6 col-sm-6 margin-bottom-30">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h4 class="panel-title">default</h4>
-        </div>
-        <div class="panel-body">
-          <div id="vmap_southamerica" class="vmap"></div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <button type="submit" class="btn btn-primary" style="margin-left: 15px;">비교 분석</button>
+</form>
+
+<div id="chartContainer" style="margin-top: 30px;">
+  <canvas id="compareChart" style="width: 100%; height: 400px;"></canvas>
 </div>
-{% endblock %}
 
-{% block scripts %}
-{{ super() }}
-<script src="{{ url_for('static', filename='jqvmap/jquery.vmap.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/jquery.vmap.world.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/jquery.vmap.usa.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.asia.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.europe.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.australia.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.africa.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.north-america.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/maps/continents/jquery.vmap.south-america.js') }}"></script>
-<script src="{{ url_for('static', filename='jqvmap/data/jquery.vmap.sampledata.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const ctx = document.getElementById('compareChart').getContext('2d');
+  let compareChart;
 
+  document.getElementById('compareForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const stock1 = document.getElementById('stock1').value.trim();
+    const stock2 = document.getElementById('stock2').value.trim();
+
+    if (!stock1 || !stock2) {
+      alert("두 종목을 모두 입력하세요.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/analysis/compare?stock1=${stock1}&stock2=${stock2}`);
+      const data = await response.json();
+
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      const labels = data.dates;
+      const dataset1 = {
+        label: data.stock1_name,
+        data: data.stock1_prices,
+        borderColor: 'rgba(54, 162, 235, 1)',
+        fill: false,
+        tension: 0.3
+      };
+      const dataset2 = {
+        label: data.stock2_name,
+        data: data.stock2_prices,
+        borderColor: 'rgba(255, 99, 132, 1)',
+        fill: false,
+        tension: 0.3
+      };
+
+      if (compareChart) compareChart.destroy();
+
+      compareChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [dataset1, dataset2],
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: false
+            }
+          }
+        }
+      });
+
+    } catch (err) {
+      alert("데이터 요청 중 오류 발생");
+      console.error(err);
+    }
+  });
+</script>
 {% endblock %}
