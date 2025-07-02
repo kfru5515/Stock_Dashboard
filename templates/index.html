@@ -133,7 +133,8 @@
               <tbody>
                 {% for item in kospi_top_volume %}
                 <tr>
-                  <td>{{ item.Name }}</td>
+                  <td class="stock-name" data-code="{{ item.Code }}" style="cursor:pointer; color:blue; text-decoration:underline;">
+                    {{ item.Name }}
                   <td>{{ item.Close | format_price }}</td>
                   <td>{{ item.Volume|format_kr }}건</td>
                   <td>{{ item.TradingValue|format_kr }}원</td>
