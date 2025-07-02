@@ -11,10 +11,6 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-<<<<<<< HEAD
-# 로그인 라우트
-=======
->>>>>>> acfab3a (로그인시 회원가입 접근불가)
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -27,20 +23,13 @@ def login():
             flash('로그인 실패')
     return render_template('sign_in.html')
 
-<<<<<<< HEAD
-# 로그아웃
-=======
->>>>>>> acfab3a (로그인시 회원가입 접근불가)
 @auth_bp.route('/logout')
 def logout():
     session.pop('user', None)
     return redirect(url_for('home'))
-<<<<<<< HEAD
-=======
 
 # ✅ 로그인한 사용자만 접근 가능 / tables.html 렌더링
 @auth_bp.route('/mypage')
 @login_required
 def mypage():
     return render_template('tables.html')
->>>>>>> acfab3a (로그인시 회원가입 접근불가)
