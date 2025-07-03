@@ -1,91 +1,216 @@
-{% extends "index.html" %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>종목 비교 분석 - Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='template/css/templatemo_main.css') }}">
+  <link href="http://fonts.googleapis.com/css?family=Open+Sans:400,300,400italic,700" rel="stylesheet" type="text/css">
+  <link href="{{ url_for('static', filename='template/css/font-awesome.min.css') }}" rel="stylesheet">
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-{% block content %}
-<ol class="breadcrumb">
-  <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
-  <li><a href="{{ url_for('index') }}">Dashboard</a></li>
-  <li class="active">비교분석</li>
-</ol>
-
-<h1>비교분석 페이지</h1>
-
-<form id="compareForm" class="form-inline" style="margin-bottom: 20px;">
-  <label for="stock1">종목1:</label>
-  <input type="text" id="stock1" name="stock1" placeholder="종목코드 또는 이름" class="form-control" required>
-
-  <label for="stock2" style="margin-left: 15px;">종목2:</label>
-  <input type="text" id="stock2" name="stock2" placeholder="종목코드 또는 이름" class="form-control" required>
-
-  <button type="submit" class="btn btn-primary" style="margin-left: 15px;">비교 분석</button>
-</form>
-
-<div id="chartContainer" style="margin-top: 30px;">
-  <canvas id="compareChart" style="width: 100%; height: 400px;"></canvas>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-  const ctx = document.getElementById('compareChart').getContext('2d');
-  let compareChart;
-
-  document.getElementById('compareForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const stock1 = document.getElementById('stock1').value.trim();
-    const stock2 = document.getElementById('stock2').value.trim();
-
-    if (!stock1 || !stock2) {
-      alert("두 종목을 모두 입력하세요.");
-      return;
+  <style>
+    /* 차트가 담길 컨테이너의 크기를 고정하여 늘어나는 현상을 방지합니다. */
+    .chart-container {
+      position: relative;
+      height: 450px; /* 차트 높이 지정 */
+      width: 100%;
     }
 
-    try {
-      const response = await fetch(`/analysis/compare?stock1=${stock1}&stock2=${stock2}`);
-      const data = await response.json();
+    /* 사이드바에 위치한 검색창 스타일을 정의합니다. */
+    .sidebar-form {
+      padding: 15px;
+    }
 
-      if (data.error) {
-        alert(data.error);
-        return;
-      }
+    .sidebar-form form {
+      display: flex;
+      flex-direction: column; /* 입력창과 버튼을 세로로 정렬 */
+      gap: 10px;           /* 입력창과 버튼 사이의 간격 */
+    }
 
-      const labels = data.dates;
-      const dataset1 = {
-        label: data.stock1_name,
-        data: data.stock1_prices,
-        borderColor: 'rgba(54, 162, 235, 1)',
-        fill: false,
-        tension: 0.3
-      };
-      const dataset2 = {
-        label: data.stock2_name,
-        data: data.stock2_prices,
-        borderColor: 'rgba(255, 99, 132, 1)',
-        fill: false,
-        tension: 0.3
-      };
+    .sidebar-form .form-control,
+    .sidebar-form .btn {
+      width: 100%; /* 너비를 꽉 채워 깔끔하게 보이도록 합니다. */
+    }
+  </style>
+</head>
+<body>
 
-      if (compareChart) compareChart.destroy();
+<div class="navbar navbar-inverse" role="navigation">
+  <div class="navbar-header">
+    <div class="logo"><h1>Final Project</h1></div>
+    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+      <span class="sr-only">Toggle navigation</span>
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+    </button>
+  </div>
+</div>
 
-      compareChart = new Chart(ctx, {
-        type: 'line',
+<div class="template-page-wrapper">
+  <div class="navbar-collapse collapse templatemo-sidebar">
+    <ul class="templatemo-sidebar-menu">
+      
+      <div class="sidebar-form">
+        <form action="{{ url_for('analysis.analysis_page') }}" method="GET">
+          <input type="text" class="form-control" name="codes" placeholder="종목명 또는 코드 입력" value="{{ stock_codes_str or '' }}">
+          <button type="submit" class="btn btn-default">분석</button>
+        </form>
+      </div>
+      
+      <li><a href="{{ url_for('index') }}"><i class="fa fa-home"></i>HOME</a></li>
+      <li class="sub">
+        <a href="javascript:;">
+          <i class="fa fa-database"></i> 종목정보 <div class="pull-right"><span class="caret"></span></div>
+        </a>
+        <ul class="templatemo-submenu">
+          <li><a href="#">1</a></li>
+          <li><a href="#">2</a></li>
+          <li><a href="#">3</a></li>
+        </ul>
+      </li>
+      <li><a href="{{ url_for('data.data_main') }}"><i class="fa fa-cubes"></i>차트</a></li>
+      <li class="active"><a href="{{ url_for('analysis.analysis_page') }}"><i class="fa fa-map-marker"></i>비교분석</a></li>
+      <li><a href="{{ url_for('tables.tables') }}"><i class="fa fa-users"></i>사용자 정보</a></li>
+      <li><a href="{{ url_for('join.join') }}"><i class="fa fa-cog"></i>회원가입</a></li>
+      
+      {% if session.get('user') %}
+         <li>
+           <a href="{{ url_for('auth.logout') }}" onclick="return confirm('로그아웃 하시겠어요?');">
+             <i class="fa fa-sign-out"></i> 로그아웃
+           </a>
+         </li>
+       {% else %}
+         <li>
+           <a href="{{ url_for('auth.login') }}">
+             <i class="fa fa-sign-in"></i> 로그인
+           </a>
+         </li>
+       {% endif %}
+    </ul>
+  </div>
+
+  <div class="templatemo-content-wrapper">
+    <div class="templatemo-content">
+      <ol class="breadcrumb">
+        <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
+        <li class="active">비교분석</li>
+      </ol>
+      <h1>종목 비교 분석</h1>
+      <p>선택된 종목들의 누적 수익률을 <strong>소비자물가지수(CPI)</strong>와 비교하고, 종목 간의 상관 관계를 분석합니다.</p>
+      
+      <hr>
+
+      {% if error_message %}
+        <div class="alert alert-warning" role="alert">
+            <strong>오류:</strong> {{ error_message }}
+        </div>
+      {% else %}
+        <div class="row">
+          <div class="col-md-12">
+            <h4>누적 수익률 및 CPI 비교 (1년)</h4>
+            <div class="chart-container">
+              <canvas id="returnsChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <hr>
+
+        <div class="row">
+          <div class="col-md-8">
+            <h4>종목간 상관 관계 행렬</h4>
+            <p>1에 가까울수록 함께 움직이는 경향이 강하고, -1에 가까울수록 반대로 움직입니다.</p>
+            <div class="table-responsive">
+              <table class="table table-bordered table-striped">
+                <thead>
+                  <tr>
+                    <th>종목</th>
+                    {% for code, name in stock_names.items() %}
+                      <th>{{ name }}</th>
+                    {% endfor %}
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for code1, name1 in stock_names.items() %}
+                  <tr>
+                    <td><b>{{ name1 }}</b></td>
+                    {% for code2, _ in stock_names.items() %}
+                      {% set value = correlation_matrix[code1][code2] %}
+                      <td style="background-color: rgba(75, 192, 192, {{ value|abs }}); color: {{ 'white' if value|abs > 0.6 else 'black' }};">
+                        {{ "%.2f"|format(value) }}
+                      </td>
+                    {% endfor %}
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  // 오류 메시지가 없을 때만 차트 관련 스크립트를 실행합니다.
+  {% if not error_message %}
+    // Flask에서 전달받은 데이터를 Javascript 변수로 변환합니다.
+    const chartLabels = {{ labels | tojson }};
+    const chartDatasets = {{ datasets | tojson }};
+
+    // 페이지 로딩이 완료되면 차트를 그립니다.
+    document.addEventListener('DOMContentLoaded', () => {
+      const ctx = document.getElementById('returnsChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line', // 선 그래프
         data: {
-          labels: labels,
-          datasets: [dataset1, dataset2],
+          labels: chartLabels,
+          datasets: chartDatasets
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false, // 컨테이너 크기에 맞춰 비율을 조정
           scales: {
             y: {
-              beginAtZero: false
+              beginAtZero: false,
+              ticks: {
+                // Y축 눈금을 퍼센트(%)로 표시
+                callback: function(value) {
+                  return (value * 100 - 100).toFixed(0) + '%'; 
+                }
+              },
+              title: {
+                display: true,
+                text: '수익률 (%)'
+              }
+            }
+          },
+          plugins: {
+            tooltip: { // 마우스를 올렸을 때 나오는 툴팁 설정
+              mode: 'index',
+              intersect: false,
+              callbacks: {
+                label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label) {
+                    label += ': ';
+                  }
+                  if (context.parsed.y !== null) {
+                    label += (context.parsed.y * 100 - 100).toFixed(2) + '%';
+                  }
+                  return label;
+                }
+              }
             }
           }
         }
       });
-
-    } catch (err) {
-      alert("데이터 요청 중 오류 발생");
-      console.error(err);
-    }
-  });
+    });
+  {% endif %}
 </script>
-{% endblock %}
+</body>
+</html>
