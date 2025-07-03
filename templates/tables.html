@@ -45,7 +45,7 @@
         </div>
         <div class="card mt-4">
           <div class="card-header"><strong>설정</strong></div>
-          <a href="{{ url_for('tables.change_password') }}" class="btn btn-sm btn-warning">비밀번호 변경</a>
+          <!-- <a href="{{ url_for('tables.change_password') }}" class="btn btn-sm btn-warning">비밀번호 변경</a> -->
           <div class="card-body">
           </div>
         </div>
@@ -59,7 +59,6 @@
           <div class="card-body">
             <p><strong>이름:</strong> {{ user.name }}</p>
             <p><strong>이메일:</strong> {{ user.email }}</p>
-            <p><strong>가입일:</strong> {{ user.joined_at.strftime('%Y-%m-%d') }}</p>
           </div>
         </div>
       
