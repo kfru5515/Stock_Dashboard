@@ -32,7 +32,6 @@ def login():
 @auth_bp.route('/logout')
 def logout():
     session.pop('user', None)
-    flash('로그아웃 되었습니다.', 'info')
     return redirect(url_for('home'))
 
 @auth_bp.route('/mypage')
