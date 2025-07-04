@@ -1,181 +1,295 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8">
-  <title>Dashboard, Free HTML5 Admin Template</title>
-  <meta name="viewport" content="width=device-width">        
-  <link rel="stylesheet" href="{{ url_for('static', filename='template/css/templatemo_main.css') }}">
-  <!-- Dashboard Template http://www.templatemo.com/preview/templatemo_415_dashboard -->
-  
-  <!-- Chart.js CDN (최신 3.x 버전) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta charset="utf-8">
+    <title>Dashboard</title>
+    <meta name="viewport" content="width=device-width">
+    <link rel="stylesheet" href="{{ url_for('static', filename='template/css/templatemo_main.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .btn-group > .btn.active {
+            background-color: #5cb85c;
+            color: white;
+            border-color: #4cae4c;
+            z-index: 2;
+        }
+        .hidden-table {
+            display: none;
+        }
+        .chart-wrapper {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .chart-container {
+            position: relative;
+            flex: 1 1 250px;
+            min-width: 250px;
+            height: 220px;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .chart-header h3 {
+            margin-bottom: 0;
+            font-size: 18px;
+        }
+        .chart-info {
+            font-size: 14px;
+            text-align: right;
+            white-space: nowrap;
+        }
+        .chart-info .value {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .chart-info .change {
+            margin-left: 8px;
+            font-size: 13px;
+        }
+        .change.positive { color: #d9534f; }
+        .change.negative { color: #337ab7; }
+        .change.zero { color: #555; }
+    </style>
 </head>
 <body>
 {% with messages = get_flashed_messages(with_categories=True) %}
-  {% if messages %}
+    {% if messages %}
     <script>
-      {% for category, message in messages %}
-        alert("{{ message }}");
-      {% endfor %}
+        {% for category, message in messages %}
+            alert("{{ message }}");
+        {% endfor %}
     </script>
-  {% endif %}
+    {% endif %}
 {% endwith %}
 
 <div class="navbar navbar-inverse" role="navigation">
-  <div class="navbar-header">
-    <div class="logo"><h1>Final Project</h1></div>
-    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
-      <span class="sr-only">Toggle navigation</span>
-      <span class="icon-bar"></span>
-      <span class="icon-bar"></span>
-      <span class="icon-bar"></span>
-    </button> 
-  </div>   
+    <div class="navbar-header">
+        <div class="logo"><h1>Final Project</h1></div>
+        <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+        </button>
+    </div>
 </div>
 
 <div class="template-page-wrapper">
-  <div class="navbar-collapse collapse templatemo-sidebar">
-    <ul class="templatemo-sidebar-menu">
-      <li>
-        <form class="navbar-form">
-          <input type="text" class="form-control" id="templatemo_search_box" placeholder="Search...">
-          <span class="btn btn-default">검색</span>url_for('analys
-        </form>
-      </li>
-      <li class="active"><a href="{{ url_for('index') }}"><i class="fa fa-home"></i>HOME</a></li>
-      <li class="sub">
-        <a href="javascript:;">
-          <i class="fa fa-database"></i> 종목정보 <div class="pull-right"><span class="caret"></span></div>
-        </a>
-        <ul class="templatemo-submenu">
-          <li><a href="#">1</a></li>
-          <li><a href="#">2</a></li>
-          <li><a href="#">3</a></li>
+    <div class="navbar-collapse collapse templatemo-sidebar">
+        <ul class="templatemo-sidebar-menu">
+            <li>
+                <form class="navbar-form">
+                    <input type="text" class="form-control" id="templatemo_search_box" placeholder="Search...">
+                    <button type="submit" class="btn btn-default">검색</button>
+                </form>
+            </li>
+            <li class="active"><a href="{{ url_for('index') }}"><i class="fa fa-home"></i>HOME</a></li>
+            <li class="sub">
+                <a href="javascript:;">
+                    <i class="fa fa-database"></i> 종목정보 <div class="pull-right"><span class="caret"></span></div>
+                </a>
+                <ul class="templatemo-submenu">
+                    <li><a href="#">1</a></li>
+                    <li><a href="#">2</a></li>
+                    <li><a href="#">3</a></li>
+                </ul>
+            </li>
+            <li><a href="#"><i class="fa fa-cubes"></i>차트</a></li>
+            <li><a href="#"><i class="fa fa-map-marker"></i>비교분석</a></li>
+            <li><a href="#"><i class="fa fa-users"></i>사용자 정보</a></li>
+            <li><a href="#"><i class="fa fa-cog"></i>회원가입</a></li>
+            {% if session.get('user') %}
+                <li>
+                    <a href="#" onclick="return confirm('로그아웃 하시겠어요?');">
+                        <i class="fa fa-sign-out"></i> 로그아웃
+                    </a>
+                </li>
+            {% else %}
+                <li>
+                    <a href="#">
+                        <i class="fa fa-sign-in"></i> 로그인
+                    </a>
+                </li>
+            {% endif %}
         </ul>
-      </li>
-      <li><a href="{{ url_for('data.data_main') }}"><i class="fa fa-cubes"></i>차트</a></li>
-      <li><a href="{{ url_for('analysis.analysis_page') }}"><i class="fa fa-map-marker"></i>비교분석</a></li>
-      <li><a href="{{ url_for('tables.tables') }}"><i class="fa fa-users"></i>사용자 정보</a></li>
-      <li><a href="{{ url_for('join.join') }}"><i class="fa fa-cog"></i>회원가입</a></li>
-      {% if session.get('user') %}
-        <li>
-          <a href="{{ url_for('auth.logout') }}" onclick="return confirm('로그아웃 하시겠어요?');">
-            <i class="fa fa-sign-out"></i> 로그아웃
-          </a>
-        </li>
-      {% else %}
-        <li>
-          <a href="{{ url_for('auth.login') }}">
-            <i class="fa fa-sign-in"></i> 로그인
-          </a>
-        </li>
-      {% endif %}
-    </ul>
-  </div><!--/.navbar-collapse -->
+    </div>
 
-  <div class="templatemo-content-wrapper">
-    <div class="templatemo-content">
-      {% block content %}
-      <ol class="breadcrumb">
-        <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
-        <li><a href="{{ url_for('index') }}">Dashboard</a></li>
-        <li class="active">Overview</li>
-      </ol>
-      <h1>Dashboard</h1>
+    <div class="templatemo-content-wrapper">
+        <div class="templatemo-content">
+            {% block content %}
+            <ol class="breadcrumb">
+                <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
+                <li class="active">Dashboard</li>
+            </ol>
+            <h1>Dashboard</h1>
 
-      <div style="display: flex; gap: 30px; flex-wrap: wrap;">
-        <div style="flex: 1 1 300px; min-width: 300px;">
-          <h3>KOSPI 종가 (최근 30일)</h3>
-          <canvas id="kospiChart" style="width: 100%; height: 300px;"></canvas>
-          <div style="margin-top: 10px;">
-            <button class="btn-kospi" data-type="daily">일봉</button>
-            <button class="btn-kospi" data-type="weekly">주봉</button>
-            <button class="btn-kospi" data-type="monthly">월봉</button>
-          </div> <!-- 버튼  -->
-        </div>
-        <div style="flex: 1 1 300px; min-width: 300px;">
-          <h3>KOSDAQ 종가 (최근 30일)</h3>
-          <canvas id="kosdaqChart" style="width: 100%; height: 300px;"></canvas>
-          <div style="margin-top: 10px;">
-            <button class="btn-kosdaq" data-type="daily">일봉</button>
-            <button class="btn-kosdaq" data-type="weekly">주봉</button>
-            <button class="btn-kosdaq" data-type="monthly">월봉</button>
-          </div> 
-        </div>
-        <div style="flex: 1 1 300px; min-width: 300px;">
-          <label for="chartTypeSelect">차트 타입:</label>
-          <select id="chartTypeSelect">
-            <option value="daily">일봉</option>
-            <option value="weekly">주봉</option>
-            <option value="monthly">월봉</option>
-          </select>
-      
-          <label for="marketSelect" style="margin-left: 20px;">시장 선택:</label>
-          <select id="marketSelect">
-            <option value="kospi">KOSPI</option>
-            <option value="kosdaq">KOSDAQ</option>
-            <option value="usdkrw">USD/KRW 환율</option>
-          </select>
-      
-          <h3 id="chartTitle" style="margin-top: 20px;">KOSPI 종가</h3>
-          <canvas id="mainChart" style="width: 100%; height: 400px;"></canvas>
-        </div>
+            <div class="chart-wrapper">
+                {% if kospi_data and kospi_info.value != 'N/A' %}
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>KOSPI</h3>
+                        <div class="chart-info">
+                            <span id="kospi-value" class="value">{{ kospi_info.value }}</span>
+                            <span id="kospi-change" class="change {% if kospi_info.raw_change > 0 %}positive{% elif kospi_info.raw_change < 0 %}negative{% else %}zero{% endif %}">
+                                {{ kospi_info.change }} ({{ kospi_info.change_pct }})
+                            </span>
+                        </div>
+                    </div>
+                    <canvas id="kospiChart"></canvas>
+                </div>
+                {% endif %}
+                
+                {% if kosdaq_data and kosdaq_info.value != 'N/A' %}
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>KOSDAQ</h3>
+                        <div class="chart-info">
+                            <span id="kosdaq-value" class="value">{{ kosdaq_info.value }}</span>
+                            <span id="kosdaq-change" class="change {% if kosdaq_info.raw_change > 0 %}positive{% elif kosdaq_info.raw_change < 0 %}negative{% else %}zero{% endif %}">
+                                {{ kosdaq_info.change }} ({{ kosdaq_info.change_pct }})
+                            </span>
+                        </div>
+                    </div>
+                    <canvas id="kosdaqChart"></canvas>
+                </div>
+                {% endif %}
 
-        <hr>
-        
-        <div style="display: flex; gap: 40px; flex-wrap: wrap;">
-          <div style="flex: 1;">
-            <h4>{{ today }} KOSPI 거래량 상위 10 </h4>
-            <table class="table table-striped">
-              <thead>
-                <tr><th>종목명</th><th>종가</th><th>거래량</th><th>거래대금</th></tr>
-              </thead>
-              <tbody>
-                {% for item in kospi_top_volume %}
-                <tr>
-                  <td class="stock-name" data-code="{{ item.Code }}" style="cursor:pointer; color:blue; text-decoration:underline;">
-                    {{ item.Name }}
-                  <td>{{ item.Close | format_price }}</td>
-                  <td>{{ item.Volume|format_kr }}건</td>
-                  <td>{{ item.TradingValue|format_kr }}원</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        
-          <div style="flex: 1;">
-            <h4>{{ today }} KOSDAQ 거래 상위 10</h4>
-            <table class="table table-striped">
-              <thead>
-                <tr><th>종목명</th><th>종가</th><th>거래량</th><th>거래대금</th></tr>
-              </thead>
-              <tbody>
-                {% for item in kosdaq_top_volume %}
-                <tr>
-                  <td>{{ item.Name }}</td>
-                  <td>{{ item.Close | format_price }}</td>
-                  <td>{{ item.Volume|format_kr }}주</td>
-                  <td>{{ item.TradingValue|format_kr }}원</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+                {% if usdkrw_data and usdkrw_info.value != 'N/A' %}
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>USD/KRW</h3>
+                        <div class="chart-info">
+                            <span id="usdkrw-value" class="value">{{ usdkrw_info.value }}</span>
+                            <span id="usdkrw-change" class="change {% if usdkrw_info.raw_change > 0 %}positive{% elif usdkrw_info.raw_change < 0 %}negative{% else %}zero{% endif %}">
+                                {{ usdkrw_info.change }} ({{ usdkrw_info.change_pct }})
+                            </span>
+                        </div>
+                    </div>
+                    <canvas id="usdkrwChart"></canvas>
+                </div>
+                {% endif %}
+
+                {% if wti_data and wti_info.value != 'N/A' %}
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>WTI</h3>
+                        <div class="chart-info">
+                            <span id="wti-value" class="value">{{ wti_info.value }}</span>
+                            <span id="wti-change" class="change {% if wti_info.raw_change > 0 %}positive{% elif wti_info.raw_change < 0 %}negative{% else %}zero{% endif %}">
+                                {{ wti_info.change }} ({{ wti_info.change_pct }})
+                            </span>
+                        </div>
+                    </div>
+                    <canvas id="wtiChart"></canvas>
+                </div>
+                {% endif %}
+            </div>
+
+            <hr>
+
+            <div style="display: flex; gap: 40px; flex-wrap: wrap; margin-top: 20px;">
+                {% if kospi_top_volume or kospi_top_value %}
+                <div style="flex: 1;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 id="kospi-rank-title" style="margin: 0;">{{ today }} KOSPI 거래량 상위 10</h4>
+                        <div class="btn-group btn-group-sm" id="kospi-rank-selector">
+                            <button type="button" class="btn btn-default active" data-target="volume">거래량</button>
+                            <button type="button" class="btn btn-default" data-target="value">거래대금</button>
+                        </div>
+                    </div>
+                    <table class="table table-striped rank-table" id="kospi-volume-table">
+                        <thead><tr><th>종목명</th><th>종가</th><th>거래량</th></tr></thead>
+                        <tbody>
+                            {% for item in kospi_top_volume %}
+                            <tr>
+                                <td class="stock-name" data-code="{{ item.Code }}" style="cursor:pointer; color:blue;">{{ item.Name }}</td>
+                                <td>{{ item.Close | format_price }}</td>
+                                <td>{{ item.Volume | format_kr }}주</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <table class="table table-striped rank-table hidden-table" id="kospi-value-table">
+                        <thead><tr><th>종목명</th><th>종가</th><th>거래대금</th></tr></thead>
+                        <tbody>
+                            {% for item in kospi_top_value %}
+                            <tr>
+                                <td class="stock-name" data-code="{{ item.Code }}" style="cursor:pointer; color:blue;">{{ item.Name }}</td>
+                                <td>{{ item.Close | format_price }}</td>
+                                <td>{{ item.TradingValue | format_kr }}원</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+                
+                {% if kosdaq_top_volume or kosdaq_top_value %}
+                <div style="flex: 1;">
+                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 id="kosdaq-rank-title" style="margin: 0;">{{ today }} KOSDAQ 거래량 상위 10</h4>
+                        <div class="btn-group btn-group-sm" id="kosdaq-rank-selector">
+                            <button type="button" class="btn btn-default active" data-target="volume">거래량</button>
+                            <button type="button" class="btn btn-default" data-target="value">거래대금</button>
+                        </div>
+                    </div>
+                    <table class="table table-striped rank-table" id="kosdaq-volume-table">
+                        <thead><tr><th>종목명</th><th>종가</th><th>거래량</th></tr></thead>
+                        <tbody>
+                            {% for item in kosdaq_top_volume %}
+                            <tr>
+                                <td class="stock-name" data-code="{{ item.Code }}" style="cursor:pointer; color:blue;">{{ item.Name }}</td>
+                                <td>{{ item.Close | format_price }}</td>
+                                <td>{{ item.Volume | format_kr }}주</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <table class="table table-striped rank-table hidden-table" id="kosdaq-value-table">
+                        <thead><tr><th>종목명</th><th>종가</th><th>거래대금</th></tr></thead>
+                        <tbody>
+                            {% for item in kosdaq_top_value %}
+                            <tr>
+                                <td class="stock-name" data-code="{{ item.Code }}" style="cursor:pointer; color:blue;">{{ item.Name }}</td>
+                                <td>{{ item.Close | format_price }}</td>
+                                <td>{{ item.TradingValue | format_kr }}원</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+            {% endblock %}
         </div>
-        
+    </div>
+    
+    <footer class="templatemo-footer">
+        <div class="templatemo-copyright">
+            <p>Copyright &copy; 2084 Your Company Name</p>
+        </div>
+    </footer>
+</div>
+
+<div class="modal fade" id="newsModal" tabindex="-1" role="dialog" aria-labelledby="newsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="newsModalLabel">종목 뉴스</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
       </div>
-      
-
-      {% endblock %}
+      <div class="modal-body" id="newsModalBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">닫기</button>
+      </div>
     </div>
   </div>
-
-  <footer class="templatemo-footer">
-    <div class="templatemo-copyright">
-      <p>Copyright &copy; 2084 Your Company Name</p>
-    </div>
-  </footer>
 </div>
 
 <script src="{{ url_for('static', filename='template/js/jquery.min.js') }}"></script>
@@ -183,155 +297,102 @@
 <script src="{{ url_for('static', filename='template/js/templatemo_script.js') }}"></script>
 
 <script>
-  // Flask에서 넘긴 데이터를 JS 객체로 변환
-    {% if kospi_data and kosdaq_data and usdkrw_data %}
-  const dataMap = {
-    daily: {
-      kospi: {{ kospi_data | tojson }},
-      kosdaq: {{ kosdaq_data | tojson }},
-      usdkrw: {{ usdkrw_data | tojson }}
-    },
-    weekly: {
-      kospi: {{ kospi_weekly_data | tojson }},
-      kosdaq: {{ kosdaq_weekly_data | tojson }},
-      usdkrw: {{ usdkrw_weekly_data | tojson }}
-    },
-    monthly: {
-      kospi: {{ kospi_monthly_data | tojson }},
-      kosdaq: {{ kosdaq_monthly_data | tojson }},
-      usdkrw: {{ usdkrw_monthly_data | tojson }}
+document.addEventListener('DOMContentLoaded', function() {
+    // --- 차트 생성 로직 ---
+    const chartDefaultOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } }, plugins: { legend: { display: false } }, elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } } };
+    function parseChartJsData(data) { return { labels: data.map(item => { if (!item.Date) return ''; const parts = item.Date.split('-'); return `${parts[1]}/${parts[2]}`; }), closes: data.map(item => item.Close) }; }
+
+    {% if kospi_data %} new Chart(document.getElementById('kospiChart'), { type: 'line', data: { labels: parseChartJsData({{ kospi_data | tojson }}).labels, datasets: [{ data: parseChartJsData({{ kospi_data | tojson }}).closes, borderColor: 'rgba(54, 162, 235, 1)' }] }, options: chartDefaultOptions }); {% endif %}
+    {% if kosdaq_data %} new Chart(document.getElementById('kosdaqChart'), { type: 'line', data: { labels: parseChartJsData({{ kosdaq_data | tojson }}).labels, datasets: [{ data: parseChartJsData({{ kosdaq_data | tojson }}).closes, borderColor: 'rgba(255, 99, 132, 1)' }] }, options: chartDefaultOptions }); {% endif %}
+    {% if usdkrw_data %} new Chart(document.getElementById('usdkrwChart'), { type: 'line', data: { labels: parseChartJsData({{ usdkrw_data | tojson }}).labels, datasets: [{ data: parseChartJsData({{ usdkrw_data | tojson }}).closes, borderColor: 'rgba(75, 192, 192, 1)' }] }, options: chartDefaultOptions }); {% endif %}
+    {% if wti_data %} new Chart(document.getElementById('wtiChart'), { type: 'line', data: { labels: parseChartJsData({{ wti_data | tojson }}).labels, datasets: [{ data: parseChartJsData({{ wti_data | tojson }}).closes, borderColor: 'rgba(255, 159, 64, 1)' }] }, options: chartDefaultOptions }); {% endif %}
+    
+    // --- 실시간 데이터 업데이트 로직 ---
+    function updateLatestData() {
+        fetch('/api/latest-data')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) { console.error("Error fetching latest data:", data.error); return; }
+                function updateIndicator(name, info) {
+                    const valueEl = document.getElementById(`${name}-value`);
+                    const changeEl = document.getElementById(`${name}-change`);
+                    if (!valueEl || !changeEl) return;
+                    valueEl.textContent = info.value;
+                    changeEl.textContent = `${info.change} (${info.change_pct})`;
+                    changeEl.className = 'change';
+                    if (info.raw_change > 0) changeEl.classList.add('positive');
+                    else if (info.raw_change < 0) changeEl.classList.add('negative');
+                    else changeEl.classList.add('zero');
+                }
+                updateIndicator('kospi', data.kospi);
+                updateIndicator('kosdaq', data.kosdaq);
+                updateIndicator('usdkrw', data.usdkrw);
+                updateIndicator('wti', data.wti);
+            });
     }
-  };
-  {% endif %}  
-  
-  // 날짜(YYYY-MM-DD)만 추출 및 종가 배열 생성 함수
-  function parseChartData(data) {
-    return {
-      labels: data.map(item => {
-        const d = new Date(item.Date);
-        return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
-      }),
-      closes: data.map(item => item.Close)
-    };
-  }
-
-  // 초기 데이터 파싱
-  const kospiChartData = parseChartData(dataMap.daily.kospi);
-  const kosdaqChartData = parseChartData(dataMap.daily.kosdaq);
-
-  // 코스피 차트 생성
-  const ctxKospi = document.getElementById('kospiChart').getContext('2d');
-  new Chart(ctxKospi, {
-    type: 'line',
-    data: {
-      labels: kospiChartData.labels,
-      datasets: [{
-        label: 'KOSPI 종가',
-        data: kospiChartData.closes,
-        borderColor: 'rgba(54, 162, 235, 1)',
-        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 3,
-        pointHoverRadius: 5,
-        borderWidth: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: { beginAtZero: false }
-      }
+    if(document.getElementById('kospi-value')) { // 지표가 하나라도 렌더링 되었을때만 업데이트 시작
+        setInterval(updateLatestData, 30000);
     }
-  });
 
-  // 코스닥 차트 생성
-  const ctxKosdaq = document.getElementById('kosdaqChart').getContext('2d');
-  new Chart(ctxKosdaq, {
-    type: 'line',
-    data: {
-      labels: kosdaqChartData.labels,
-      datasets: [{
-        label: 'KOSDAQ 종가',
-        data: kosdaqChartData.closes,
-        borderColor: 'rgba(255, 99, 132, 1)',
-        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 3,
-        pointHoverRadius: 5,
-        borderWidth: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: { beginAtZero: false }
-      }
+    // --- 테이블 순위 전환 로직 ---
+    function setupRankSwitcher(selectorId, titleId, marketPrefix) {
+        const selector = document.getElementById(selectorId);
+        if (!selector) return;
+        selector.addEventListener('click', function(event) {
+            if (event.target.tagName !== 'BUTTON') return;
+            const targetType = event.target.getAttribute('data-target');
+            const title = document.getElementById(titleId);
+            const today = "{{ today }}";
+            selector.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            if (targetType === 'volume') {
+                document.getElementById(`${marketPrefix}-volume-table`).classList.remove('hidden-table');
+                document.getElementById(`${marketPrefix}-value-table`).classList.add('hidden-table');
+                title.textContent = `${today} ${marketPrefix.toUpperCase()} 거래량 상위 10`;
+            } else if (targetType === 'value') {
+                document.getElementById(`${marketPrefix}-volume-table`).classList.add('hidden-table');
+                document.getElementById(`${marketPrefix}-value-table`).classList.remove('hidden-table');
+                title.textContent = `${today} ${marketPrefix.toUpperCase()} 거래대금 상위 10`;
+            }
+        });
     }
-  });
+    setupRankSwitcher('kospi-rank-selector', 'kospi-rank-title', 'kospi');
+    setupRankSwitcher('kosdaq-rank-selector', 'kosdaq-rank-title', 'kosdaq');
 
-  let mainChart;
-
-  function createChart(ctx, label, color) {
-    return new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label,
-          data: [],
-          borderColor: color,
-          backgroundColor: color.replace('1)', '0.2)'),
-          fill: true,
-          tension: 0.3,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          borderWidth: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: {
-          y: {
-            beginAtZero: false
-          }
-        }
-      }
+    // --- 뉴스 모달 로직 ---
+    document.querySelectorAll('.stock-name').forEach(item => {
+        item.addEventListener('click', event => {
+            const stockCode = event.target.getAttribute('data-code');
+            const stockName = event.target.textContent.trim();
+            const modalTitle = document.getElementById('newsModalLabel');
+            const modalBody = document.getElementById('newsModalBody');
+            modalTitle.textContent = `${stockName} 관련 뉴스`;
+            modalBody.innerHTML = '<div class="text-center p-4"><div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div></div>';
+            $('#newsModal').modal('show');
+            fetch(`/news/${stockCode}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        modalBody.innerHTML = `<p class="p-3">뉴스를 불러오는 데 실패했습니다: ${data.error}</p>`;
+                        return;
+                    }
+                    if (data.length === 0) {
+                         modalBody.innerHTML = `<p class="p-3">관련 뉴스가 없습니다.</p>`;
+                         return;
+                    }
+                    let newsHtml = '<ul class="list-group list-group-flush">';
+                    data.forEach(newsItem => {
+                        newsHtml += `<li class="list-group-item"><a href="${newsItem.url}" target="_blank" rel="noopener noreferrer" style="color: #337ab7;">${newsItem.title}</a><small class="d-block text-muted mt-1">${newsItem.press} - ${newsItem.date}</small></li>`;
+                    });
+                    newsHtml += '</ul>';
+                    modalBody.innerHTML = newsHtml;
+                })
+                .catch(error => {
+                    modalBody.innerHTML = `<p class="p-3">뉴스를 불러오는 중 오류가 발생했습니다: ${error}</p>`;
+                });
+        });
     });
-  }
-
-  function updateChart(chart, data, label) {
-    chart.data.labels = data.labels;
-    chart.data.datasets[0].data = data.closes;
-    chart.data.datasets[0].label = label;
-    chart.update();
-  }
-
-  function updateMainChart() {
-    const type = document.getElementById('chartTypeSelect').value;
-    const market = document.getElementById('marketSelect').value;
-
-    const data = parseChartData(dataMap[type][market]);
-    const labelMap = {
-      kospi: 'KOSPI 종가',
-      kosdaq: 'KOSDAQ 종가',
-      usdkrw: 'USD/KRW 환율'
-    };
-
-    document.getElementById('chartTitle').textContent = labelMap[market];
-    updateChart(mainChart, data, labelMap[market]);
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const ctx = document.getElementById('mainChart').getContext('2d');
-    mainChart = createChart(ctx, 'KOSPI 종가', 'rgba(54, 162, 235, 1)');
-    updateMainChart();
-
-    document.getElementById('chartTypeSelect').addEventListener('change', updateMainChart);
-    document.getElementById('marketSelect').addEventListener('change', updateMainChart);
-  });
-
+});
 </script>
 
 </body>

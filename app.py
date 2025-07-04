@@ -1,24 +1,18 @@
-from flask import Flask, Blueprint, render_template, request, jsonify
-from blueprints.analysis import analysis_bp
-from blueprints.tables import tables_bp
-from blueprints.join import join_bp
-from blueprints.data import data_bp
-from blueprints.auth import auth_bp
+from flask import Flask, render_template, jsonify
 import FinanceDataReader as fdr
 import pandas as pd
-from dotenv import load_dotenv
-import os
-
-from pytz import timezone # 한국시간 사용 
-
-
+from pytz import timezone
 from datetime import datetime, timedelta
-import os, json
+import os
+import json
+import yfinance as yf
+from pykrx import stock
+import requests
 
 app = Flask(__name__)
 app.secret_key = '1234'
 
-# 거래량: 억/만 단위 + 원
+# --- Template Filters (서식 지정) ---
 @app.template_filter('format_kr')
 def format_kr(value):
     try:
@@ -29,196 +23,219 @@ def format_kr(value):
             return f"{num // 10000}만"
         else:
             return str(num)
-    except:
+    except (ValueError, TypeError):
         return value
-    
-# 종가: 숫자 + 원
+
 @app.template_filter('format_price')
 def format_price(value):
     try:
-        return f"{int(value):,} 원"
-    except:
+        return f"{float(value):,.2f}"
+    except (ValueError, TypeError):
         return value
 
-# 거래대금: 만원 단위 절하 + '만원'
-@app.template_filter('format_trading_value')
-def format_trading_value(value):
-    try:
-        return f"{int(value) // 10000:,} 만원"
-    except:
-        return value
-        
 app.jinja_env.filters['format_kr'] = format_kr
+app.jinja_env.filters['format_price'] = format_price
 
+# --- 데이터 조회 함수들 ---
+CACHE_PATH = 'cache/market_data.json'
+
+def get_latest_business_day():
+    today = datetime.now(timezone('Asia/Seoul'))
+    if today.hour < 15 or (today.hour == 15 and today.minute < 40):
+        today = today - timedelta(days=1)
+    for i in range(10): 
+        date_to_check = today - timedelta(days=i)
+        date_str = date_to_check.strftime('%Y%m%d')
+        try:
+            df = stock.get_market_ohlcv(date_str, date_str, "005930")
+            if not df.empty:
+                return date_str
+        except Exception:
+            continue
+    return today.strftime('%Y%m%d')
+
+def get_market_rank_data(date_str):
+    kospi_df = stock.get_market_ohlcv(date_str, market="KOSPI").reset_index()
+    kosdaq_df = stock.get_market_ohlcv(date_str, market="KOSDAQ").reset_index()
+    for df in [kospi_df, kosdaq_df]:
+        tickers = df['티커']
+        names = [stock.get_market_ticker_name(ticker) for ticker in tickers]
+        df['Name'] = names
+        df.rename(columns={'티커': 'Code', '종가': 'Close', '거래량': 'Volume', '거래대금': 'TradingValue'}, inplace=True)
+    return kospi_df.to_dict('records'), kosdaq_df.to_dict('records')
+
+def get_wti_data(days=60):
+    ticker = yf.Ticker("CL=F")
+    df = ticker.history(period=f"{days}d")
+    return df.reset_index()[['Date', 'Close']].dropna()
+
+def calculate_change_info(df, name):
+    if df is None or len(df.index) < 2:
+        return {'name': name, 'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
+    latest = df.iloc[-1]
+    previous = df.iloc[-2]
+    value = latest['Close']
+    change = value - previous['Close']
+    change_pct = (change / previous['Close']) * 100 if previous['Close'] != 0 else 0
+    return {
+        'name': name, 'value': f"{value:,.2f}", 'change': f"{change:,.2f}",
+        'change_pct': f"{change_pct:+.2f}%", 'raw_change': change
+    }
+
+# --- 뉴스 API 라우트 ---
+@app.route('/news/<string:code>')
+def get_news(code):
+    try:
+        url = f"https://m.stock.naver.com/api/news/stock/{code}?pageSize=10&page=1"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        raw_data = response.json()
+        formatted_news = []
+        if isinstance(raw_data, list):
+            for data_group in raw_data:
+                if isinstance(data_group, dict) and 'items' in data_group:
+                    for item in data_group.get('items', []):
+                        if isinstance(item, dict):
+                            office_id, article_id = item.get('officeId'), item.get('articleId')
+                            if office_id and article_id:
+                                raw_dt = item.get('datetime', '')
+                                f_date = f"{raw_dt[0:4]}-{raw_dt[4:6]}-{raw_dt[6:8]} {raw_dt[8:10]}:{raw_dt[10:12]}" if len(raw_dt) >= 12 else raw_dt
+                                formatted_news.append({
+                                    'title': item.get('title'), 'press': item.get('officeName'),
+                                    'date': f_date, 'url': f"https://n.news.naver.com/mnews/article/{office_id}/{article_id}"
+                                })
+        return jsonify(formatted_news[:10])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- 실시간 데이터 API 라우트 ---
+@app.route('/api/latest-data')
+def get_latest_data():
+    try:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=10)
+        kospi_df = fdr.DataReader('KS11', start=start_date, end=end_date)
+        kosdaq_df = fdr.DataReader('KQ11', start=start_date, end=end_date)
+        usdkrw_df = fdr.DataReader('USD/KRW', start=start_date, end=end_date)
+        wti_df = get_wti_data(10)
+        wti_df.set_index('Date', inplace=True)
+        return jsonify({
+            'kospi': calculate_change_info(kospi_df, 'KOSPI'),
+            'kosdaq': calculate_change_info(kosdaq_df, 'KOSDAQ'),
+            'usdkrw': calculate_change_info(usdkrw_df, 'USD/KRW'),
+            'wti': calculate_change_info(wti_df, 'WTI')
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- 메인 라우트 (안정성 강화) ---
 @app.route('/')
 @app.route('/index')
 def index():
-    import FinanceDataReader as fdr
-    import pandas as pd
-
-    kospi_df = fdr.DataReader('KS11').tail(180).reset_index()
-    kosdaq_df = fdr.DataReader('KQ11').tail(180).reset_index()
-    usdkrw_df = fdr.DataReader('USD/KRW').tail(180).reset_index()
-    usdkrw_df.rename(columns={'index': 'Date'}, inplace=True)
-
-
-    # 날짜를 UTC에서 서울 시간으로 변환 후 날짜만 추출
-    seoul_tz = timezone('Asia/Seoul')
-    kospi_df['Date'] = pd.to_datetime(kospi_df['Date']).dt.tz_localize('UTC').dt.tz_convert(seoul_tz).dt.date
-    kosdaq_df['Date'] = pd.to_datetime(kosdaq_df['Date']).dt.tz_localize('UTC').dt.tz_convert(seoul_tz).dt.date
-    usdkrw_df['Date'] = pd.to_datetime(usdkrw_df['Date']).dt.tz_localize('UTC').dt.tz_convert(seoul_tz).dt.date
-
-    def resample_data(df, rule):
-        if 'Date' not in df.columns:
-            df = df.reset_index()
-        df['Date'] = pd.to_datetime(df['Date'])
-        df.set_index('Date', inplace=True)
-        df_resampled = df['Close'].resample(rule).last().dropna()
-        return [{'Date': d.strftime('%Y-%m-%d'), 'Close': float(c)} for d, c in df_resampled.items()]
-
-    kospi_daily = kospi_df.tail(30)[['Date', 'Close']]
-    kosdaq_daily = kosdaq_df.tail(30)[['Date', 'Close']]
-    usdkrw_daily = usdkrw_df.tail(30)[['Date', 'Close']]
-
-    kospi_weekly_data = resample_data(kospi_df.copy(), 'W')
-    kosdaq_weekly_data = resample_data(kosdaq_df.copy(), 'W')
-    usdkrw_weekly_data = resample_data(usdkrw_df.copy(), 'W')
-
-    kospi_monthly_data = resample_data(kospi_df.copy(), 'ME')
-    kosdaq_monthly_data = resample_data(kosdaq_df.copy(), 'ME')
-    usdkrw_monthly_data = resample_data(usdkrw_df.copy(), 'ME')
-
- #거래량 상위 
-    top_kospi_volume = get_top_volume_with_cache('KOSPI')
-    top_kosdaq_volume = get_top_volume_with_cache('KOSDAQ')
-
-    top_kospi_volume = add_trading_value(get_top_volume_with_cache('KOSPI'))
-    top_kosdaq_volume = add_trading_value(get_top_volume_with_cache('KOSDAQ'))
-
+    # --- 캐시 관리 ---
+    os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
+    try:
+        with open(CACHE_PATH, 'r', encoding='utf-8') as f:
+            cache = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        cache = {}
     
-# 거래대금 
-    top_kospi_volume = add_trading_value(top_kospi_volume)
-    top_kosdaq_volume = add_trading_value(top_kosdaq_volume)
+    latest_bday = get_latest_business_day()
 
-#오늘날 
-    yesterday = datetime.now() - timedelta(days=1)
-    today_str = yesterday.strftime('%Y-%m-%d')
+    if cache.get('date') != latest_bday:
+        print(f"[{datetime.now()}] Creating new cache for date: {latest_bday}")
+        new_cache = {'date': latest_bday}
+        try:
+            kospi_all_data, kosdaq_all_data = get_market_rank_data(latest_bday)
+            new_cache['kospi_all_data'] = kospi_all_data
+            new_cache['kosdaq_all_data'] = kosdaq_all_data
+        except Exception as e:
+            print(f"Error fetching pykrx data: {e}")
+        cache = new_cache
+        with open(CACHE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
 
+    kospi_all_data = cache.get('kospi_all_data', [])
+    kosdaq_all_data = cache.get('kosdaq_all_data', [])
+
+    # --- 각 데이터 조회 및 변동률 계산 (개별 try-except로 안정성 확보) ---
+    default_info = {'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
+    kospi_info, kosdaq_info, usdkrw_info, wti_info = default_info, default_info, default_info, default_info
+    kospi_data, kosdaq_data, usdkrw_data, wti_data = [], [], [], []
+
+    days_to_fetch = 60
+    start_date = datetime.now() - timedelta(days=days_to_fetch)
+    end_date = datetime.now()
+
+    try:
+        kospi_df_full = fdr.DataReader('KS11', start=start_date, end=end_date)
+        kospi_info = calculate_change_info(kospi_df_full, 'KOSPI')
+        kospi_df_full.reset_index(inplace=True)
+        kospi_data = kospi_df_full.tail(30).to_dict('records')
+    except Exception as e:
+        print(f"Error fetching KOSPI data: {e}")
+
+    try:
+        kosdaq_df_full = fdr.DataReader('KQ11', start=start_date, end=end_date)
+        kosdaq_info = calculate_change_info(kosdaq_df_full, 'KOSDAQ')
+        kosdaq_df_full.reset_index(inplace=True)
+        kosdaq_data = kosdaq_df_full.tail(30).to_dict('records')
+    except Exception as e:
+        print(f"Error fetching KOSDAQ data: {e}")
+
+    try:
+        usdkrw_df_full = fdr.DataReader('USD/KRW', start=start_date, end=end_date)
+        usdkrw_info = calculate_change_info(usdkrw_df_full, 'USD/KRW')
+        usdkrw_df_full.reset_index(inplace=True)
+        usdkrw_data = usdkrw_df_full.tail(30).to_dict('records')
+    except Exception as e:
+        print(f"Error fetching USD/KRW data: {e}")
+
+    try:
+        wti_df_full = get_wti_data(days_to_fetch)
+        wti_df_full_for_calc = wti_df_full.copy()
+        wti_df_full_for_calc.set_index('Date', inplace=True)
+        wti_info = calculate_change_info(wti_df_full_for_calc, 'WTI')
+        wti_data = wti_df_full.tail(30).to_dict('records')
+    except Exception as e:
+        print(f"Error fetching WTI data: {e}")
+        
+    # 날짜 형식 통일
+    for data_list in [kospi_data, kosdaq_data, usdkrw_data, wti_data]:
+        for item in data_list:
+            if isinstance(item.get('Date'), datetime):
+                item['Date'] = item['Date'].strftime('%Y-%m-%d')
+    
+    # --- 순위 데이터 정렬 ---
+    top_kospi_volume = sorted(kospi_all_data, key=lambda x: x.get('Volume', 0), reverse=True)[:10]
+    top_kospi_value = sorted(kospi_all_data, key=lambda x: x.get('TradingValue', 0), reverse=True)[:10]
+    top_kosdaq_volume = sorted(kosdaq_all_data, key=lambda x: x.get('Volume', 0), reverse=True)[:10]
+    top_kosdaq_value = sorted(kosdaq_all_data, key=lambda x: x.get('TradingValue', 0), reverse=True)[:10]
+    
+    today_str_display = datetime.strptime(latest_bday, '%Y%m%d').strftime('%Y-%m-%d')
 
     return render_template('index.html',
-        kospi_data=kospi_daily.to_dict(orient='records'),
-        kosdaq_data=kosdaq_daily.to_dict(orient='records'),
-        usdkrw_data=usdkrw_daily.to_dict(orient='records'),
-        kospi_weekly_data=kospi_weekly_data,
-        kosdaq_weekly_data=kosdaq_weekly_data,
-        usdkrw_weekly_data=usdkrw_weekly_data,
-        kospi_monthly_data=kospi_monthly_data,
-        kosdaq_monthly_data=kosdaq_monthly_data,
-        usdkrw_monthly_data=usdkrw_monthly_data,
-        kospi_top_volume=top_kospi_volume,
-        kosdaq_top_volume=top_kosdaq_volume,
-
-        today=today_str
-    )
-
-#그므
-def get_cpi_data_from_bok():
-    api_key = os.getenv("ECOS_API_KEY")
-    if not api_key:
-        raise ValueError("ECOS_API_KEY가 .env에서 로드되지 않았습니다.")
-
-    url = (
-        f"http://ecos.bok.or.kr/api/StatisticSearch/{api_key}/json/kr/1/100/"
-        f"901Y014/2020/2025/0000001/M"
-    )
-
-    response = requests.get(url)
-    data = response.json()
-
-    rows = data['StatisticSearch']['row']
-    cpi_dates = [f"{r['TIME'][:4]}-{r['TIME'][4:]}" for r in rows]
-    cpi_values = [float(r['DATA_VALUE']) for r in rows]
-
-    return cpi_dates[-12:], cpi_values[-12:]
-    
-def add_trading_value(stock_list):
-    for item in stock_list:
-        item['TradingValue'] = item['Close'] * item['Volume']
-    return stock_list
-
-
-def get_top_volume_stocks(market, top_n=10):
-    stock_list = fdr.StockListing(market)[['Name', 'Code']]
-    result = []
-
-    for _, row in stock_list.iterrows():
-        try:
-            df = fdr.DataReader(row['Code']).tail(1)
-            if not df.empty:
-                volume = df['Volume'].iloc[0]
-                close = df['Close'].iloc[0]
-                trading_value = volume * close
-                result.append({
-                    'Name': row['Name'],
-                    'Code': row['Code'],
-                    'Close': float(close),  # 여기 변환
-                    'Volume': int(volume)   # 여기 변환
-                })
-        except:
-            continue  # 오류 무시하고 다음 종목 처리
-
-    result_sorted = sorted(result, key=lambda x: x['Volume'], reverse=True)
-    return result_sorted[:top_n]
-
-
-
-
-cache_path = 'cache/top_volume.json'
-
-import os
-import json
-
-def get_top_volume_with_cache(market, top_n=10):
-        # cache 폴더가 없으면 생성
-    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-
-    cache = {}
-    if os.path.exists(cache_path):
-        with open(cache_path, 'r', encoding='utf-8') as f:
-            try:
-                cache = json.load(f)
-            except:
-                cache = {}
-
-    today = datetime.now().strftime('%Y-%m-%d')
-
-    # 날짜가 다르면 초기화
-    if cache.get('date') != today:
-        cache = {'date': today}
-
-    # 캐시에 이미 있으면 바로 리턴
-    if f'top_{market.lower()}' in cache:
-        return cache[f'top_{market.lower()}']
-
-    # 없으면 데이터 새로 조회
-    result = get_top_volume_stocks(market, top_n)
-    cache[f'top_{market.lower()}'] = result
-
-    # 다시 저장
-    with open(cache_path, 'w', encoding='utf-8') as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
-
-    return result
-
-# 사용 예
-top_kospi_volume = get_top_volume_with_cache('KOSPI')
-top_kosdaq_volume = get_top_volume_with_cache('KOSDAQ')
-    
-app.register_blueprint(auth_bp, url_prefix='/auth')
-app.register_blueprint(analysis_bp)
-app.register_blueprint(tables_bp)
-app.register_blueprint(join_bp)
-app.register_blueprint(data_bp)
+        kospi_data=kospi_data, kosdaq_data=kosdaq_data, usdkrw_data=usdkrw_data, wti_data=wti_data,
+        kospi_info=kospi_info, kosdaq_info=kosdaq_info, usdkrw_info=usdkrw_info, wti_info=wti_info,
+        kospi_top_volume=top_kospi_volume, kosdaq_top_volume=top_kosdaq_volume,
+        kospi_top_value=top_kospi_value, kosdaq_top_value=top_kosdaq_value,
+        today=today_str_display)
 
 if __name__ == '__main__':
     app.run(debug=True)
+    # --- 블루프린트 및 서버 실행 (필요 시 주석 해제) ---
+from blueprints.analysis import analysis_bp
+#from blueprints.tables import tables_bp
+# from blueprints.join import join_bp
+# from blueprints.data import data_bp
+# from blueprints.auth import auth_bp
+
+#app.register_blueprint(auth_bp, url_prefix='/auth')
+app.register_blueprint(analysis_bp)
+# app.register_blueprint(tables_bp)
+# app.register_blueprint(join_bp)
+# app.register_blueprint(data_bp)
+
+
+
