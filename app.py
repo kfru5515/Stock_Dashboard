@@ -14,6 +14,7 @@ from blueprints.tables import tables_bp
 from blueprints.join import join_bp
 from blueprints.data import data_bp
 from blueprints.auth import auth_bp
+from blueprints.askfin import askfin_bp
 
 from db.extensions import db
 
@@ -142,14 +143,8 @@ def get_latest_data():
 # AskFin 라우트 
 @app.route("/askfin")
 def askfin_page():
-    # askfin.html 파일을 사용자에게 보여줍니다.
     return render_template("askfin.html")
 
-# --- Flask 앱 실행 ---
-if __name__ == '__main__':
-    # ... (기존 코드와 동일) ...
-
-    
 
 # --- 메인 라우트 (안정성 강화) ---
 @app.route('/')
@@ -250,6 +245,8 @@ def index():
 # from blueprints.join import join_bp
 # from blueprints.data import data_bp
 # from blueprints.auth import auth_bp
+from blueprints.askfin import askfin_bp
+app.register_blueprint(askfin_bp)
 
 #app.register_blueprint(auth_bp, url_prefix='/auth')
 # app.register_blueprint(tables_bp)
@@ -271,5 +268,5 @@ app.register_blueprint(join_bp)  # <-- 여기 한 번만 등록!
 app.register_blueprint(data_bp)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000)
 
