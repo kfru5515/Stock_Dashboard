@@ -139,6 +139,20 @@ def get_latest_data():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+
+# AskFin 라우트 
+@app.route("/askfin")
+def askfin_page():
+    # askfin.html 파일을 사용자에게 보여줍니다.
+    return render_template("askfin.html")
+
+# --- Flask 앱 실행 ---
+if __name__ == '__main__':
+    # ... (기존 코드와 동일) ...
+
+    
+
 # --- 메인 라우트 (안정성 강화) ---
 @app.route('/')
 @app.route('/index')
