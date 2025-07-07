@@ -32,7 +32,7 @@ def login():
 @auth_bp.route('/logout')
 def logout():
     session.pop('user', None)
-    return redirect(url_for('home'))
+    return redirect(url_for('index'))
 
 @auth_bp.route('/mypage')
 @login_required

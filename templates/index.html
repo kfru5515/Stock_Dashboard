@@ -99,7 +99,7 @@
                 </ul>
             </li>
             <li><a href="{{ url_for('data.data') }}"><i class="fa fa-cubes"></i>차트</a></li>
-            <li><a href="{{ url_for('analysis.analysis') }}"><i class="fa fa-map-marker"></i>비교분석</a></li>
+            <li><a href="{{ url_for('analysis.analysis_page') }}"><i class="fa fa-map-marker"></i>비교분석</a></li>
             <li><a href="{{ url_for('tables.tables') }}"><i class="fa fa-users"></i>사용자 정보</a></li>
             <li><a href="{{ url_for('join.join') }}"><i class="fa fa-cog"></i>회원가입</a></li>
             {% if session.get('user') %}
@@ -121,12 +121,7 @@
     <div class="templatemo-content-wrapper">
         <div class="templatemo-content">
             {% block content %}
-            <ol class="breadcrumb">
-              <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
-              <li><a href="{{ url_for('index') }}">Dashboard</a></li>
-              <li class="active">Overview</li>
-              <li><a href="{{ url_for('auth.login') }}">Sign In Form</a></li>
-            </ol>
+            
             <h1>Dashboard</h1>
 
             <div class="chart-wrapper">

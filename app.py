@@ -230,17 +230,14 @@ def index():
         kospi_top_value=top_kospi_value, kosdaq_top_value=top_kosdaq_value,
         today=today_str_display)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+
     # --- 블루프린트 및 서버 실행 (필요 시 주석 해제) ---
-from blueprints.analysis import analysis_bp
 #from blueprints.tables import tables_bp
 # from blueprints.join import join_bp
 # from blueprints.data import data_bp
 # from blueprints.auth import auth_bp
 
 #app.register_blueprint(auth_bp, url_prefix='/auth')
-app.register_blueprint(analysis_bp)
 # app.register_blueprint(tables_bp)
 # app.register_blueprint(join_bp)
 # app.register_blueprint(data_bp)
@@ -252,13 +249,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
-@app.route('/')
-def home():
-    return render_template('index_main.html')
-
-@app.route('/index')
-def index():
-    return render_template('index.html')
 
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(analysis_bp)
