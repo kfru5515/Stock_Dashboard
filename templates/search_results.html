@@ -1,0 +1,15 @@
+{% extends "index.html" %}
+
+{% block content %}
+<h3>검색 결과: "{{ query }}"</h3>
+{% if results %}
+<ul>
+    {% for stock in results %}
+    <li><a href="{{ url_for('search.stock_detail', code=stock.code) }}">{{ stock.name }} ({{ stock.code }}) - 현재가: {{ stock.currentPrice }}</a></li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>검색 결과가 없습니다.</p>
+{% endif %}
+{% endblock %}
+
