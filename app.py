@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 import FinanceDataReader as fdr
 import pandas as pd
 from pytz import timezone
@@ -14,8 +14,10 @@ from blueprints.tables import tables_bp
 from blueprints.join import join_bp
 from blueprints.data import data_bp
 from blueprints.auth import auth_bp
+from blueprints.search import search_bp
 
 from db.extensions import db
+
 
 app = Flask(__name__)
 app.secret_key = '1234'
@@ -231,6 +233,80 @@ def index():
         today=today_str_display)
 
 
+@app.route('/search')
+def search():
+    query = request.args.get('q', '').strip()
+    results = []
+
+    if query:
+        # pykrx에서 종목명-코드 딕셔너리 로드
+        try:
+            krx_list = fdr.StockListing('KRX')
+            name_to_code = pd.Series(krx_list.Code.values, index=krx_list.Name).to_dict()
+        except Exception as e:
+            print(f"KRX 종목 리스트 로드 실패: {e}")
+            name_to_code = {}
+
+        # query가 종목명인지 코드인지 판단해서 코드로 변환
+        ticker_code = name_to_code.get(query)
+        if not ticker_code:
+            # 코드 형태로 입력했을 수도 있으니 그냥 대문자로
+            ticker_code = query.upper()
+        
+        # yfinance 티커 포맷 (KRX 종목은 .KS 붙임)
+        ticker_code_yf = f"{ticker_code}.KS"
+
+        print(f"query: {query}")
+        print(f"ticker_code: {ticker_code}")
+        print(f"ticker_code_yf: {ticker_code_yf}")
+
+        try:
+            ticker = yf.Ticker(ticker_code_yf)
+            info = ticker.info
+            # info가 너무 빈 dict면 fallback
+            if not info or 'shortName' not in info:
+                raise ValueError("info가 충분하지 않음, 히스토리 조회로 대체")
+
+            results.append({
+                'code': ticker_code,
+                'name': info.get('shortName', query),
+                'currentPrice': info.get('currentPrice', 'N/A'),
+            })
+        except Exception as e:
+            print(f"yfinance info 조회 실패: {e}")
+            # fallback: 최근 1일 히스토리 조회해보기
+            try:
+                hist = ticker.history(period="1d")
+                if not hist.empty:
+                    current_price = hist['Close'].iloc[-1]
+                    results.append({
+                        'code': ticker_code,
+                        'name': query,
+                        'currentPrice': f"{current_price:.2f}",
+                    })
+                else:
+                    print("히스토리 데이터도 없음")
+            except Exception as e2:
+                print(f"히스토리 조회 실패: {e2}")
+
+    return render_template('search_results.html', results=results, query=query)
+
+
+# 종목 상세 페이지 라우트
+@search_bp.route('/stock/<code>')
+def stock_detail(code):
+    try:
+        ticker = yf.Ticker(code)
+        info = ticker.info
+    except Exception as e:
+        info = None
+
+    if not info:
+        return "종목 정보를 찾을 수 없습니다.", 404
+
+    return render_template('stock_detail.html', stock=info)
+
+
     # --- 블루프린트 및 서버 실행 (필요 시 주석 해제) ---
 #from blueprints.tables import tables_bp
 # from blueprints.join import join_bp
@@ -255,6 +331,8 @@ app.register_blueprint(analysis_bp)
 app.register_blueprint(tables_bp)
 app.register_blueprint(join_bp)  # <-- 여기 한 번만 등록!
 app.register_blueprint(data_bp)
+app.register_blueprint(search_bp)
+
 
 if __name__ == '__main__':
     app.run(debug=True)

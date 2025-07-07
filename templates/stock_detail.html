@@ -1,0 +1,14 @@
+{% extends "index.html" %}
+
+{% block content %}
+<h2>{{ stock.get('shortName', '정보 없음') }} ({{ stock.get('symbol', '') }})</h2>
+<ul>
+    <li>현재가: {{ stock.get('currentPrice', 'N/A') }}</li>
+    <li>시장: {{ stock.get('exchange', 'N/A') }}</li>
+    <li>시가총액: {{ stock.get('marketCap', 'N/A') }}</li>
+    <li>52주 최고: {{ stock.get('fiftyTwoWeekHigh', 'N/A') }}</li>
+    <li>52주 최저: {{ stock.get('fiftyTwoWeekLow', 'N/A') }}</li>
+    <!-- 필요한 데이터 더 추가 -->
+</ul>
+
+{% endblock %}
