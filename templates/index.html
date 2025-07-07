@@ -98,20 +98,20 @@
                     <li><a href="#">3</a></li>
                 </ul>
             </li>
-            <li><a href="#"><i class="fa fa-cubes"></i>차트</a></li>
-            <li><a href="#"><i class="fa fa-map-marker"></i>비교분석</a></li>
-            <li><a href="#"><i class="fa fa-users"></i>사용자 정보</a></li>
-            <li><a href="#"><i class="fa fa-cog"></i>회원가입</a></li>
+            <li><a href="{{ url_for('data.data') }}"><i class="fa fa-cubes"></i>차트</a></li>
+            <li><a href="{{ url_for('analysis.analysis') }}"><i class="fa fa-map-marker"></i>비교분석</a></li>
+            <li><a href="{{ url_for('tables.tables') }}"><i class="fa fa-users"></i>사용자 정보</a></li>
+            <li><a href="{{ url_for('join.join') }}"><i class="fa fa-cog"></i>회원가입</a></li>
             {% if session.get('user') %}
                 <li>
-                    <a href="#" onclick="return confirm('로그아웃 하시겠어요?');">
-                        <i class="fa fa-sign-out"></i> 로그아웃
+                  <a href="{{ url_for('auth.logout') }}" onclick="return confirm('로그아웃 하시겠어요?');">
+                    <i class="fa fa-sign-out"></i> 로그아웃
                     </a>
                 </li>
             {% else %}
                 <li>
-                    <a href="#">
-                        <i class="fa fa-sign-in"></i> 로그인
+                  <a href="{{ url_for('auth.login') }}">
+                    <i class="fa fa-sign-in"></i> 로그인
                     </a>
                 </li>
             {% endif %}
@@ -122,8 +122,10 @@
         <div class="templatemo-content">
             {% block content %}
             <ol class="breadcrumb">
-                <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
-                <li class="active">Dashboard</li>
+              <li><a href="{{ url_for('index') }}">Admin Panel</a></li>
+              <li><a href="{{ url_for('index') }}">Dashboard</a></li>
+              <li class="active">Overview</li>
+              <li><a href="{{ url_for('auth.login') }}">Sign In Form</a></li>
             </ol>
             <h1>Dashboard</h1>
 
