@@ -5,11 +5,10 @@
 {% if results %}
 <ul>
     {% for stock in results %}
-    <li><a href="{{ url_for('search.stock_detail', code=stock.code) }}">{{ stock.name }} ({{ stock.code }}) - 현재가: {{ stock.currentPrice }}</a></li>
+    <li><a href="{{ url_for('search.stock_detail', code=stock.code) }}">{{ query }} ({{ stock.code }}) - 현재가: {{ stock.currentPrice }}</a></li>
     {% endfor %}
 </ul>
 {% else %}
 <p>검색 결과가 없습니다.</p>
 {% endif %}
 {% endblock %}
-

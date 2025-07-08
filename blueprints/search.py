@@ -20,8 +20,22 @@ def search():
     results = []
 
     if not query:
-        return render_template('search_results.html', results=[], query=query)
+        # 최근 조회 종목도 넘겨야 하므로 추가
+        recent_codes = session.get('recent_stocks', [])
+        recent_stocks = []
+        for c in recent_codes:
+            try:
+                t = yf.Ticker(c)
+                info = t.info
+                name = info.get('shortName', c)
+                price = info.get('currentPrice', 'N/A')
+                recent_stocks.append({'code': c, 'name': name, 'price': price})
+            except Exception:
+                recent_stocks.append({'code': c, 'name': c, 'price': 'N/A'})
 
+        return render_template('search_results.html', results=[], query=query, recent_stocks=recent_stocks)
+
+    # 기존 로직...
     ticker_code = ''
     ticker_suffix = ''
 
@@ -54,17 +68,29 @@ def search():
     except Exception as e:
         print("yfinance 오류:", e)
 
-    # 🔥 최근 조회 종목 세션에 저장
+    # 최근 조회 종목 세션 저장
     recent = session.get('recent_stocks', [])
-    stock_info = {'code': ticker_code, 'name': info['shortName']}
     if ticker_code not in recent:
         recent.insert(0, ticker_code)
         if len(recent) > 5:
             recent = recent[:5]
         session['recent_stocks'] = recent
-        session.modified = True  
+        session.modified = True
 
-    return render_template('search_results.html', results=results, query=query)
+    # 최근 조회 종목 리스트 생성
+    recent_codes = session.get('recent_stocks', [])
+    recent_stocks = []
+    for c in recent_codes:
+        try:
+            t = yf.Ticker(c)
+            info = t.info
+            name = info.get('shortName', c)
+            price = info.get('currentPrice', 'N/A')
+            recent_stocks.append({'code': c, 'name': name, 'price': price})
+        except Exception:
+            recent_stocks.append({'code': c, 'name': c, 'price': 'N/A'})
+
+    return render_template('search_results.html', results=results, query=query, recent_stocks=recent_stocks)
 
 
 
