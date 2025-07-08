@@ -21,7 +21,12 @@ def login():
 
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
-            session['user'] = user.username
+            session['user'] = {
+                'username': user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'email': user.email
+            }
             flash('로그인 성공!', 'success')
             return redirect(url_for('index'))
         else:
