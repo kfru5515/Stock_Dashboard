@@ -21,4 +21,4 @@ def tables():
         except Exception:
             recent_stocks.append({'code': code, 'name': code})
 
-    return render_template('.html', user=user, recent_stocks=recent_stocks)
+    return render_template('tables.html', user=user, recent_stocks=recent_stocks)

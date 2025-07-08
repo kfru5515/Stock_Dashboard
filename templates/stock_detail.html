@@ -1,14 +1,30 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>{{ stock.get('shortName', '정보 없음') }} ({{ stock.get('symbol', '') }})</h2>
-<ul>
-    <li>현재가: {{ stock.get('currentPrice', 'N/A') }}</li>
-    <li>시장: {{ stock.get('exchange', 'N/A') }}</li>
-    <li>시가총액: {{ stock.get('marketCap', 'N/A') }}</li>
-    <li>52주 최고: {{ stock.get('fiftyTwoWeekHigh', 'N/A') }}</li>
-    <li>52주 최저: {{ stock.get('fiftyTwoWeekLow', 'N/A') }}</li>
-    <!-- 필요한 데이터 더 추가 -->
-</ul>
-
+<div class="container my-4">
+    <h2 class="mb-4">{{ stock.get('shortName', '정보 없음') }} ({{ stock.get('symbol', '') }})</h2>
+    <ul class="list-group w-50">
+        <li class="list-group-item d-flex justify-content-between">
+            <strong>현재가:</strong>
+            <span>{{ stock.get('currentPrice', 'N/A') }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+            <strong>시장:</strong>
+            <span>{{ stock.get('exchange', 'N/A') }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+            <strong>시가총액:</strong>
+            <span>{{ stock.get('marketCap', 'N/A') }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+            <strong>52주 최고:</strong>
+            <span>{{ stock.get('fiftyTwoWeekHigh', 'N/A') }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+            <strong>52주 최저:</strong>
+            <span>{{ stock.get('fiftyTwoWeekLow', 'N/A') }}</span>
+        </li>
+        <!-- 필요하면 더 추가하세요 -->
+    </ul>
+</div>
 {% endblock %}
