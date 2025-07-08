@@ -1,4 +1,4 @@
-{% extends 'index.html' %}
+{% extends 'base.html' %}
 
 {% block content %}
 
@@ -65,9 +65,14 @@
         <div class="card">
           <div class="card-header"><strong>최근 조회 종목</strong></div>
           <div class="card-body">
-            <p>종목 1</p>
-            <p>종목 2</p>
-          </div>
+            {% if recent_stocks %}
+              {% for stock in recent_stocks %}
+                <p>{{ stock.name }} ({{ stock.code }})</p>
+              {% endfor %}
+            {% else %}
+              <p>최근 조회한 종목이 없습니다.</p>
+            {% endif %}
+          </div>          
         </div>
       </div>
     </div>

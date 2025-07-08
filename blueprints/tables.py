@@ -1,30 +1,24 @@
-from flask import Blueprint, render_template, session
-from .auth import login_required
-from models import User
+from flask import Blueprint, render_template, session, redirect, url_for, flash
+import yfinance as yf
 
 tables_bp = Blueprint('tables', __name__, url_prefix='/tables')
 
 @tables_bp.route('/')
-@login_required
 def tables():
-    username = session.get('user')
-    user_obj = User.query.filter_by(username=username).first()
+    user = session.get('user')  # 로그인 사용자 세션에서 정보 가져오기
+    if not user:
+        return redirect(url_for('auth.login'))  # 로그인 페이지로 리디렉션
 
-    if not user_obj:
-        return "사용자 정보를 찾을 수 없습니다.", 404
+    # 최근 조회 종목 가져오기
+    recent_codes = session.get('recent_stocks', [])
+    recent_stocks = []
 
-    user = {
-        'name': f"{user_obj.first_name} {user_obj.last_name}",
-        'email': user_obj.email,
-        'recent_logs': [
-            {'timestamp': '2025-06-30 13:00', 'action': '로그인'},
-            {'timestamp': '2025-06-29 09:20', 'action': '비밀번호 변경'},
-        ]
-    }
+    for code in recent_codes:
+        try:
+            stock = yf.Ticker(code).info
+            name = stock.get('shortName', code)
+            recent_stocks.append({'code': code, 'name': name})
+        except Exception:
+            recent_stocks.append({'code': code, 'name': code})
 
-    return render_template('tables.html', user=user)
-
-@tables_bp.route('/change-password')
-@login_required
-def change_password():
-    return render_template('change_password.html')
+    return render_template('mypage.html', user=user, recent_stocks=recent_stocks)

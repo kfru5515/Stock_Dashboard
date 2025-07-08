@@ -36,8 +36,8 @@
     <div class="navbar-collapse collapse templatemo-sidebar">
         <ul class="templatemo-sidebar-menu">
             <li>
-                <form class="navbar-form">
-                    <input type="text" class="form-control" id="templatemo_search_box" placeholder="Search...">
+                <form class="navbar-form" method="get" action="{{ url_for('search.search') }}">
+                    <input type="text" class="form-control" id="templatemo_search_box" name="q" placeholder="Search...">
                     <button type="submit" class="btn btn-default">검색</button>
                 </form>
             </li>
@@ -45,14 +45,23 @@
             <li><a href="{{ url_for('askfin_page') }}"><i class="fa fa-question-circle"></i>AskFin</a></li>
             <li class="sub">
                 <a href="javascript:;">
-                    <i class="fa fa-database"></i> 종목정보 <div class="pull-right"><span class="caret"></span></div>
+                    <i class="fa fa-database"></i> 최근 조회 종목 정보 <div class="pull-right"><span class="caret"></span></div>
                 </a>
                 <ul class="templatemo-submenu">
-                    <li><a href="#">1</a></li>
-                    <li><a href="#">2</a></li>
-                    <li><a href="#">3</a></li>
+                    {% if recent_stocks %}
+                        {% for stock in recent_stocks %}
+                        <li>
+                            <a href="{{ url_for('search.stock_detail', code=stock.code) }}">
+                                {{ stock.name }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                        <li><a href="#">최근 조회한 종목 없음</a></li>
+                    {% endif %}
                 </ul>
             </li>
+
             <li><a href="{{ url_for('data.data') }}"><i class="fa fa-cubes"></i>차트</a></li>
             <li><a href="{{ url_for('analysis.analysis_page') }}"><i class="fa fa-map-marker"></i>비교분석</a></li>
             <li><a href="{{ url_for('tables.tables') }}"><i class="fa fa-users"></i>사용자 정보</a></li>

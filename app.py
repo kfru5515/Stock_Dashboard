@@ -15,6 +15,7 @@ from blueprints.join import join_bp
 from blueprints.data import data_bp
 from blueprints.auth import auth_bp
 from blueprints.askfin import askfin_bp
+from blueprints.search import search_bp
 
 from db.extensions import db
 
@@ -266,6 +267,7 @@ app.register_blueprint(analysis_bp)
 app.register_blueprint(tables_bp)
 app.register_blueprint(join_bp)  # <-- 여기 한 번만 등록!
 app.register_blueprint(data_bp)
+app.register_blueprint(search_bp)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
