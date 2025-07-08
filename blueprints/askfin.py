@@ -1,3 +1,5 @@
+import dart_fss as dart
+
 import os
 import json
 import traceback
@@ -20,6 +22,15 @@ NAME_TICKER_MAP = None
 load_dotenv()
 
 askfin_bp = Blueprint('askfin', __name__, url_prefix='/askfin')
+try:
+    DART_API_KEY = os.getenv("DART_API_KEY")
+    if not DART_API_KEY:
+        raise ValueError("DART API 키가 .env 파일에 없습니다.")
+    dart.set_api_key(api_key=DART_API_KEY)
+    print("DART API 키가 성공적으로 설정되었습니다.")
+except Exception as e:
+    print(f"[경고] DART API 키 설정 실패: {e}")
+
 
 try:
     API_KEY = os.getenv("GOOGLE_AI_API_KEY")
@@ -65,6 +76,11 @@ First, classify the query_type as "stock_analysis" or "indicator_lookup".
     {{"period": "최근", "condition": {{"type": "indicator", "name": "CPI", "operator": ">", "value": 3.5}}, "target": "주식", "action": "가장 많이 오른 주식"}}
 
     ```
+
+5. User Query: "지난 1년간 2차전지주 중 가장 많이 내린 주식은?"
+   JSON Output:
+   ```json
+   {{"query_type": "stock_analysis", "period": "지난 1년간", "condition": null, "target": "2차전지주", "action": "가장 많이 내린 주식"}}
 
 ## Task:
 User Query: "{user_query}"
@@ -146,69 +162,46 @@ def execute_indicator_lookup(intent_json):
     
 
 @askfin_bp.route('/stock/<string:code>/financials')
+# @cache.cached(...) -> 이 데코레이터 삭제
 def get_stock_financials(code):
-    """네이버 증권에서 기업의 연간 실적 정보를 스크래핑하여 반환하는 API (우선주 처리 기능 포함)"""
+    """DART API를 이용해 기업의 연간 실적 정보를 반환하는 API (캐싱 없음)"""
     try:
-
-        _load_ticker_maps()
-
-        target_code = code
-        stock_name = TICKER_NAME_MAP.get(code)
+        # 캐싱 함수 대신 DART API를 직접 호출하도록 변경
+        corp_list = dart.get_corp_list()
         
-        if not stock_name:
-            return jsonify({"error": f"종목코드 '{code}'에 해당하는 종목을 찾을 수 없습니다."}), 404
+        corp = corp_list.find_by_stock_code(code)
+        if not corp:
+            return jsonify({"error": f"종목코드 '{code}'에 해당하는 공시 정보를 찾을 수 없습니다."}), 404
 
-        is_preferred = '우' in stock_name or stock_name[-1].isdigit() or 'B' in stock_name[-2:]
-        
-        if is_preferred:
-            common_stock_name = re.sub(r'(\d?[우B]?)$', '', stock_name).strip()
-            common_stock_code = NAME_TICKER_MAP.get(common_stock_name)
-            
-            if common_stock_code:
-                print(f"우선주 '{stock_name}' 요청 -> 보통주 '{common_stock_name}'({common_stock_code}) 정보로 조회합니다.")
-                target_code = common_stock_code
-            else:
-                return jsonify({"error": f"'{stock_name}'의 보통주를 찾을 수 없어 재무 정보 조회가 불가능합니다."}), 404
+        fs = corp.extract_fs(bgn_de='20220101')
+        if not fs:
+            return jsonify({"error": "재무제표 정보를 가져올 수 없습니다."}), 404
 
-        url = f"https://finance.naver.com/item/main.naver?code={target_code}"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        df = fs.show('is')
         
-        soup = BeautifulSoup(response.text, 'html.parser')
-        table = soup.select_one('div.cop_analysis table.tbl_type1')
-        
-        if not table:
-            return jsonify({"error": "재무 정보를 담고 있는 테이블을 찾을 수 없습니다. (ETF 등 재무정보가 없는 종목일 수 있습니다)"}), 404
+        if df is None or df.empty:
+            return jsonify({"error": "손익계산서 정보를 추출하지 못했습니다."}), 404
 
-        financial_info = []
-        th_list = table.select('thead > tr > th')
-        dates = [th.text.strip() for th in th_list if th.get('scope') == 'col']
-        
-        tr_list = table.select('tbody > tr')
         required_items = ['매출액', '영업이익', '당기순이익']
+        df_filtered = df[df['label_ko'].isin(required_items)]
         
-        for tr in tr_list:
-            item_title_element = tr.select_one('th')
-            if item_title_element:
-                item_title = item_title_element.text.strip()
-                if item_title in required_items:
-                    values = [td.text.strip() for td in tr.select('td')]
-                    item_data = {'item': item_title, 'values': dict(zip(dates, values))}
-                    financial_info.append(item_data)
+        financial_info = []
+        for item in required_items:
+            if item in df_filtered['label_ko'].values:
+                row = df_filtered[df_filtered['label_ko'] == item].iloc[-1]
+                values = {
+                    '2023': f"{int(row.get('2023', 0)/100000000):,} 억원" if row.get('2023') else "N/A",
+                    '2022': f"{int(row.get('2022', 0)/100000000):,} 억원" if row.get('2022') else "N/A",
+                }
+                financial_info.append({'item': item, 'values': values})
 
-        if is_preferred:
-            result_data = {
-                "financial_info": financial_info,
-                "message": f"'{stock_name}'(우선주)의 재무정보는 보통주 '{TICKER_NAME_MAP.get(target_code)}' 기준입니다."
-            }
-            return jsonify(result_data)
-
+        if not financial_info:
+            return jsonify({"error": "재무제표에서 필요한 항목(매출액 등)을 찾지 못했습니다."}), 404
+        
         return jsonify({"financial_info": financial_info})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+        return jsonify({"error": f"DART API 처리 중 오류: {str(e)}"}), 500    
 
 def get_target_stocks(target_str):
     """타겟 문자열에 해당하는 종목 리스트(DataFrame)를 반환하는 함수 (themes.json 사용)"""
@@ -221,38 +214,26 @@ def get_target_stocks(target_str):
     analysis_subject = "시장 전체"
     target_stocks = krx
 
-    if target_str and target_str.strip():
+    if target_str and target_str.strip() and target_str not in GENERIC_TARGETS:
         analysis_subject = f"'{target_str}'"
         
-        # 1. 사용자의 원본 입력 그대로 테마 맵에서 먼저 찾아봅니다.
-        if target_str in THEME_MAP:
-            print(f"테마 '{target_str}'에 대한 종목을 검색합니다.")
-            theme_stock_names = THEME_MAP[target_str]
-            _load_ticker_maps()
-            target_codes = [NAME_TICKER_MAP.get(name) for name in theme_stock_names if NAME_TICKER_MAP.get(name)]
-            target_stocks = krx[krx['Code'].isin(target_codes)]
-            return target_stocks, analysis_subject # 찾았으면 여기서 함수 종료
+        keyword = target_str.replace(" 관련주", "").replace(" 테마주", "").replace(" 테마", "").replace("주", "").strip()
 
-        # 2. 원본 입력이 없다면, 키워드를 정리해서 다시 찾아봅니다.
-        keyword = target_str.replace(" 관련주", "").replace(" 테마", "").replace("주", "").strip()
         if keyword in THEME_MAP:
-            print(f"정리된 키워드 '{keyword}'로 테마를 다시 검색합니다.")
+            print(f"테마 '{keyword}'에 대한 종목을 검색합니다.")
             theme_stock_names = THEME_MAP[keyword]
-            _load_ticker_maps()
+            _load_ticker_maps() 
             target_codes = [NAME_TICKER_MAP.get(name) for name in theme_stock_names if NAME_TICKER_MAP.get(name)]
             target_stocks = krx[krx['Code'].isin(target_codes)]
-
-        # 3. 테마 맵에 최종적으로 없다면, 종목명에서 검색합니다.
-        elif target_str not in GENERIC_TARGETS:
-            print(f"종목명에 '{keyword}' 키워드가 포함된 종목을 검색합니다.")
-            target_stocks = krx[krx['Name'].str.contains(keyword, na=False)]
         
         else:
-            analysis_subject = "시장 전체"
-            target_stocks = krx
+            print(f"종목명에 '{keyword}' 키워드가 포함된 종목을 검색합니다.")
+            target_stocks = krx[krx['Name'].str.contains(keyword, na=False)]
+    
+    elif target_str in GENERIC_TARGETS:
+         analysis_subject = "시장 전체"
             
     return target_stocks, analysis_subject
-
 
 
 def parse_period(period_str):
@@ -289,12 +270,10 @@ def get_target_stocks(target_str):
     krx = fdr.StockListing('KRX')
     print("종목 목록 로딩 완료.")
     
-    # 변수들을 미리 기본값으로 초기화합니다.
     analysis_subject = "시장 전체"
     target_stocks = krx
 
     if target_str and target_str.strip():
-        # 검색이 시작되면 analysis_subject를 우선 사용자 요청으로 설정합니다.
         analysis_subject = f"'{target_str}'"
 
         if target_str in THEME_MAP:
@@ -307,7 +286,6 @@ def get_target_stocks(target_str):
             keyword = target_str.replace(" 관련주", "").replace("주", "")
             target_stocks = krx[krx['Name'].str.contains(keyword, na=False)]
         
-        # '주식'과 같은 일반적인 타겟이 들어오면, 제목을 다시 '시장 전체'로 설정합니다.
         else:
             analysis_subject = "시장 전체"
             target_stocks = krx
@@ -381,6 +359,10 @@ def execute_stock_analysis(intent_json):
     result_data = []
     if "오른" in action_str:
         result_data = analyze_top_performers(target_stocks, event_periods, (start_date, end_date))
+    elif "내린" in action_str:
+        result_data = analyze_top_performers(target_stocks, event_periods, (start_date, end_date))
+        sort_descending = False 
+
     else:
         return {"error": f"'{action_str}' 액션은 아직 지원하지 않습니다."}
 
@@ -403,15 +385,13 @@ def handle_season_condition(period_tuple, season):
         season_start, season_end = None, None
         
         if season == "겨울":
-            # 겨울은 12월 1일에 시작하여 다음 해 2월 말일에 끝남
-            # 해당 연도의 1, 2월 (이전 연도 겨울의 일부)
+
             dec_first_prev_year = datetime(year - 1, 12, 1)
             feb_last_this_year = datetime(year, 3, 1) - timedelta(days=1)
             if dec_first_prev_year <= end_date and feb_last_this_year >= start_date:
                 event_periods.append((max(dec_first_prev_year, start_date), min(feb_last_this_year, end_date)))
 
         elif season == "여름":
-            # 여름은 6월 1일부터 8월 31일까지
             season_start = datetime(year, 6, 1)
             season_end = datetime(year, 8, 31)
             if season_start <= end_date and season_end >= start_date:
@@ -426,15 +406,15 @@ def handle_interest_rate_condition(api_key, period_tuple):
     
     event_periods = []
     for hike_date in hike_dates:
-        # 금리 인상일로부터 1주일 후까지의 기간을 이벤트로 설정
         event_start = hike_date
         event_end = event_start + timedelta(days=7)
         
-        # 해당 이벤트 기간이 사용자가 요청한 전체 기간 내에 있는지 확인
         if event_start >= start_date and event_end <= end_date:
             event_periods.append((event_start, event_end))
             
     return event_periods
+
+# askfin.py
 
 def analyze_top_performers(target_stocks, event_periods, overall_period):
     """
@@ -447,10 +427,9 @@ def analyze_top_performers(target_stocks, event_periods, overall_period):
     """
     analysis_results = []
     
-    # 분석 대상 종목 수를 제한하여 과도한 시간 소요 방지 (예: 시가총액 상위 500개)
     # KOSPI와 KOSDAQ만 필터링하고 시가총액으로 정렬
     target_stocks = target_stocks[target_stocks['Market'].isin(['KOSPI', 'KOSDAQ'])]
-    top_stocks = target_stocks.nlargest(500, 'Marcap').reset_index(drop=True)
+    top_stocks = target_stocks.nlargest(100, 'Marcap').reset_index(drop=True)
 
     print(f"시가총액 상위 {len(top_stocks)}개 종목에 대한 분석을 시작합니다...")
 
@@ -464,11 +443,9 @@ def analyze_top_performers(target_stocks, event_periods, overall_period):
 
         for start, end in event_periods:
             try:
-                # 이벤트 기간의 주가 데이터 조회
                 prices = fdr.DataReader(stock_code, start, end)
                 
                 if not prices.empty and len(prices) > 1:
-                    # 기간 시작일의 시가와 종료일의 종가로 수익률 계산
                     start_price = prices['Open'].iloc[0]
                     end_price = prices['Close'].iloc[-1]
                     
@@ -477,11 +454,11 @@ def analyze_top_performers(target_stocks, event_periods, overall_period):
                         period_returns.append(period_return)
 
             except Exception as e:
-                # 데이터가 없는 경우 등 예외 발생 시 건너뜀
-                # print(f"    - {stock_name} 데이터 조회 오류: {start.date()}~{end.date()} ({e})")
-                continue
-        
-        # 모든 이벤트 기간에 대한 평균 수익률 계산
+                # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 이 부분이 수정되었습니다 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+                # 오류가 발생해도 아무것도 하지 않고 계속 진행하도록 pass를 추가
+                pass
+                # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
         if period_returns:
             average_return = statistics.mean(period_returns)
             analysis_results.append({
@@ -493,6 +470,7 @@ def analyze_top_performers(target_stocks, event_periods, overall_period):
 
     print("주식 분석 완료.")
     return analysis_results
+
 
 def handle_indicator_condition(condition_obj, period_tuple):
     """CPI, 금리 등 지표 조건을 만족하는 날짜 구간을 반환"""
@@ -547,13 +525,11 @@ def get_bok_data(bok_api_key, stats_code, item_code, start_date, end_date):
         if not rows:
             return None
 
-        # 데이터프레임으로 변환 후 처리
         df = pd.DataFrame(rows)
-        df['TIME'] = pd.to_datetime(df['TIME'], format='%Y%m') # 날짜 형식 변환
-        df['DATA_VALUE'] = pd.to_numeric(df['DATA_VALUE'])   # 숫자 형식 변환
-        df = df.set_index('TIME')                             # 날짜를 인덱스로 설정
+        df['TIME'] = pd.to_datetime(df['TIME'], format='%Y%m') 
+        df['DATA_VALUE'] = pd.to_numeric(df['DATA_VALUE'])   
+        df = df.set_index('TIME')                            
         
-        # 날짜를 기준으로 정렬된 데이터 값(Series) 반환
         return df['DATA_VALUE'].sort_index()
 
     except requests.exceptions.RequestException as e:
@@ -584,7 +560,6 @@ def analyze_query():
         
         query_type = intent_json.get("query_type")
         
-        # query_type에 따라 다른 함수 호출
         if query_type == "stock_analysis":
             final_result = execute_stock_analysis(intent_json)
         elif query_type == "indicator_lookup":
