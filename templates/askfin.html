@@ -29,19 +29,21 @@
 <div id="loading-spinner" class="spinner"></div>
 
 <div id="results-container">
-    <h3>분석 결과</h3>
-    <table class="table table-striped table-hover">
+    <h3 id="analysis-subject-title"></h3>
+    
+    <div id="text-result-area" class="well" style="display: none;"></div>
+    
+    <table id="table-result-area" class="table table-striped table-hover" style="display: none;">
         <thead>
             <tr>
                 <th>순위</th>
                 <th>종목명</th>
                 <th>종목코드</th>
-                <th>수익률 (%)</th>
+                <th>평균 수익률 (%)</th>
                 <th>변동성 (%)</th>
             </tr>
         </thead>
-        <tbody id="results-table-body">
-            </tbody>
+        <tbody id="results-table-body"></tbody>
     </table>
 </div>
 
@@ -51,24 +53,27 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('askfin-form');
-    const input = document.getElementById('query-input');
     const resultsContainer = document.getElementById('results-container');
-    // <pre> 대신 <tbody> 요소를 가져옵니다.
-    const tableBody = document.getElementById('results-table-body'); 
+    const subjectTitle = document.getElementById('analysis-subject-title');
+    const textResultArea = document.getElementById('text-result-area');
+    const tableResultArea = document.getElementById('table-result-area');
+    const tableBody = document.getElementById('results-table-body');
     const spinner = document.getElementById('loading-spinner');
 
     form.addEventListener('submit', function(event) {
         event.preventDefault();
-        const query = input.value.trim();
+        const query = document.getElementById('query-input').value.trim();
         if (!query) { alert('질문을 입력해주세요.'); return; }
 
+        // 이전 결과 초기화
         resultsContainer.style.display = 'none';
+        textResultArea.style.display = 'none';
+        tableResultArea.style.display = 'none';
         spinner.style.display = 'block';
-        tableBody.innerHTML = ''; // 이전 결과 삭제
+        tableBody.innerHTML = '';
+        subjectTitle.textContent = '';
 
-        const analyzeUrl = "{{ url_for('askfin.analyze_query') }}";
-
-        fetch(analyzeUrl, {
+        fetch("{{ url_for('askfin.analyze_query') }}", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: query })
@@ -76,36 +81,36 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.ok ? response.json() : Promise.reject(response))
         .then(data => {
             spinner.style.display = 'none';
-
             if (data.error) {
-                alert(`오류가 발생했습니다: ${data.error}`);
+                alert(`오류: ${data.error}`);
                 return;
             }
-            
-            if (typeof data.result === 'string' || data.result.length === 0) {
-                const row = tableBody.insertRow();
-                const cell = row.insertCell();
-                cell.colSpan = 5;
-                cell.textContent = data.result[0] || "데이터가 없습니다.";
-                cell.style.textAlign = 'center';
-            } else {
-                data.result.forEach((stock, index) => {
+
+            subjectTitle.textContent = `${data.analysis_subject} 분석 결과`;
+            const result = data.result;
+
+            // result가 배열이고, 첫 번째 항목이 객체이면 -> 주식 분석 결과로 판단
+            if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'object') {
+                result.forEach((stock, index) => {
                     const row = tableBody.insertRow();
-                    
-                    row.insertCell().textContent = index + 1; // 순위
-                    row.insertCell().textContent = stock.name;  // 종목명
-                    row.insertCell().textContent = stock.code;  // 종목코드
-                    
+                    row.insertCell().textContent = index + 1;
+                    row.insertCell().textContent = stock.name;
+                    row.insertCell().textContent = stock.code;
                     const returnCell = row.insertCell();
-                    const return_key = stock.average_return_pct !== undefined ? 'average_return_pct' : 'total_return_pct';
-                    const returnValue = stock[return_key];
+                    const returnValue = stock.average_return_pct;
                     returnCell.textContent = `${returnValue.toFixed(2)}`;
                     returnCell.style.color = returnValue > 0 ? '#d9534f' : '#337ab7';
                     returnCell.style.fontWeight = 'bold';
-                    
                     row.insertCell().textContent = `${stock.volatility_pct.toFixed(2)}`;
                 });
+                tableResultArea.style.display = 'table'; // 표를 보여줌
+            } 
+            // result가 배열이고, 첫 번째 항목이 문자열이면 -> "만족 종목 없음" 같은 메시지
+            else if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'string') {
+                textResultArea.textContent = result[0];
+                textResultArea.style.display = 'block'; // 텍스트 영역을 보여줌
             }
+
             resultsContainer.style.display = 'block';
         })
         .catch(error => {
