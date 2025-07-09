@@ -157,50 +157,44 @@ document.addEventListener('DOMContentLoaded', function() {
             const modalTitle = document.getElementById('modal-title');
             const modalBody = document.getElementById('modal-body');
 
-            modalTitle.textContent = `${stockName} (${stockCode}) 실적 정보`;
+            modalTitle.textContent = `${stockName} (${stockCode}) 기업 개요`;
             modalBody.innerHTML = '<div class="spinner" style="display:block;"></div>';
             
-            // Bootstrap의 jQuery 기반 modal('show')를 사용합니다.
-            // base.html에 jQuery가 포함되어 있어야 합니다.
+            // Bootstrap의 jQuery 기반 modal('show')를 사용
             $('#financialModal').modal('show'); 
 
-            fetch(`/askfin/stock/${stockCode}/financials`)
-                .then(response => response.json())
+            // 1. 새로운 API 엔드포인트(/profile)를 호출하도록 변경
+            fetch(`/askfin/stock/${stockCode}/profile`)
+                .then(response => response.ok ? response.json() : Promise.reject('서버 응답 오류'))
                 .then(data => {
                     if (data.error) {
                         modalBody.innerHTML = `<p>오류: ${data.error}</p>`;
                         return;
                     }
-
-                    // 1. 실제 재무정보 배열은 data.financial_info 에서 가져옵니다.
-                    const financialData = data.financial_info;
-                    if (!financialData) {
-                        modalBody.innerHTML = `<p>재무 정보를 받아오지 못했습니다.</p>`;
+                    
+                    const profile = data.company_profile;
+                    if (!profile) {
+                        modalBody.innerHTML = `<p>기업 개요 정보를 받아오지 못했습니다.</p>`;
                         return;
                     }
                     
-                    // 2. 받아온 배열 데이터로 테이블 생성
-                    let content = '<table class="table table-sm">';
-                    financialData.forEach(item => {
-                        content += `<tr><th>${item.item}</th>`;
-                        Object.entries(item.values).slice(-4).forEach(([date, value]) => {
-                           content += `<td><strong>${date.split('.')[0]}</strong><br>${value}</td>`;
-                        });
-                        content += '</tr>';
-                    });
-                    content += '</table>';
-
-                    // 3. 우선주인 경우, 함께 온 안내 메시지를 추가합니다.
-                    if (data.message) {
-                        content += `<p class="text-info small mt-2">${data.message}</p>`;
+                    // 2. 받아온 프로필 데이터를 dl, dt, dd 태그로 예쁘게 만듦
+                    let content = '<dl class="dl-horizontal">';
+                    for (const [key, value] of Object.entries(profile)) {
+                        let displayValue = value || 'N/A';
+                        if (key === '홈페이지' && value && value !== 'N/A') {
+                            // http://가 없으면 붙여줌
+                            const url = value.startsWith('http') ? value : `http://${value}`;
+                            displayValue = `<a href="${url}" target="_blank">${value}</a>`;
+                        }
+                        content += `<dt>${key}</dt><dd>${displayValue}</dd>`;
                     }
-
-                    content += '<p style="font-size: 12px; text-align: right; margin-top:10px;">(단위: 억원)</p>';
+                    content += '</dl>';
                     
                     modalBody.innerHTML = content;
                 })
                 .catch(err => {
-                    modalBody.innerHTML = '<p>실적 정보를 불러오는 데 실패했습니다.</p>';
+                    modalBody.innerHTML = '<p>정보를 불러오는 데 실패했습니다.</p>';
                     console.error('Fetch Error:', err);
                 });
         }

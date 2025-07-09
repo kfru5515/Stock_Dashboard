@@ -161,47 +161,89 @@ def execute_indicator_lookup(intent_json):
         return {"error": "지표 조회 중 오류가 발생했습니다."}
     
 
-@askfin_bp.route('/stock/<string:code>/financials')
-# @cache.cached(...) -> 이 데코레이터 삭제
-def get_stock_financials(code):
-    """DART API를 이용해 기업의 연간 실적 정보를 반환하는 API (캐싱 없음)"""
+@askfin_bp.route('/stock/<code>/profile')
+def get_stock_profile(code):
+    """
+    DART, pykrx 정보를 통합하고, 예외 처리를 통해 안정성을 극대화한 최종 API.
+    """
     try:
-        # 캐싱 함수 대신 DART API를 직접 호출하도록 변경
+        # --- 1. DART에서 기본 프로필 정보 가져오기 ---
         corp_list = dart.get_corp_list()
-        
         corp = corp_list.find_by_stock_code(code)
         if not corp:
-            return jsonify({"error": f"종목코드 '{code}'에 해당하는 공시 정보를 찾을 수 없습니다."}), 404
+            return jsonify({"error": f"종목코드 '{code}'에 해당하는 기업 정보를 찾을 수 없습니다."}), 404
 
-        fs = corp.extract_fs(bgn_de='20220101')
-        if not fs:
-            return jsonify({"error": "재무제표 정보를 가져올 수 없습니다."}), 404
+        info_dict = corp.__dict__.get('_info', {})
+        sector = info_dict.get('sector')
+        profile_data = {
+            '기업명': info_dict.get('corp_name', 'N/A'),
+            '업종': sector,
+            '주요제품': info_dict.get('product', 'N/A'),
+        }
 
-        df = fs.show('is')
+        # --- 2. pykrx에서 핵심 투자 지표 가져오기 ---
+        latest_business_day = stock.get_nearest_business_day_in_a_week()
         
-        if df is None or df.empty:
-            return jsonify({"error": "손익계산서 정보를 추출하지 못했습니다."}), 404
+        # 현재가 조회
+        df_ohlcv = stock.get_market_ohlcv_by_date(fromdate=latest_business_day, todate=latest_business_day, ticker=code)
+        current_price = 0
+        if not df_ohlcv.empty:
+            current_price = df_ohlcv.iloc[0]['종가']
+            profile_data['현재가'] = f"{current_price:,} 원"
 
-        required_items = ['매출액', '영업이익', '당기순이익']
-        df_filtered = df[df['label_ko'].isin(required_items)]
+        # 시가총액 조회
+        df_cap = stock.get_market_cap_by_ticker(latest_business_day, code)
+        if not df_cap.empty:
+            market_cap = df_cap.iloc[0]['시가총액']
+            if market_cap > 1_0000_0000_0000:
+                profile_data['시가총액'] = f"{market_cap / 1_0000_0000_0000:.2f} 조원"
+            else:
+                profile_data['시가총액'] = f"{market_cap / 1_0000_0000:.2f} 억원"
         
-        financial_info = []
-        for item in required_items:
-            if item in df_filtered['label_ko'].values:
-                row = df_filtered[df_filtered['label_ko'] == item].iloc[-1]
-                values = {
-                    '2023': f"{int(row.get('2023', 0)/100000000):,} 억원" if row.get('2023') else "N/A",
-                    '2022': f"{int(row.get('2022', 0)/100000000):,} 억원" if row.get('2022') else "N/A",
-                }
-                financial_info.append({'item': item, 'values': values})
+        # --- ▼▼▼ 펀더멘털 및 적정주가 계산 전체를 try-except로 감싸기 ▼▼▼ ---
+        try:
+            # 펀더멘털 정보 조회
+            df_fundamental = stock.get_market_fundamental_by_ticker(latest_business_day, code)
+            eps = 0
+            if not df_fundamental.empty:
+                fundamental = df_fundamental.iloc[0]
+                eps = fundamental.get('EPS', 0)
+                per = fundamental.get('PER', 0)
+                pbr = fundamental.get('PBR', 0)
+                div = fundamental.get('DIV', 0)
+                profile_data['PER'] = f"{per:.2f} 배" if per > 0 else "N/A"
+                profile_data['PBR'] = f"{pbr:.2f} 배" if pbr > 0 else "N/A"
+                profile_data['배당수익률'] = f"{div:.2f} %" if div > 0 else "N/A"
 
-        if not financial_info:
-            return jsonify({"error": "재무제표에서 필요한 항목(매출액 등)을 찾지 못했습니다."}), 404
+            # 업종 PER 기반 적정주가 계산
+            if sector and eps > 0:
+                krx_list = fdr.StockListing('KRX')
+                sector_stocks = krx_list[krx_list['Sector'] == sector]
+                sector_pers = []
+                # 업종 평균 계산 시 너무 많은 요청을 보내지 않도록 종목 수 제한
+                for ticker in sector_stocks['Code'].head(30):
+                    funda = stock.get_market_fundamental_by_ticker(latest_business_day, ticker)
+                    if not funda.empty and funda.iloc[0]['PER'] > 0:
+                        sector_pers.append(funda.iloc[0]['PER'])
+                
+                if sector_pers:
+                    avg_per = statistics.mean(sector_pers)
+                    fair_price = eps * avg_per
+                    upside = ((fair_price / current_price) - 1) * 100 if current_price > 0 else 0
+                    profile_data['적정주가(업종PER기반)'] = f"{int(fair_price):,} 원"
+                    profile_data['상승여력'] = f"{upside:.2f} %"
         
-        return jsonify({"financial_info": financial_info})
+        except KeyError:
+            # KeyError 발생 시, 펀더멘털/적정주가 정보 없이 그냥 넘어감
+            print(f"'{code}' 종목의 펀더멘털 데이터를 찾을 수 없어 해당 정보는 건너뜁니다.")
+            pass
+        # --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
+
+        return jsonify({"company_profile": profile_data})
 
     except Exception as e:
-        return jsonify({"error": f"DART API 처리 중 오류: {str(e)}"}), 500    
+        traceback.print_exc()
+        return jsonify({"error": f"기업 상세 정보 처리 중 오류 발생: {str(e)}"}), 500    
 
 def get_target_stocks(target_str):
     """타겟 문자열에 해당하는 종목 리스트(DataFrame)를 반환하는 함수 (themes.json 사용)"""
