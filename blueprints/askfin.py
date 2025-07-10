@@ -106,40 +106,76 @@ def _load_ticker_maps():
 def execute_indicator_lookup(intent_json):
     """경제 지표를 조회하고 자연어 답변을 생성하는 함수"""
     target = intent_json.get("target", "")
-    bok_api_key = os.getenv("ECOS_API_KEY")
-    if not bok_api_key: return {"error": "한국은행 API 키가 설정되지 않았습니다."}
-
-    INDICATOR_MAP = {
-        "CPI": {"stats_code": "901Y001", "item_code": "0", "name": "소비자물가지수"},
-        "기준금리": {"stats_code": "722Y001", "item_code": "0001000", "name": "기준금리"},
+    
+    # 1. FinanceDataReader를 통한 지표 조회 (일별 데이터)
+    FDR_INDICATOR_MAP = {
+        "환율": {"code": "USD/KRW", "name": "원/달러 환율"},
+        "유가": {"code": "WTI", "name": "WTI 국제 유가"},
+        "금리": {"code": "US10YT", "name": "미 10년물 국채 금리"},
+        "코스피": {"code": "KS11", "name": "코스피 지수"},
+        "코스닥": {"code": "KQ11", "name": "코스닥 지수"},
     }
     
     found_indicator = None
-    for key, value in INDICATOR_MAP.items():
+    for key, value in FDR_INDICATOR_MAP.items():
         if key in target or value['name'] in target:
             found_indicator = value
             break
             
-    if not found_indicator:
-        # 'analysis_subject'를 포함하여 반환
-        return {
-            "query_intent": intent_json,
-            "analysis_subject": "알 수 없는 지표",
-            "result": [f"'{target}' 지표는 아직 지원하지 않습니다."]
-        }
-        
-    end_date = datetime.now().strftime('%Y%m')
-    start_date = (datetime.now() - timedelta(days=60)).strftime('%Y%m')
-    url = f"https://ecos.bok.or.kr/api/StatisticSearch/{bok_api_key}/json/kr/1/10/{found_indicator['stats_code']}/MM/{start_date}/{end_date}/{found_indicator['item_code']}"
+    if found_indicator:
+        try:
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=60)
+            data = fdr.DataReader(found_indicator['code'], start_date, end_date)
+            if data.empty or len(data) < 2:
+                return {"error": f"{found_indicator['name']} 데이터 조회 실패"}
 
-    try:
-        response = requests.get(url, timeout=10).json()
-        rows = response.get("StatisticSearch", {}).get("row", [])
-        if len(rows) < 2:
+            latest = data['Close'].iloc[-1]
+            previous = data['Close'].iloc[-2]
+            change = latest - previous
+            change_str = f"{abs(change):.2f} 상승" if change > 0 else f"{abs(change):.2f} 하락" if change < 0 else "변동 없음"
+            latest_date = data.index[-1].strftime('%Y년 %m월 %d일')
+            result_sentence = f"가장 최근({latest_date}) {found_indicator['name']}는 {latest:.2f}이며, 전일 대비 {change_str}했습니다."
             return {
                 "query_intent": intent_json,
                 "analysis_subject": found_indicator['name'],
-                "result": [f"최근 {found_indicator['name']} 데이터를 조회할 수 없습니다."]
+                "result": [result_sentence]
+            }
+        except Exception as e:
+            return {"error": f"{found_indicator['name']} 조회 중 오류: {e}"}
+            
+    # 2. 한국은행(BOK) API를 통한 지표 조회 (월별 데이터)
+    bok_api_key = os.getenv("ECOS_API_KEY")
+    if not bok_api_key: return {"error": "한국은행 API 키가 설정되지 않았습니다."}
+
+    BOK_INDICATOR_MAP = {
+        "CPI": {"stats_code": "901Y001", "item_code": "0", "name": "소비자물가지수"},
+        "기준금리": {"stats_code": "722Y001", "item_code": "0001000", "name": "기준금리"},
+    }
+    
+    found_bok_indicator = None
+    for key, value in BOK_INDICATOR_MAP.items():
+        if key in target or value['name'] in target:
+            found_bok_indicator = value
+            break
+            
+    if not found_bok_indicator:
+        return {"error": f"'{target}' 지표는 아직 지원하지 않습니다."}
+
+    try:
+        # 최근 3개월치 데이터 요청
+        end_date = datetime.now().strftime('%Y%m')
+        start_date = (datetime.now() - timedelta(days=90)).strftime('%Y%m')
+        
+        url = (f"https://ecos.bok.or.kr/api/StatisticSearch/{bok_api_key}/json/kr/1/10/"
+               f"{found_bok_indicator['stats_code']}/MM/{start_date}/{end_date}/{found_bok_indicator['item_code']}")
+
+        response = requests.get(url, timeout=10).json()
+        rows = response.get("StatisticSearch", {}).get("row", [])
+        
+        if len(rows) < 2:
+            return {
+                "error": f"최근 {found_bok_indicator['name']} 데이터를 비교할 만큼 충분히 조회할 수 없습니다."
             }
             
         latest = rows[-1]
@@ -148,103 +184,88 @@ def execute_indicator_lookup(intent_json):
         change = float(latest['DATA_VALUE']) - float(previous['DATA_VALUE'])
         change_str = f"{abs(change):.2f} 상승" if change > 0 else f"{abs(change):.2f} 하락" if change < 0 else "변동 없음"
 
-        result_sentence = (f"가장 최근({latest_date}) {found_indicator['name']}는 {latest['DATA_VALUE']}이며, 전월 대비 {change_str}했습니다.")
+        result_sentence = (f"가장 최근({latest_date}) {found_bok_indicator['name']}는 {latest['DATA_VALUE']}이며, "
+                           f"전월 대비 {change_str}했습니다.")
         
-        # 'analysis_subject'와 함께 최종 결과 반환
         return {
             "query_intent": intent_json,
-            "analysis_subject": found_indicator['name'],
-            "result": [result_sentence] # 결과를 리스트로 감싸서 형식 통일
+            "analysis_subject": found_bok_indicator['name'],
+            "result": [result_sentence]
         }
     except Exception as e:
-        print(f"지표 조회 중 오류: {e}")
-        return {"error": "지표 조회 중 오류가 발생했습니다."}
-    
+        print(f"BOK 지표 조회 중 오류: {e}")
+        return {"error": "한국은행(BOK) 지표 조회 중 오류가 발생했습니다."}
 
 @askfin_bp.route('/stock/<code>/profile')
 def get_stock_profile(code):
     """
-    DART, pykrx 정보를 통합하고, 예외 처리를 통해 안정성을 극대화한 최종 API.
+    [최종 완성] 시장 정보를 명시적으로 지정하여 일괄 조회함으로써
+    안정성과 속도를 모두 확보한 최종 API.
     """
     try:
-        # --- 1. DART에서 기본 프로필 정보 가져오기 ---
-        corp_list = dart.get_corp_list()
-        corp = corp_list.find_by_stock_code(code)
-        if not corp:
-            return jsonify({"error": f"종목코드 '{code}'에 해당하는 기업 정보를 찾을 수 없습니다."}), 404
-
-        info_dict = corp.__dict__.get('_info', {})
-        sector = info_dict.get('sector')
-        profile_data = {
-            '기업명': info_dict.get('corp_name', 'N/A'),
-            '업종': sector,
-            '주요제품': info_dict.get('product', 'N/A'),
-        }
-
-        # --- 2. pykrx에서 핵심 투자 지표 가져오기 ---
+        profile_data = {}
         latest_business_day = stock.get_nearest_business_day_in_a_week()
-        
-        # 현재가 조회
-        df_ohlcv = stock.get_market_ohlcv_by_date(fromdate=latest_business_day, todate=latest_business_day, ticker=code)
-        current_price = 0
-        if not df_ohlcv.empty:
-            current_price = df_ohlcv.iloc[0]['종가']
-            profile_data['현재가'] = f"{current_price:,} 원"
 
-        # 시가총액 조회
-        df_cap = stock.get_market_cap_by_ticker(latest_business_day, code)
-        if not df_cap.empty:
-            market_cap = df_cap.iloc[0]['시가총액']
-            if market_cap > 1_0000_0000_0000:
-                profile_data['시가총액'] = f"{market_cap / 1_0000_0000_0000:.2f} 조원"
-            else:
-                profile_data['시가총액'] = f"{market_cap / 1_0000_0000:.2f} 억원"
+        # --- 1. fdr에서 종목의 기본 정보 및 소속 시장(Market) 확인 ---
+        krx_list = fdr.StockListing('KRX')
+        target_info = krx_list[krx_list['Code'] == code]
+        if target_info.empty:
+            return jsonify({"error": f"종목코드 '{code}'를 찾을 수 없습니다."}), 404
         
-        # --- ▼▼▼ 펀더멘털 및 적정주가 계산 전체를 try-except로 감싸기 ▼▼▼ ---
-        try:
-            # 펀더멘털 정보 조회
-            df_fundamental = stock.get_market_fundamental_by_ticker(latest_business_day, code)
-            eps = 0
-            if not df_fundamental.empty:
-                fundamental = df_fundamental.iloc[0]
-                eps = fundamental.get('EPS', 0)
-                per = fundamental.get('PER', 0)
-                pbr = fundamental.get('PBR', 0)
-                div = fundamental.get('DIV', 0)
-                profile_data['PER'] = f"{per:.2f} 배" if per > 0 else "N/A"
-                profile_data['PBR'] = f"{pbr:.2f} 배" if pbr > 0 else "N/A"
-                profile_data['배당수익률'] = f"{div:.2f} %" if div > 0 else "N/A"
+        target_info = target_info.iloc[0]
+        market = target_info.get('Market', 'KOSPI') # 기본값 KOSPI
+        sector = target_info.get('Sector')
+        
+        profile_data['기업명'] = target_info.get('Name', 'N/A')
+        profile_data['업종'] = sector
+        profile_data['주요제품'] = target_info.get('Industry', 'N/A')
 
-            # 업종 PER 기반 적정주가 계산
-            if sector and eps > 0:
-                krx_list = fdr.StockListing('KRX')
-                sector_stocks = krx_list[krx_list['Sector'] == sector]
-                sector_pers = []
-                # 업종 평균 계산 시 너무 많은 요청을 보내지 않도록 종목 수 제한
-                for ticker in sector_stocks['Code'].head(30):
-                    funda = stock.get_market_fundamental_by_ticker(latest_business_day, ticker)
-                    if not funda.empty and funda.iloc[0]['PER'] > 0:
-                        sector_pers.append(funda.iloc[0]['PER'])
-                
-                if sector_pers:
-                    avg_per = statistics.mean(sector_pers)
-                    fair_price = eps * avg_per
-                    upside = ((fair_price / current_price) - 1) * 100 if current_price > 0 else 0
-                    profile_data['적정주가(업종PER기반)'] = f"{int(fair_price):,} 원"
-                    profile_data['상승여력'] = f"{upside:.2f} %"
+        # --- 2. 확인된 시장(Market)의 데이터를 pykrx로 일괄 조회 ---
+        print(f"'{market}' 시장의 전체 데이터를 일괄 조회합니다...")
+        df_ohlcv = stock.get_market_ohlcv(latest_business_day, market=market)
+        df_cap = stock.get_market_cap(latest_business_day, market=market)
+        df_funda = stock.get_market_fundamental(latest_business_day, market=market)
+        print("일괄 조회 완료.")
+
+        # --- 3. 일괄 조회된 데이터에서 해당 종목 정보 추출 ---
+        current_price = df_ohlcv.loc[code, '종가']
+        market_cap = df_cap.loc[code, '시가총액']
+        funda = df_funda.loc[code]
+
+        profile_data['현재가'] = f"{current_price:,} 원"
+        if market_cap > 1_0000_0000_0000:
+            profile_data['시가총액'] = f"{market_cap / 1_0000_0000_0000:.2f} 조원"
+        else:
+            profile_data['시가총액'] = f"{market_cap / 1_0000_0000:.2f} 억원"
         
-        except KeyError:
-            # KeyError 발생 시, 펀더멘털/적정주가 정보 없이 그냥 넘어감
-            print(f"'{code}' 종목의 펀더멘털 데이터를 찾을 수 없어 해당 정보는 건너뜁니다.")
-            pass
-        # --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
+        eps = funda.get('EPS', 0)
+        per = funda.get('PER', 0)
+        pbr = funda.get('PBR', 0)
+        div = funda.get('DIV', 0)
+        profile_data['PER'] = f"{per:.2f} 배" if per > 0 else "N/A"
+        profile_data['PBR'] = f"{pbr:.2f} 배" if pbr > 0 else "N/A"
+        profile_data['배당수익률'] = f"{div:.2f} %" if div > 0 else "N/A"
+
+        # --- 4. 적정주가 계산 ---
+        if sector and eps > 0:
+            # 업종 평균 PER 계산을 위해 krx_list와 df_funda를 병합
+            merged_df = krx_list.set_index('Code').join(df_funda)
+            sector_pers = merged_df[merged_df['Sector'] == sector]['PER']
+            sector_pers = sector_pers[sector_pers > 0]
+            
+            if not sector_pers.empty:
+                avg_per = sector_pers.mean()
+                fair_price = eps * avg_per
+                upside = ((fair_price / current_price) - 1) * 100 if current_price > 0 else 0
+                profile_data['적정주가(업종PER기반)'] = f"{int(fair_price):,} 원"
+                profile_data['상승여력'] = f"{upside:.2f} %"
 
         return jsonify({"company_profile": profile_data})
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": f"기업 상세 정보 처리 중 오류 발생: {str(e)}"}), 500    
-
+        return jsonify({"error": f"기업 상세 정보 처리 중 오류 발생: {str(e)}"}), 500
+    
 def get_target_stocks(target_str):
     """타겟 문자열에 해당하는 종목 리스트(DataFrame)를 반환하는 함수 (themes.json 사용)"""
     
