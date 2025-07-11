@@ -197,6 +197,28 @@ def get_interest_rate_hike_dates(api_key):
     except Exception as e:
         print(f"한국은행 API 처리 오류: {e}")
         return []
+    
+def handle_season_condition(date_range, season):
+    start_date, end_date = date_range
+    start_year = int(start_date[:4])
+    end_year = int(end_date[:4])
+    
+    periods = []
+
+    for year in range(start_year, end_year + 1):
+        if season == "여름":
+            periods.append((f"{year}-06-01", f"{year}-08-31"))
+        elif season == "봄":
+            periods.append((f"{year}-03-01", f"{year}-05-31"))
+        elif season == "가을":
+            periods.append((f"{year}-09-01", f"{year}-11-30"))
+        elif season == "겨울":
+            periods.append((f"{year}-12-01", f"{year+1}-02-28"))
+        else:
+            periods.append((start_date, end_date))  # fallback
+
+    return periods
+
 
 def execute_stock_analysis(intent_json):
     """주식 분석을 수행하는 함수"""
