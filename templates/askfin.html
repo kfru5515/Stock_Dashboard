@@ -7,6 +7,8 @@
     #results-container { margin-top: 20px; padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; display: none; }
     .spinner { display: none; margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    /* 종목명에 마우스를 올렸을 때 클릭 가능함을 표시 */
+    .stock-info-btn { cursor: pointer; color: #337ab7; text-decoration: underline; }
 </style>
 {% endblock %}
 
@@ -40,11 +42,28 @@
                 <th>종목명</th>
                 <th>종목코드</th>
                 <th>평균 수익률 (%)</th>
-                <th>변동성 (%)</th>
             </tr>
         </thead>
         <tbody id="results-table-body"></tbody>
     </table>
+</div>
+
+
+<div class="modal fade" id="financialModal" tabindex="-1" role="dialog" aria-labelledby="modal-title">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="modal-title">기업 실적 정보</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <p>실적 정보를 불러오는 중입니다...</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% endblock %}
@@ -60,6 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const tableBody = document.getElementById('results-table-body');
     const spinner = document.getElementById('loading-spinner');
 
+    // 메인 분석 요청 처리
     form.addEventListener('submit', function(event) {
         event.preventDefault();
         const query = document.getElementById('query-input').value.trim();
@@ -89,35 +109,95 @@ document.addEventListener('DOMContentLoaded', function() {
             subjectTitle.textContent = `${data.analysis_subject} 분석 결과`;
             const result = data.result;
 
-            // result가 배열이고, 첫 번째 항목이 객체이면 -> 주식 분석 결과로 판단
             if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'object') {
                 result.forEach((stock, index) => {
                     const row = tableBody.insertRow();
                     row.insertCell().textContent = index + 1;
-                    row.insertCell().textContent = stock.name;
+
+                    // 종목명 셀: 클릭하면 모달을 띄우는 링크로 만듦
+                    const nameCell = row.insertCell();
+                    const nameButton = document.createElement('a');
+                    nameButton.href = "#";
+                    nameButton.textContent = stock.name;
+                    nameButton.dataset.code = stock.code;
+                    nameButton.dataset.name = stock.name;
+                    nameButton.classList.add('stock-info-btn');
+                    nameCell.appendChild(nameButton);
+
                     row.insertCell().textContent = stock.code;
+                    
                     const returnCell = row.insertCell();
                     const returnValue = stock.average_return_pct;
                     returnCell.textContent = `${returnValue.toFixed(2)}`;
                     returnCell.style.color = returnValue > 0 ? '#d9534f' : '#337ab7';
                     returnCell.style.fontWeight = 'bold';
-                    row.insertCell().textContent = `${stock.volatility_pct.toFixed(2)}`;
                 });
-                tableResultArea.style.display = 'table'; // 표를 보여줌
-            } 
-            // result가 배열이고, 첫 번째 항목이 문자열이면 -> "만족 종목 없음" 같은 메시지
-            else if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'string') {
+                tableResultArea.style.display = 'table';
+            } else if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'string') {
                 textResultArea.textContent = result[0];
-                textResultArea.style.display = 'block'; // 텍스트 영역을 보여줌
+                textResultArea.style.display = 'block';
             }
 
             resultsContainer.style.display = 'block';
         })
         .catch(error => {
             spinner.style.display = 'none';
-            alert(`분석 중 심각한 오류가 발생했습니다.`);
+            alert(`분석 중 심각한 오류가 발생했습니다. 서버 로그를 확인해주세요.`);
             console.error('Fetch error:', error);
         });
+    });
+
+    // 테이블 내의 종목명 클릭 시 모달창 띄우기 (이벤트 위임 방식)
+    tableBody.addEventListener('click', function(event) {
+        if (event.target.classList.contains('stock-info-btn')) {
+            event.preventDefault();
+
+            const stockCode = event.target.dataset.code;
+            const stockName = event.target.dataset.name;
+            const modalTitle = document.getElementById('modal-title');
+            const modalBody = document.getElementById('modal-body');
+
+            modalTitle.textContent = `${stockName} (${stockCode}) 기업 개요`;
+            modalBody.innerHTML = '<div class="spinner" style="display:block;"></div>';
+            
+            // Bootstrap의 jQuery 기반 modal('show')를 사용
+            $('#financialModal').modal('show'); 
+
+            // 1. 새로운 API 엔드포인트(/profile)를 호출하도록 변경
+            fetch(`/askfin/stock/${stockCode}/profile`)
+                .then(response => response.ok ? response.json() : Promise.reject('서버 응답 오류'))
+                .then(data => {
+                    if (data.error) {
+                        modalBody.innerHTML = `<p>오류: ${data.error}</p>`;
+                        return;
+                    }
+                    
+                    const profile = data.company_profile;
+                    if (!profile) {
+                        modalBody.innerHTML = `<p>기업 개요 정보를 받아오지 못했습니다.</p>`;
+                        return;
+                    }
+                    
+                    // 2. 받아온 프로필 데이터를 dl, dt, dd 태그로 예쁘게 만듦
+                    let content = '<dl class="dl-horizontal">';
+                    for (const [key, value] of Object.entries(profile)) {
+                        let displayValue = value || 'N/A';
+                        if (key === '홈페이지' && value && value !== 'N/A') {
+                            // http://가 없으면 붙여줌
+                            const url = value.startsWith('http') ? value : `http://${value}`;
+                            displayValue = `<a href="${url}" target="_blank">${value}</a>`;
+                        }
+                        content += `<dt>${key}</dt><dd>${displayValue}</dd>`;
+                    }
+                    content += '</dl>';
+                    
+                    modalBody.innerHTML = content;
+                })
+                .catch(err => {
+                    modalBody.innerHTML = '<p>정보를 불러오는 데 실패했습니다.</p>';
+                    console.error('Fetch Error:', err);
+                });
+        }
     });
 });
 </script>
