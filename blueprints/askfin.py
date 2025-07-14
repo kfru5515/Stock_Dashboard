@@ -10,7 +10,7 @@ import FinanceDataReader as fdr
 import pandas as pd
 import numpy as np
 import statistics
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, session
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
@@ -414,47 +414,62 @@ def handle_season_condition(date_range, season):
     return periods
 
 
-def execute_stock_analysis(intent_json, page):
+def execute_stock_analysis(intent_json, page, cache_key=None):
     """
-    주식 분석을 수행하고, 페이지네이션 정보를 포함하여 표준화된 결과를 반환하는 최종 함수.
+    [최종 완성] 캐싱, 페이지네이션, 다중 분석 기능을 모두 포함한 주식 분석 실행 함수.
     """
     try:
-        # 1. 사용자 의도(JSON)에서 분석에 필요한 정보 추출
-        target_str = intent_json.get("target")
-        action_str = intent_json.get("action", "")
-        condition_str = intent_json.get("condition")
-
-        # 2. 분석 대상 종목 선정
-        target_stocks, analysis_subject = get_target_stocks(target_str)
-        if target_stocks.empty:
-            return {"result": [f"{analysis_subject}에 해당하는 종목을 찾을 수 없습니다."]}
-
-        # 3. 분석 기간 및 조건(계절 등)에 따른 세부 기간 설정
-        start_date, end_date = parse_period(intent_json.get("period"))
+        # 1. 캐시 확인: 캐시 키가 유효하면, 저장된 전체 결과를 바로 사용
+        if cache_key and cache_key in ANALYSIS_CACHE and 'full_result' in ANALYSIS_CACHE[cache_key]:
+            sorted_result = ANALYSIS_CACHE[cache_key]['full_result']
+            analysis_subject = ANALYSIS_CACHE[cache_key]['analysis_subject']
+            print(f"✅ CACHE HIT: 캐시된 전체 결과 {len(sorted_result)}개를 사용합니다.")
         
-        event_periods = []
-        if isinstance(condition_str, str) and any(s in condition_str for s in ["여름", "겨울"]):
-            season = "여름" if "여름" in condition_str else "겨울"
-            event_periods = handle_season_condition((start_date, end_date), season)
+        # 2. 신규 분석: 캐시가 없으면 처음부터 분석 시작
         else:
-            event_periods = [(start_date, end_date)]
+            print(f"🔥 CACHE MISS: 새로운 분석을 시작합니다.")
+            target_str = intent_json.get("target")
+            action_str = intent_json.get("action", "")
+            condition_str = intent_json.get("condition")
+            
+            target_stocks, analysis_subject = get_target_stocks(target_str)
+            if target_stocks.empty:
+                return {"result": [f"{analysis_subject}에 해당하는 종목을 찾을 수 없습니다."]}
 
-        # 4. 사용자의 '액션'에 따라 적절한 분석 함수 호출
-        result_data = []
-        if "오른" in action_str or "내린" in action_str:
-            result_data = analyze_top_performers(target_stocks, event_periods, (start_date, end_date))
-        elif "변동성" in action_str or "변동" in action_str:
-            result_data = analyze_volatility(target_stocks, (start_date, end_date))
-        elif "목표주가" in action_str:
-            result_data = analyze_target_price_upside(target_stocks)
-        else:
-            return {"error": f"'{action_str}' 액션은 아직 지원하지 않습니다."}
+            start_date, end_date = parse_period(intent_json.get("period"))
+            
+            event_periods = []
+            if isinstance(condition_str, str) and any(s in condition_str for s in ["여름", "겨울"]):
+                season = "여름" if "여름" in condition_str else "겨울"
+                event_periods = handle_season_condition((start_date, end_date), season)
+            else:
+                event_periods = [(start_date, end_date)]
 
-        # 5. 분석 결과 정렬
-        reverse_sort = False if "내린" in action_str else True
-        sorted_result = sorted(result_data, key=lambda x: x.get('value', -999), reverse=reverse_sort)
-        
-        # 6. 페이지네이션 처리
+            result_data = []
+            if "오른" in action_str or "내린" in action_str:
+                result_data = analyze_top_performers(target_stocks, event_periods, (start_date, end_date))
+            elif "변동성" in action_str or "변동" in action_str:
+                result_data = analyze_volatility(target_stocks, (start_date, end_date))
+            elif "목표주가" in action_str:
+                result_data = analyze_target_price_upside(target_stocks)
+            else:
+                return {"error": f"'{action_str}' 액션은 아직 지원하지 않습니다."}
+
+            reverse_sort = False if "내린" in action_str else True
+            sorted_result = sorted(result_data, key=lambda x: x.get('value', -999), reverse=reverse_sort)
+            
+            # 새로 분석한 전체 결과를 캐시에 저장
+            if not cache_key:
+                cache_key = str(hash(json.dumps(intent_json, sort_keys=True)))
+            
+            ANALYSIS_CACHE[cache_key] = {
+                'intent_json': intent_json,
+                'analysis_subject': analysis_subject,
+                'full_result': sorted_result
+            }
+            print(f"새로운 분석 결과 {len(sorted_result)}개를 캐시에 저장했습니다. (키: {cache_key})")
+
+        # 3. 페이지네이션 처리 (캐시된 결과 또는 새로 분석한 결과 사용)
         items_per_page = 20
         total_items = len(sorted_result)
         total_pages = (total_items + items_per_page - 1) // items_per_page
@@ -462,7 +477,7 @@ def execute_stock_analysis(intent_json, page):
         end_index = start_index + items_per_page
         paginated_result = sorted_result[start_index:end_index]
         
-        # 7. 최종 결과 JSON 구성하여 반환
+        # 4. 최종 결과 반환
         return {
             "query_intent": intent_json,
             "analysis_subject": analysis_subject,
@@ -471,11 +486,13 @@ def execute_stock_analysis(intent_json, page):
                 "current_page": page,
                 "total_pages": total_pages,
                 "total_items": total_items
-            }
+            },
+            "cache_key": cache_key 
         }
+        
     except Exception as e:
         traceback.print_exc()
-        return {"error": f"분석 중 오류 발생: {e}"}
+        return {"error": f"분석 실행 중 오류 발생: {e}"}
     
 
 def handle_season_condition(period_tuple, season):
@@ -561,7 +578,6 @@ def analyze_top_performers(target_stocks, event_periods, overall_period):
             print(f"  - {stock_name}({stock_code}) 분석 중 오류 발생: {e}")
             pass
         
-        # --- 각 종목 분석 후 0.2초 대기 ---
         time.sleep(0.2)
             
     return analysis_results
@@ -579,7 +595,7 @@ def analyze_volatility(target_stocks, period_tuple):
         try:
             overall_prices = fdr.DataReader(code, start_date, end_date)
             if overall_prices.empty:
-                time.sleep(0.2) # 실패 시에도 딜레이
+                time.sleep(0.2) 
                 continue
             
             daily_returns = overall_prices['Close'].pct_change().dropna()
@@ -595,7 +611,6 @@ def analyze_volatility(target_stocks, period_tuple):
             print(f"  - {name}({code}) 분석 중 오류 발생: {e}")
             pass
             
-        # --- 각 종목 분석 후 0.2초 대기 ---
         time.sleep(0.2)
             
     return analysis_results
@@ -620,13 +635,10 @@ def handle_indicator_condition(condition_obj, period_tuple):
     op_str = condition_obj.get("operator")
     value = condition_obj.get("value")
 
-    # 조건에 맞는 날짜(월) 필터링
     if op_str == '>': matching_series = data_series[data_series > value]
     elif op_str == '>=': matching_series = data_series[data_series >= value]
-    # ... 다른 연산자 추가 가능
     else: return []
 
-    # 해당 월의 시작일과 종료일을 분석 구간으로 설정
     return [(d.replace(day=1), (d.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)) for d in matching_series.index]
 
 def get_bok_data(bok_api_key, stats_code, item_code, start_date, end_date):
@@ -672,57 +684,75 @@ def askfin_page():
     return render_template('askfin.html')
 
 QUERY_CACHE = {}
+ANALYSIS_CACHE = {}
 
 @askfin_bp.route('/analyze', methods=['POST'])
 def analyze_query():
     """
-    [최종 수정] AI 응답에서 JSON을 더 정확하게 추출하도록 수정한 API.
+    [폴백 기능 추가] JSON 분석에 실패하면, 일반 대화형으로 답변하도록 수정된 최종 API.
     """
     if not model:
         return jsonify({"error": "모델이 초기화되지 않았습니다. API 키를 확인하세요."}), 500
     
     data = request.get_json()
-    if not data or 'query' not in data:
+    user_query = data.get('query')
+    page = data.get('page', 1)
+    cache_key = data.get('cache_key')
+
+    if not user_query:
         return jsonify({"error": "잘못된 요청입니다."}), 400
 
-    user_query = data['query']
-    page = data.get('page', 1)
-
     try:
-        # 캐싱 로직은 그대로 유지
-        if user_query in QUERY_CACHE:
-            print(f"✅ CACHE HIT: '{user_query}'에 대한 캐시된 결과를 사용합니다.")
-            intent_json = QUERY_CACHE[user_query]
+        intent_json = None
+        # 캐시 키가 유효하면, 저장된 분석 의도(intent)를 사용 (AI 호출 생략)
+        if cache_key and cache_key in ANALYSIS_CACHE:
+            print(f"✅ CACHE HIT: 캐시 키 '{cache_key}'를 사용합니다.")
+            intent_json = ANALYSIS_CACHE[cache_key]['intent_json']
         else:
-            print(f"🔥 CACHE MISS: '{user_query}'에 대해 Gemini API를 호출합니다.")
+            # 캐시가 없으면 새로운 분석 시작 (AI 호출)
+            print(f"🔥 CACHE MISS: 새로운 분석을 위해 Gemini API를 호출합니다.")
             prompt = PROMPT_TEMPLATE.format(user_query=user_query)
             response = model.generate_content(prompt)
-
-            # --- ▼▼▼ JSON 추출 및 정제 로직 강화 ▼▼▼ ---
             raw_text = response.text
-            # 문자열에서 첫 '{'와 마지막 '}'를 찾아 그 사이의 내용만 추출
+
             try:
+                # AI 응답에서 JSON 부분만 정확히 추출
                 start = raw_text.find('{')
                 end = raw_text.rfind('}') + 1
                 cleaned_response = raw_text[start:end]
-            except Exception:
-                cleaned_response = ""
-            # --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
-
-            if not cleaned_response or not cleaned_response.startswith('{'):
-                print(f"❌ Gemini가 유효한 JSON을 반환하지 않았습니다. 응답: '{raw_text}'")
-                return jsonify({"error": "AI가 요청을 처리할 수 없거나 부적절한 질문으로 판단했습니다. 다른 질문으로 다시 시도해주세요."})
+                intent_json = json.loads(cleaned_response)
+                
+                # 새로운 캐시 키 생성 및 결과 저장 준비
+                new_cache_key = str(hash(json.dumps(intent_json, sort_keys=True)))
+                ANALYSIS_CACHE[new_cache_key] = { 'intent_json': intent_json }
+                cache_key = new_cache_key # 다음 단계를 위해 캐시 키 업데이트
             
-            intent_json = json.loads(cleaned_response)
-            QUERY_CACHE[user_query] = intent_json
-        
+            except (json.JSONDecodeError, IndexError):
+                # JSON 분석 실패 시, 일반 대화형 답변으로 전환 (Fallback)
+                print(f"⚠️ JSON 분석 실패. '{user_query}'에 대해 대화형 답변으로 전환합니다.")
+                conversational_prompt = f"다음 사용자 질문에 대해 친절하고 유용한 보조원처럼 답변해 주세요: '{user_query}'"
+                response = model.generate_content(conversational_prompt)
+                
+                return jsonify({
+                    "analysis_subject": "AI 답변",
+                    "result": [response.text]
+                })
+
+        if not intent_json:
+            return jsonify({"error": "AI가 유효한 분석 결과를 반환하지 못했습니다."})
+
         query_type = intent_json.get("query_type")
         
-        final_result = {}
+        # 분석 유형에 따라 적절한 함수 호출
         if query_type == "stock_analysis":
-            final_result = execute_stock_analysis(intent_json, page)
+            final_result = execute_stock_analysis(intent_json, page, cache_key)
         elif query_type == "indicator_lookup":
             final_result = execute_indicator_lookup(intent_json)
+        elif query_type == "greeting":
+             final_result = {
+                "analysis_subject": "인사",
+                "result": ["안녕하세요! 금융에 대해 무엇이든 물어보세요."]
+            }
         else:
             final_result = {"error": f"알 수 없는 질문 유형입니다: {query_type}"}
             
