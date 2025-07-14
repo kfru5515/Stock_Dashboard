@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, session
 import FinanceDataReader as fdr
 import pandas as pd
 from pytz import timezone
@@ -241,6 +241,26 @@ def index():
         kospi_top_volume=top_kospi_volume, kosdaq_top_volume=top_kosdaq_volume,
         kospi_top_value=top_kospi_value, kosdaq_top_value=top_kosdaq_value,
         today=today_str_display)
+
+
+# 최근조회종목정보 모든페이지에서 조회할 수 있음
+@app.context_processor
+def inject_recent_stocks():
+    def get_recent_stocks():
+        recent_codes = session.get('recent_stocks', [])
+        recent_stocks = []
+        for code in recent_codes:
+            try:
+                ticker = yf.Ticker(code)
+                info = ticker.info
+                name = info.get('shortName', code)
+                price = info.get('currentPrice', 'N/A')
+                recent_stocks.append({'code': code, 'name': name, 'price': price})
+            except Exception:
+                recent_stocks.append({'code': code, 'name': code, 'price': 'N/A'})
+        return recent_stocks
+
+    return dict(recent_stocks=get_recent_stocks())
 
 
     # --- 블루프린트 및 서버 실행 (필요 시 주석 해제) ---
