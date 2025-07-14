@@ -1,4 +1,5 @@
 import dart_fss as dart
+import time
 
 import os
 import json
@@ -82,6 +83,7 @@ First, classify the query_type as "stock_analysis" or "indicator_lookup".
    ```json
    {{"query_type": "stock_analysis", "period": "지난 1년간", "condition": null, "target": "2차전지주", "action": "가장 많이 내린 주식"}}
 
+   
 ## Task:
 User Query: "{user_query}"
 JSON Output:
@@ -103,80 +105,52 @@ def _load_ticker_maps():
         NAME_TICKER_MAP = {name: ticker for ticker, name in TICKER_NAME_MAP.items()}
         print("종목 정보 로딩 완료.")
 
-def execute_indicator_lookup(intent_json):
-    """경제 지표를 조회하고 자연어 답변을 생성하는 함수"""
-    target = intent_json.get("target", "")
-    
-    # 1. FinanceDataReader를 통한 지표 조회 (일별 데이터)
-    FDR_INDICATOR_MAP = {
-        "환율": {"code": "USD/KRW", "name": "원/달러 환율"},
-        "유가": {"code": "WTI", "name": "WTI 국제 유가"},
-        "금리": {"code": "US10YT", "name": "미 10년물 국채 금리"},
-        "코스피": {"code": "KS11", "name": "코스피 지수"},
-        "코스닥": {"code": "KQ11", "name": "코스닥 지수"},
-    }
-    
-    found_indicator = None
-    for key, value in FDR_INDICATOR_MAP.items():
-        if key in target or value['name'] in target:
-            found_indicator = value
-            break
-            
-    if found_indicator:
-        try:
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=60)
-            data = fdr.DataReader(found_indicator['code'], start_date, end_date)
-            if data.empty or len(data) < 2:
-                return {"error": f"{found_indicator['name']} 데이터 조회 실패"}
-
-            latest = data['Close'].iloc[-1]
-            previous = data['Close'].iloc[-2]
-            change = latest - previous
-            change_str = f"{abs(change):.2f} 상승" if change > 0 else f"{abs(change):.2f} 하락" if change < 0 else "변동 없음"
-            latest_date = data.index[-1].strftime('%Y년 %m월 %d일')
-            result_sentence = f"가장 최근({latest_date}) {found_indicator['name']}는 {latest:.2f}이며, 전일 대비 {change_str}했습니다."
-            return {
-                "query_intent": intent_json,
-                "analysis_subject": found_indicator['name'],
-                "result": [result_sentence]
-            }
-        except Exception as e:
-            return {"error": f"{found_indicator['name']} 조회 중 오류: {e}"}
-            
-    # 2. 한국은행(BOK) API를 통한 지표 조회 (월별 데이터)
-    bok_api_key = os.getenv("ECOS_API_KEY")
-    if not bok_api_key: return {"error": "한국은행 API 키가 설정되지 않았습니다."}
-
-    BOK_INDICATOR_MAP = {
-        "CPI": {"stats_code": "901Y001", "item_code": "0", "name": "소비자물가지수"},
-        "기준금리": {"stats_code": "722Y001", "item_code": "0001000", "name": "기준금리"},
-    }
-    
-    found_bok_indicator = None
-    for key, value in BOK_INDICATOR_MAP.items():
-        if key in target or value['name'] in target:
-            found_bok_indicator = value
-            break
-            
-    if not found_bok_indicator:
-        return {"error": f"'{target}' 지표는 아직 지원하지 않습니다."}
-
+def _get_fdr_indicator(indicator_info, intent_json):
+    """FinanceDataReader를 통해 일별 지표를 조회하고 결과를 반환하는 헬퍼 함수"""
     try:
-        # 최근 3개월치 데이터 요청
-        end_date = datetime.now().strftime('%Y%m')
-        start_date = (datetime.now() - timedelta(days=90)).strftime('%Y%m')
+        name = indicator_info['name']
+        code = indicator_info['code']
         
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=60)
+        data = fdr.DataReader(code, start_date, end_date)
+        
+        if data.empty or len(data) < 2:
+            return {"error": f"{name} 데이터 조회에 실패했습니다."}
+
+        latest = data['Close'].iloc[-1]
+        previous = data['Close'].iloc[-2]
+        change = latest - previous
+        change_str = f"{abs(change):.2f} 상승" if change > 0 else f"{abs(change):.2f} 하락" if change < 0 else "변동 없음"
+        latest_date = data.index[-1].strftime('%Y년 %m월 %d일')
+        
+        result_sentence = f"가장 최근({latest_date}) {name}는(은) {latest:,.2f}이며, 전일 대비 {change_str}했습니다."
+        
+        return {
+            "query_intent": intent_json,
+            "analysis_subject": name,
+            "result": [result_sentence]
+        }
+    except Exception as e:
+        return {"error": f"{indicator_info.get('name', '알수없는')} 지표 조회 중 오류가 발생했습니다: {e}"}
+
+def _get_bok_indicator(indicator_info, intent_json):
+    """한국은행(BOK) API를 통해 월별 지표를 조회하고 결과를 반환하는 헬퍼 함수"""
+    try:
+        name = indicator_info['name']
+        bok_api_key = os.getenv("ECOS_API_KEY")
+        if not bok_api_key: return {"error": "한국은행 API 키가 설정되지 않았습니다."}
+
+        end_date = datetime.now().strftime('%Y%m')
+        start_date = (datetime.now() - timedelta(days=120)).strftime('%Y%m')
         url = (f"https://ecos.bok.or.kr/api/StatisticSearch/{bok_api_key}/json/kr/1/10/"
-               f"{found_bok_indicator['stats_code']}/MM/{start_date}/{end_date}/{found_bok_indicator['item_code']}")
+               f"{indicator_info['stats_code']}/MM/{start_date}/{end_date}/{indicator_info['item_code']}")
 
         response = requests.get(url, timeout=10).json()
         rows = response.get("StatisticSearch", {}).get("row", [])
         
         if len(rows) < 2:
-            return {
-                "error": f"최근 {found_bok_indicator['name']} 데이터를 비교할 만큼 충분히 조회할 수 없습니다."
-            }
+            return {"error": f"최근 {name} 데이터를 비교할 만큼 충분히 조회할 수 없습니다."}
             
         latest = rows[-1]
         previous = rows[-2]
@@ -184,17 +158,53 @@ def execute_indicator_lookup(intent_json):
         change = float(latest['DATA_VALUE']) - float(previous['DATA_VALUE'])
         change_str = f"{abs(change):.2f} 상승" if change > 0 else f"{abs(change):.2f} 하락" if change < 0 else "변동 없음"
 
-        result_sentence = (f"가장 최근({latest_date}) {found_bok_indicator['name']}는 {latest['DATA_VALUE']}이며, "
-                           f"전월 대비 {change_str}했습니다.")
+        result_sentence = (f"가장 최근({latest_date}) {name}는(은) {latest['DATA_VALUE']}이며, 전월 대비 {change_str}했습니다.")
         
         return {
             "query_intent": intent_json,
-            "analysis_subject": found_bok_indicator['name'],
+            "analysis_subject": name,
             "result": [result_sentence]
         }
     except Exception as e:
-        print(f"BOK 지표 조회 중 오류: {e}")
-        return {"error": "한국은행(BOK) 지표 조회 중 오류가 발생했습니다."}
+        return {"error": f"한국은행(BOK) 지표 조회 중 오류가 발생했습니다: {e}"}
+
+
+def execute_indicator_lookup(intent_json):
+    """
+    [최종 수정] 여러 소스의 경제 지표를 조회하는 메인 함수
+    """
+    target = intent_json.get("target", "")
+
+    # 데이터 소스 1: FinanceDataReader (일별 데이터)
+    FDR_INDICATOR_MAP = {
+        "환율": {"code": "USD/KRW", "name": "원/달러 환율"},
+        "유가": {"code": "WTI", "name": "WTI 국제 유가"},
+        "금값": {"code": "GC", "name": "금 선물"},
+        "미국채10년": {"code": "US10YT", "name": "미 10년물 국채 금리"},
+        "코스피": {"code": "KS11", "name": "코스피 지수"},
+        "코스닥": {"code": "KQ11", "name": "코스닥 지수"},
+    }
+    
+    for key, value in FDR_INDICATOR_MAP.items():
+        if key in target or value['name'] in target:
+            return _get_fdr_indicator(value, intent_json)
+            
+    # 데이터 소스 2: 한국은행 ECOS (월별 데이터)
+    BOK_INDICATOR_MAP = {
+        "CPI": {"stats_code": "901Y001", "item_code": "0", "name": "소비자물가지수"},
+        "기준금리": {"stats_code": "722Y001", "item_code": "0001000", "name": "한국 기준금리"},
+    }
+    
+    for key, value in BOK_INDICATOR_MAP.items():
+        if key in target or value['name'] in target:
+            return _get_bok_indicator(value, intent_json)
+
+    # 어떤 맵에서도 찾지 못한 경우
+    return {
+        "query_intent": intent_json,
+        "analysis_subject": "알 수 없는 지표",
+        "result": [f"'{target}' 지표는 아직 지원하지 않습니다."]
+    }
 
 @askfin_bp.route('/stock/<code>/profile')
 def get_stock_profile(code):
@@ -404,61 +414,69 @@ def handle_season_condition(date_range, season):
     return periods
 
 
-def execute_stock_analysis(intent_json):
-    """주식 분석을 수행하는 함수"""
-    print(f"주식 분석 시작: {intent_json}")
+def execute_stock_analysis(intent_json, page):
+    """
+    주식 분석을 수행하고, 페이지네이션 정보를 포함하여 표준화된 결과를 반환하는 최종 함수.
+    """
+    try:
+        # 1. 사용자 의도(JSON)에서 분석에 필요한 정보 추출
+        target_str = intent_json.get("target")
+        action_str = intent_json.get("action", "")
+        condition_str = intent_json.get("condition")
 
-    period_str = intent_json.get("period")
-    condition = intent_json.get("condition")
-    target_str = intent_json.get("target")
-    action_str = intent_json.get("action", "")
+        # 2. 분석 대상 종목 선정
+        target_stocks, analysis_subject = get_target_stocks(target_str)
+        if target_stocks.empty:
+            return {"result": [f"{analysis_subject}에 해당하는 종목을 찾을 수 없습니다."]}
 
-    # 위에서 수정한 get_target_stocks 함수를 호출합니다.
-    target_stocks, analysis_subject = get_target_stocks(target_str)
-    
-    # 받은 종목 리스트가 비어있는지 여기서 확인합니다.
-    if target_stocks.empty:
+        # 3. 분석 기간 및 조건(계절 등)에 따른 세부 기간 설정
+        start_date, end_date = parse_period(intent_json.get("period"))
+        
+        event_periods = []
+        if isinstance(condition_str, str) and any(s in condition_str for s in ["여름", "겨울"]):
+            season = "여름" if "여름" in condition_str else "겨울"
+            event_periods = handle_season_condition((start_date, end_date), season)
+        else:
+            event_periods = [(start_date, end_date)]
+
+        # 4. 사용자의 '액션'에 따라 적절한 분석 함수 호출
+        result_data = []
+        if "오른" in action_str or "내린" in action_str:
+            result_data = analyze_top_performers(target_stocks, event_periods, (start_date, end_date))
+        elif "변동성" in action_str or "변동" in action_str:
+            result_data = analyze_volatility(target_stocks, (start_date, end_date))
+        elif "목표주가" in action_str:
+            result_data = analyze_target_price_upside(target_stocks)
+        else:
+            return {"error": f"'{action_str}' 액션은 아직 지원하지 않습니다."}
+
+        # 5. 분석 결과 정렬
+        reverse_sort = False if "내린" in action_str else True
+        sorted_result = sorted(result_data, key=lambda x: x.get('value', -999), reverse=reverse_sort)
+        
+        # 6. 페이지네이션 처리
+        items_per_page = 20
+        total_items = len(sorted_result)
+        total_pages = (total_items + items_per_page - 1) // items_per_page
+        start_index = (page - 1) * items_per_page
+        end_index = start_index + items_per_page
+        paginated_result = sorted_result[start_index:end_index]
+        
+        # 7. 최종 결과 JSON 구성하여 반환
         return {
             "query_intent": intent_json,
             "analysis_subject": analysis_subject,
-            "result": [f"{analysis_subject}에 해당하는 종목을 찾을 수 없습니다."]
+            "result": paginated_result,
+            "pagination": {
+                "current_page": page,
+                "total_pages": total_pages,
+                "total_items": total_items
+            }
         }
-
-    start_date, end_date = parse_period(period_str)
+    except Exception as e:
+        traceback.print_exc()
+        return {"error": f"분석 중 오류 발생: {e}"}
     
-    event_periods = []
-    if isinstance(condition, dict) and condition.get("type") == "indicator":
-        event_periods = handle_indicator_condition(condition, (start_date, end_date))
-    elif isinstance(condition, str):
-        if "금리" in condition:
-            bok_api_key = os.getenv("ECOS_API_KEY")
-            if not bok_api_key: return {"error": "한국은행 API 키가 설정되지 않았습니다."}
-            event_periods = handle_interest_rate_condition(bok_api_key, (start_date, end_date))
-        elif any(s in condition for s in ["여름", "겨울"]):
-            season = "여름" if "여름" in condition else "겨울"
-            event_periods = handle_season_condition((start_date, end_date), season)
-    
-    if not event_periods:
-        event_periods = [(start_date, end_date)]
-
-    result_data = []
-    if "오른" in action_str:
-        result_data = analyze_top_performers(target_stocks, event_periods, (start_date, end_date))
-    elif "내린" in action_str:
-        result_data = analyze_top_performers(target_stocks, event_periods, (start_date, end_date))
-        sort_descending = False 
-
-    else:
-        return {"error": f"'{action_str}' 액션은 아직 지원하지 않습니다."}
-
-    sort_key = 'average_return_pct'
-    sorted_result = sorted(result_data, key=lambda x: x.get(sort_key, -np.inf), reverse=True)
-    
-    return {
-        "query_intent": intent_json,
-        "analysis_subject": analysis_subject,
-        "result": sorted_result[:20] if sorted_result else ["조건을 만족하는 종목이 없습니다."]
-    }
 
 def handle_season_condition(period_tuple, season):
     """'여름' 또는 '겨울' 조건에 맞는 날짜 구간 리스트를 반환하는 함수"""
@@ -502,60 +520,85 @@ def handle_interest_rate_condition(api_key, period_tuple):
 # askfin.py
 
 def analyze_top_performers(target_stocks, event_periods, overall_period):
-    """
-    주어진 종목들과 기간들에 대해 수익률을 분석하고 상위 종목을 반환.
-    
-    :param target_stocks: 분석할 종목들의 DataFrame.
-    :param event_periods: 분석할 특정 기간들의 리스트 [(start_date, end_date), ...].
-    :param overall_period: 전체 분석 기간 (현재는 사용되지 않으나 확장성 위해 유지).
-    :return: 종목별 분석 결과 리스트 (딕셔너리 형태).
-    """
+    """수익률 분석 함수 (딜레이 추가로 안정성 확보)"""
     analysis_results = []
-    
-    # KOSPI와 KOSDAQ만 필터링하고 시가총액으로 정렬
-    target_stocks = target_stocks[target_stocks['Market'].isin(['KOSPI', 'KOSDAQ'])]
-    top_stocks = target_stocks.nlargest(100, 'Marcap').reset_index(drop=True)
-
-    print(f"시가총액 상위 {len(top_stocks)}개 종목에 대한 분석을 시작합니다...")
+    top_stocks = target_stocks.nlargest(min(len(target_stocks), 100), 'Marcap').reset_index(drop=True)
+    print(f"시가총액 상위 {len(top_stocks)}개 종목에 대한 수익률 분석을 시작합니다...")
+    overall_start, overall_end = overall_period
 
     for index, stock in top_stocks.iterrows():
-        stock_code = stock['Code']
-        stock_name = stock['Name']
-        
-        period_returns = []
-        
+        stock_code, stock_name = stock['Code'], stock['Name']
         print(f"  ({index + 1}/{len(top_stocks)}) {stock_name}({stock_code}) 분석 중...")
-
-        for start, end in event_periods:
-            try:
+        try:
+            overall_prices = fdr.DataReader(stock_code, overall_start, overall_end)
+            if overall_prices.empty:
+                time.sleep(0.2) # 실패 시에도 딜레이
+                continue
+            
+            start_price = overall_prices['Open'].iloc[0]
+            end_price = overall_prices['Close'].iloc[-1]
+            period_returns = []
+            for start, end in event_periods:
                 prices = fdr.DataReader(stock_code, start, end)
-                
-                if not prices.empty and len(prices) > 1:
-                    start_price = prices['Open'].iloc[0]
-                    end_price = prices['Close'].iloc[-1]
-                    
-                    if start_price > 0:
-                        period_return = (end_price / start_price) - 1
-                        period_returns.append(period_return)
-
-            except Exception as e:
-                # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 이 부분이 수정되었습니다 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-                # 오류가 발생해도 아무것도 하지 않고 계속 진행하도록 pass를 추가
-                pass
-                # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
-        if period_returns:
-            average_return = statistics.mean(period_returns)
-            analysis_results.append({
-                "code": stock_code,
-                "name": stock_name,
-                "average_return_pct": round(average_return * 100, 2),
-                "event_count": len(period_returns)
-            })
-
-    print("주식 분석 완료.")
+                if len(prices) > 1:
+                    event_start_price = prices['Open'].iloc[0]
+                    event_end_price = prices['Close'].iloc[-1]
+                    if event_start_price > 0:
+                        period_returns.append((event_end_price / event_start_price) - 1)
+            
+            if period_returns:
+                average_return = statistics.mean(period_returns)
+                if pd.notna(average_return):
+                    analysis_results.append({
+                        "code": stock_code,
+                        "name": stock_name,
+                        "value": round(average_return * 100, 2),
+                        "label": "평균 수익률(%)",
+                        "start_price": int(start_price),
+                        "end_price": int(end_price)
+                    })
+        except Exception as e:
+            print(f"  - {stock_name}({stock_code}) 분석 중 오류 발생: {e}")
+            pass
+        
+        # --- 각 종목 분석 후 0.2초 대기 ---
+        time.sleep(0.2)
+            
     return analysis_results
 
+def analyze_volatility(target_stocks, period_tuple):
+    """변동성 분석 함수 (딜레이 추가로 안정성 확보)"""
+    analysis_results = []
+    start_date, end_date = period_tuple
+    top_stocks = target_stocks.nlargest(min(len(target_stocks), 100), 'Marcap').reset_index(drop=True)
+    print(f"시가총액 상위 {len(top_stocks)}개 종목에 대한 변동성 분석을 시작합니다...")
+
+    for index, stock_info in top_stocks.iterrows():
+        code, name = stock_info['Code'], stock_info['Name']
+        print(f"  ({index + 1}/{len(top_stocks)}) {name}({code}) 분석 중...")
+        try:
+            overall_prices = fdr.DataReader(code, start_date, end_date)
+            if overall_prices.empty:
+                time.sleep(0.2) # 실패 시에도 딜레이
+                continue
+            
+            daily_returns = overall_prices['Close'].pct_change().dropna()
+            volatility = daily_returns.std()
+            if pd.notna(volatility):
+                analysis_results.append({
+                    "code": code, "name": name,
+                    "value": round(volatility * 100, 2), "label": "변동성(%)",
+                    "start_price": overall_prices['Open'].iloc[0],
+                    "end_price": overall_prices['Close'].iloc[-1]
+                })
+        except Exception as e:
+            print(f"  - {name}({code}) 분석 중 오류 발생: {e}")
+            pass
+            
+        # --- 각 종목 분석 후 0.2초 대기 ---
+        time.sleep(0.2)
+            
+    return analysis_results
 
 def handle_indicator_condition(condition_obj, period_tuple):
     """CPI, 금리 등 지표 조건을 만족하는 날짜 구간을 반환"""
@@ -628,25 +671,56 @@ def get_bok_data(bok_api_key, stats_code, item_code, start_date, end_date):
 def askfin_page():
     return render_template('askfin.html')
 
+QUERY_CACHE = {}
+
 @askfin_bp.route('/analyze', methods=['POST'])
 def analyze_query():
+    """
+    [최종 수정] AI 응답에서 JSON을 더 정확하게 추출하도록 수정한 API.
+    """
     if not model:
         return jsonify({"error": "모델이 초기화되지 않았습니다. API 키를 확인하세요."}), 500
+    
     data = request.get_json()
-    if not data or 'query' not in data: return jsonify({"error": "잘못된 요청입니다."}), 400
+    if not data or 'query' not in data:
+        return jsonify({"error": "잘못된 요청입니다."}), 400
 
     user_query = data['query']
+    page = data.get('page', 1)
 
     try:
-        prompt = PROMPT_TEMPLATE.format(user_query=user_query)
-        response = model.generate_content(prompt)
-        cleaned_response = response.text.strip().replace("```json", "").replace("```", "")
-        intent_json = json.loads(cleaned_response)
+        # 캐싱 로직은 그대로 유지
+        if user_query in QUERY_CACHE:
+            print(f"✅ CACHE HIT: '{user_query}'에 대한 캐시된 결과를 사용합니다.")
+            intent_json = QUERY_CACHE[user_query]
+        else:
+            print(f"🔥 CACHE MISS: '{user_query}'에 대해 Gemini API를 호출합니다.")
+            prompt = PROMPT_TEMPLATE.format(user_query=user_query)
+            response = model.generate_content(prompt)
+
+            # --- ▼▼▼ JSON 추출 및 정제 로직 강화 ▼▼▼ ---
+            raw_text = response.text
+            # 문자열에서 첫 '{'와 마지막 '}'를 찾아 그 사이의 내용만 추출
+            try:
+                start = raw_text.find('{')
+                end = raw_text.rfind('}') + 1
+                cleaned_response = raw_text[start:end]
+            except Exception:
+                cleaned_response = ""
+            # --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
+
+            if not cleaned_response or not cleaned_response.startswith('{'):
+                print(f"❌ Gemini가 유효한 JSON을 반환하지 않았습니다. 응답: '{raw_text}'")
+                return jsonify({"error": "AI가 요청을 처리할 수 없거나 부적절한 질문으로 판단했습니다. 다른 질문으로 다시 시도해주세요."})
+            
+            intent_json = json.loads(cleaned_response)
+            QUERY_CACHE[user_query] = intent_json
         
         query_type = intent_json.get("query_type")
         
+        final_result = {}
         if query_type == "stock_analysis":
-            final_result = execute_stock_analysis(intent_json)
+            final_result = execute_stock_analysis(intent_json, page)
         elif query_type == "indicator_lookup":
             final_result = execute_indicator_lookup(intent_json)
         else:
@@ -655,7 +729,11 @@ def analyze_query():
         return jsonify(final_result)
 
     except Exception as e:
-        print("="*30, "\n!!! AN ERROR OCCURRED IN /analyze !!!")
         traceback.print_exc()
-        print("="*30)
         return jsonify({"error": f"분석 중 오류 발생: {str(e)}"}), 500
+
+@askfin_bp.route('/new_chat', methods=['POST'])
+def new_chat():
+    """대화 기록(세션)을 초기화합니다."""
+    session.pop('chat_history', None)
+    return jsonify({"status": "success", "message": "새 대화를 시작합니다."})

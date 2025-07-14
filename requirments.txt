@@ -1,0 +1,11 @@
+flask
+yfinance
+Flask-SQLAlchemy
+dart-fss
+FinanceDataReader
+pandas
+pytz
+pykrx
+requests
+pymysql
+google-generativeai
