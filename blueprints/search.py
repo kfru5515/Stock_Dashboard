@@ -2,6 +2,13 @@ from flask import Blueprint, render_template, request, session
 import FinanceDataReader as fdr
 import yfinance as yf
 import pandas as pd
+import joblib  # ✅ 모델 로딩용
+
+# 학습된 모델, 인코더, 피처 목록 로딩
+model = joblib.load('models/trend_model.pkl')
+le = joblib.load('models/label_encoder.pkl')
+features = joblib.load('models/feature_list.pkl')
+
 
 search_bp = Blueprint('search', __name__, url_prefix='/search')
 
@@ -51,11 +58,41 @@ def search():
         ticker = yf.Ticker(ticker_code)
         info = ticker.info
         if info and 'shortName' in info and info.get('currentPrice'):
+            # 예측 로직 추가
+            try:
+                hist = ticker.history(period='1d', interval='5m')
+                if not hist.empty:
+                    latest = hist.iloc[-1]
+                    open_ = latest['Open']
+                    high = latest['High']
+                    low = latest['Low']
+                    close = latest['Close']
+                    volume = latest['Volume']
+
+                    # 피처 생성
+                    range_ = high - low
+                    body = abs(close - open_)
+                    direction = close - open_
+                    volatility = (high - low) / open_ if open_ else 0
+
+                    input_df = pd.DataFrame([[
+                        open_, high, low, close, volume, range_, body, direction, volatility
+                    ]], columns=features)
+
+                    prediction = model.predict(input_df)
+                    label = le.inverse_transform(prediction)[0]
+                else:
+                    label = "예측 불가"
+            except Exception as e:
+                print("예측 오류:", e)
+                label = "예측 실패"
+
             results.append({
                 'code': ticker_code,
                 'name': info['shortName'],
-                'currentPrice': info.get('currentPrice', 'N/A')
-            })
+                'currentPrice': info.get('currentPrice', 'N/A'),
+                'prediction': label  # ✅ 예측 결과 추가
+    })
         else:
             hist = ticker.history(period='1d')
             if not hist.empty:
