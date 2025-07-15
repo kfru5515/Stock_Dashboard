@@ -17,83 +17,32 @@
         padding: 20px;
         overflow-y: auto;
     }
-    .message-row {
-        display: flex;
-        margin-bottom: 15px;
-        width: 100%;
-    }
-    .message {
-        max-width: 80%;
-        padding: 12px 18px;
-        border-radius: 20px;
-        line-height: 1.6;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    }
-
-    .user-message-row {
-        justify-content: flex-end !important; /* !important로 오른쪽 정렬 강제 */
-    }
-    .user-message {
-        background-color: #007bff;
-        color: white;
-        border-bottom-right-radius: 5px;
-    }
-
-    .ai-message-row {
-        justify-content: flex-start !important; /* !important로 왼쪽 정렬 강제 */
-    }
-    .ai-message {
-        background-color: #f1f3f5;
-        color: #333;
-        border: 1px solid #e9ecef;
-        border-bottom-left-radius: 5px;
-    }
-
-    #askfin-form-container {
-        padding: 15px;
-        border-top: 1px solid #e0e0e0;
-    }
-    #askfin-form {
-        display: flex;
-        align-items: center;
-    }
-    #query-input {
-        flex-grow: 1;
-        font-size: 16px;
-        padding: 12px 20px;
-        border-radius: 25px;
-        border: 1px solid #ccc;
-        margin-right: 10px;
-    }
-    #askfin-form button {
-        border-radius: 25px;
-        padding: 12px 20px;
-        flex-shrink: 0;
-    }
-    .spinner-container {
-        display: none; /* 평소에는 숨김 */
-        text-align: center;
-        padding: 20px;
-    }
-    .spinner {
-        display: inline-block;
-        width: 40px; height: 40px;
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #3498db;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
+    .message-row { display: flex; margin-bottom: 15px; width: 100%; }
+    .message { max-width: 80%; padding: 12px 18px; border-radius: 20px; line-height: 1.6; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .user-message-row { justify-content: flex-end !important; }
+    .user-message { background-color: #007bff; color: white; border-bottom-right-radius: 5px; }
+    .ai-message-row { justify-content: flex-start !important; }
+    .ai-message { background-color: #f1f3f5; color: #333; border: 1px solid #e9ecef; border-bottom-left-radius: 5px; }
+    #askfin-form-container { padding: 15px; border-top: 1px solid #e0e0e0; }
+    #askfin-form { display: flex; align-items: center; }
+    #query-input { flex-grow: 1; font-size: 16px; padding: 12px 20px; border-radius: 25px; border: 1px solid #ccc; margin-right: 10px; }
+    #askfin-form button { border-radius: 25px; padding: 12px 20px; flex-shrink: 0; }
+    .spinner { display: inline-block; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     .stock-info-btn { cursor: pointer; color: #0056b3; text-decoration: underline; }
     #pagination-container { margin-top: 15px; text-align: center; }
     .page-btn { margin: 0 5px; padding: 5px 10px; border: 1px solid #ddd; background-color: #fff; cursor: pointer; border-radius: 5px; }
     .page-btn.active { font-weight: bold; background-color: #337ab7; color: #fff; border-color: #337ab7; }
+    /* [추가] 모달 내 테이블 스타일 */
+    .financial-table { font-size: 14px; }
+    .financial-table th, .financial-table td { text-align: right; }
+    .financial-table th:first-child, .financial-table td:first-child { text-align: left; background-color: #f8f9fa; }
 </style>
 {% endblock %}
 
 {% block content %}
 <h1>AskFin - 대화형 금융 도우미</h1>
-<p>금융/투자에 대한 질문을 AI와 대화하듯 물어보세요 ex: 최근 3년동안 가장 많이 오른 제약주는?.</p>
+<p>금융/투자에 대한 질문을 AI와 대화하듯 물어보세요 (예: 최근 3년동안 가장 많이 오른 제약주는?).</p>
 <hr>
 
 <div id="chat-container">
@@ -101,10 +50,6 @@
         <div class="message-row ai-message-row">
             <div class="message ai-message">안녕하세요! 무엇을 분석해 드릴까요?</div>
         </div>
-    </div>
-
-    <div id="loading-spinner-container" class="spinner-container">
-        <div class="spinner"></div>
     </div>
 
     <div id="askfin-form-container">
@@ -115,15 +60,35 @@
         </form>
     </div>
 </div>
+
 <div class="modal fade" id="financialModal" tabindex="-1" role="dialog" aria-labelledby="modal-title-label">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
+    <div class="modal-dialog modal-lg" role="document"> <div class="modal-content">
             <div class="modal-header">
-                <h4 class="modal-title" id="modal-title-label">기업 개요 정보</h4>
+                <h4 class="modal-title" id="modal-title-label">기업 정보</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
-            <div class="modal-body" id="modal-body">
-                <p>정보를 불러오는 중입니다...</p>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" role="tablist">
+                    <li role="presentation" class="active"><a href="#profile-content" aria-controls="profile" role="tab" data-toggle="tab">기업 개요</a></li>
+                    <li role="presentation"><a href="#bs-content" aria-controls="bs" role="tab" data-toggle="tab">재무상태표</a></li>
+                    <li role="presentation"><a href="#is-content" aria-controls="is" role="tab" data-toggle="tab">손익계산서</a></li>
+                    <li role="presentation"><a href="#cf-content" aria-controls="cf" role="tab" data-toggle="tab">현금흐름표</a></li>
+                </ul>
+
+                <div class="tab-content" style="padding-top: 20px;">
+                    <div role="tabpanel" class="tab-pane active" id="profile-content">
+                        <p>정보를 불러오는 중입니다...</p>
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="bs-content">
+                        <p>정보를 불러오는 중입니다...</p>
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="is-content">
+                        <p>정보를 불러오는 중입니다...</p>
+                    </div>
+                    <div role="tabpanel" class="tab-pane" id="cf-content">
+                        <p>정보를 불러오는 중입니다...</p>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">닫기</button>
@@ -136,102 +101,66 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- 1. 주요 HTML 요소 가져오기 ---
     const queryInput = document.getElementById('query-input');
     const submitBtn = document.getElementById('submit-btn');
     const chatWindow = document.getElementById('chat-window');
     const newChatBtn = document.getElementById('new-chat-btn');
-    const spinnerContainer = document.getElementById('loading-spinner-container');
 
+    // --- State Variables ---
     let currentQuery = '';
     let currentCacheKey = null;
 
-    // --- 2. 헬퍼 함수 정의 ---
-    function addMessageToChat(message, type, contentHtml = null) {
-        // 정렬을 담당하는 바깥쪽 div 생성 및 스타일 직접 주입
+    function addMessageToChat(type, contentHtml) {
         const rowDiv = document.createElement('div');
-        rowDiv.style.display = 'flex';
-        rowDiv.style.marginBottom = '15px';
+        rowDiv.className = `message-row ${type}-row`;
 
-        // 실제 말풍선 div 생성
         const messageDiv = document.createElement('div');
-        
-        // --- ▼▼▼ 말풍선 공통 스타일 직접 주입 ▼▼▼ ---
-        messageDiv.style.maxWidth = '80%';
-        messageDiv.style.padding = '12px 18px';
-        messageDiv.style.borderRadius = '20px';
-        messageDiv.style.lineHeight = '1.6';
-        messageDiv.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)';
-        // --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
-
-        if (type === 'user-message') {
-            // --- ▼▼▼ 사용자 말풍선 스타일 직접 주입 ▼▼▼ ---
-            rowDiv.style.justifyContent = 'flex-end'; // 오른쪽 정렬
-            messageDiv.style.backgroundColor = '#007bff';
-            messageDiv.style.color = 'white';
-            messageDiv.style.borderBottomRightRadius = '5px';
-            // --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
-        } else { // ai-message 또는 다른 타입
-            // --- ▼▼▼ AI 말풍선 스타일 직접 주입 ▼▼▼ ---
-            rowDiv.style.justifyContent = 'flex-start'; // 왼쪽 정렬
-            messageDiv.style.backgroundColor = '#f1f3f5';
-            messageDiv.style.color = '#333';
-            messageDiv.style.border = '1px solid #e9ecef';
-            messageDiv.style.borderBottomLeftRadius = '5px';
-            // --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
-        }
-        
-        if (contentHtml) {
-            messageDiv.innerHTML = contentHtml;
-        } else {
-            messageDiv.textContent = message;
-        }
+        messageDiv.className = `message ${type}`;
+        messageDiv.innerHTML = contentHtml;
 
         rowDiv.appendChild(messageDiv);
         chatWindow.appendChild(rowDiv);
-
         chatWindow.scrollTop = chatWindow.scrollHeight;
         
-        return messageDiv;
+        return rowDiv;
     }
-
+    
     function renderPagination(pagination) {
+        if (!pagination || pagination.total_pages <= 1) return '';
+        
         let paginationHtml = '<div id="pagination-container">';
-        if (pagination && pagination.total_pages > 1) {
-            for (let i = 1; i <= pagination.total_pages; i++) {
-                const activeClass = (i === pagination.current_page) ? 'active' : '';
-                paginationHtml += `<button class="page-btn ${activeClass}" data-page="${i}">${i}</button>`;
-            }
+        for (let i = 1; i <= pagination.total_pages; i++) {
+            const activeClass = (i === pagination.current_page) ? 'active' : '';
+            paginationHtml += `<button class="page-btn ${activeClass}" data-page="${i}">${i}</button>`;
         }
         paginationHtml += '</div>';
         return paginationHtml;
     }
 
-    // --- 3. 메인 분석 요청 함수 ---
     function fetchAnalysis(query, page = 1) {
-    if (!query) return; 
-    currentQuery = query;
+        if (!query) return;
 
-    if (page === 1) {
-        currentCacheKey = null;
-        addMessageToChat(query, 'user-message');
-        queryInput.value = '';
-    }
-    
-    const spinnerMessage = addMessageToChat('', 'ai-message', '<div class="spinner" style="display:block; margin: 0;"></div>');
+        if (page === 1) {
+            currentQuery = query;
+            currentCacheKey = null;
+            addMessageToChat('user-message', query);
+            queryInput.value = '';
+        }
+        
+        const spinnerBubble = addMessageToChat('ai-message', '<div class="spinner" style="display:block; margin: 0 auto;"></div>');
 
-    fetch("{{ url_for('askfin.analyze_query') }}", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query, page: page, cache_key: currentCacheKey })
-    })
-    .then(response => response.ok ? response.json() : Promise.reject(response))
+        fetch("{{ url_for('askfin.analyze_query') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: currentQuery, page: page, cache_key: currentCacheKey })
+        })
+        .then(response => response.ok ? response.json() : Promise.reject(response))
         .then(data => {
-            spinnerMessage.remove();
+            spinnerBubble.remove();
 
             if (data.cache_key) { currentCacheKey = data.cache_key; }
             if (data.error) {
-                addMessageToChat(`오류: ${data.error}`, 'ai-message');
+                addMessageToChat('ai-message', `오류: ${data.error}`);
                 return;
             }
 
@@ -249,28 +178,22 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </thead>
                                 <tbody>`;
                 
-                // --- ▼▼▼ 데이터 처리 부분을 더 안전하게 수정 ▼▼▼ ---
                 result.forEach((item, index) => {
                     const rank = ((data.pagination.current_page - 1) * 20) + index + 1;
-
-                    // 각 키가 존재하는지 확인 후 안전하게 값을 가져옴
-                    const itemName = item && item.name ? item.name : '이름 없음';
-                    const itemCode = item && item.code ? item.code : '코드 없음';
-                    const startPrice = item && item.start_price ? `${parseInt(item.start_price).toLocaleString()} 원` : 'N/A';
-                    const endPrice = item && item.end_price ? `${parseInt(item.end_price).toLocaleString()} 원` : 'N/A';
-                    const displayValue = item && (item.value !== null && item.value !== undefined) ? item.value.toFixed(2) : 'N/A';
-                    const valueColor = item && item.value > 0 ? '#d9534f' : (item.value < 0 ? '#337ab7' : '#333');
+                    const itemName = item?.name || 'N/A';
+                    const itemCode = item?.code || 'N/A';
+                    const startPrice = item?.start_price ? `${parseInt(item.start_price).toLocaleString()} 원` : 'N/A';
+                    const endPrice = item?.end_price ? `${parseInt(item.end_price).toLocaleString()} 원` : 'N/A';
+                    const displayValue = (item?.value !== null && item?.value !== undefined) ? item.value.toFixed(2) : 'N/A';
                     
                     table += `<tr>
                                 <td>${rank}</td>
                                 <td><a href="#" class="stock-info-btn" data-code="${itemCode}" data-name="${itemName}">${itemName}</a></td>
                                 <td>${startPrice}</td>
                                 <td>${endPrice}</td>
-                                <td style="color: ${valueLabel.includes('수익률') ? valueColor : '#333'}; font-weight: bold;">${displayValue}</td>
+                                <td style="font-weight: bold;">${displayValue}</td>
                               </tr>`;
                 });
-                // --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
-
                 table += `</tbody></table>`;
                 responseHtml += table;
                 responseHtml += renderPagination(data.pagination);
@@ -279,71 +202,149 @@ document.addEventListener('DOMContentLoaded', function() {
                 responseHtml += `<p>${result.join('<br>')}</p>`;
             }
             
-            addMessageToChat('', 'ai-message', responseHtml);
+            addMessageToChat('ai-message', responseHtml);
         })
         .catch(error => {
-            spinnerMessage.remove();
-            addMessageToChat('분석 중 심각한 오류가 발생했습니다. 브라우저의 개발자 콘솔(F12)을 확인해주세요.', 'ai-message');
+            spinnerBubble.remove();
+            addMessageToChat('ai-message', '분석 중 심각한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
             console.error('Fetch error:', error);
         });
     }
 
-    // --- 4. 이벤트 리스너 설정 ---
-    submitBtn.addEventListener('click', () => {
-        const query = queryInput.value.trim();
-        fetchAnalysis(query, 1);
-    });
-    queryInput.addEventListener('keypress', (event) => {
-        if (event.key === 'Enter') {
-            submitBtn.click();
+    // --- [추가] 재무제표 JSON을 HTML 테이블로 렌더링하는 헬퍼 함수 ---
+    function renderFinancialTable(statementJson, targetElementId) {
+        const targetElement = document.getElementById(targetElementId);
+        if (!statementJson) {
+            targetElement.innerHTML = '<p class="text-danger">해당 재무 정보를 불러올 수 없습니다.</p>';
+            return;
         }
+
+        try {
+            const stmt = JSON.parse(statementJson);
+            let table = '<div class="table-responsive"><table class="table table-bordered table-hover financial-table">';
+            
+            // Header
+            table += '<thead><tr><th>항목</th>';
+            stmt.columns.forEach(col => {
+                table += `<th>${col}</th>`;
+            });
+            table += '</tr></thead>';
+
+            // Body
+            table += '<tbody>';
+            stmt.data.forEach((rowData, rowIndex) => {
+                table += '<tr>';
+                // Account Name (Index)
+                table += `<td><strong>${stmt.index[rowIndex]}</strong></td>`;
+                // Data
+                rowData.forEach(cellData => {
+                    // 숫자인 경우 3자리 콤마 포맷 적용
+                    const value = (typeof cellData === 'number') ? cellData.toLocaleString() : (cellData || '0');
+                    table += `<td>${value}</td>`;
+                });
+                table += '</tr>';
+            });
+            table += '</tbody></table></div>';
+            
+            targetElement.innerHTML = table;
+        } catch (e) {
+            console.error("재무제표 파싱 오류:", e);
+            targetElement.innerHTML = '<p class="text-danger">재무 정보 형식이 올바르지 않아 표시할 수 없습니다.</p>';
+        }
+    }
+
+
+    // --- Event Listeners ---
+    submitBtn.addEventListener('click', () => fetchAnalysis(queryInput.value.trim(), 1));
+    queryInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') submitBtn.click();
     });
+
     newChatBtn.addEventListener('click', () => {
         currentCacheKey = null;
+        currentQuery = '';
         fetch("{{ url_for('askfin.new_chat') }}", { method: 'POST' })
         .then(() => {
             chatWindow.innerHTML = '';
-            addMessageToChat('새로운 대화를 시작합니다. 무엇이 궁금하신가요?', 'ai-message');
+            addMessageToChat('ai-message', '새로운 대화를 시작합니다. 무엇이 궁금하신가요?');
         });
     });
+
     chatWindow.addEventListener('click', (event) => {
         const target = event.target;
-        if (target.classList.contains('page-btn')) {
+
+        if (target.classList.contains('page-btn') && !target.classList.contains('active')) {
             event.preventDefault();
             const page = parseInt(target.dataset.page, 10);
+            
+            const resultBubble = target.closest('.ai-message-row');
+            if(resultBubble) {
+                resultBubble.remove();
+            }
+            
             fetchAnalysis(currentQuery, page);
         }
+
+        // --- [수정] 기업 정보 버튼 클릭 시, 모든 탭의 데이터를 채우도록 로직 변경 ---
         if (target.classList.contains('stock-info-btn')) {
             event.preventDefault();
             const stockCode = target.dataset.code;
             const stockName = target.dataset.name;
-            const modalTitle = document.getElementById('modal-title-label');
-            const modalBody = document.getElementById('modal-body');
 
-            modalTitle.textContent = `${stockName} (${stockCode}) 기업 개요`;
-            modalBody.innerHTML = '<div class="spinner" style="display:block; margin: 20px auto;"></div>';
+            // 모달창 내용 초기화
+            document.getElementById('modal-title-label').textContent = `${stockName} (${stockCode})`;
+            const spinnerHtml = '<div class="spinner" style="display:block; margin: 20px auto;"></div>';
+            document.getElementById('profile-content').innerHTML = spinnerHtml;
+            document.getElementById('bs-content').innerHTML = spinnerHtml;
+            document.getElementById('is-content').innerHTML = spinnerHtml;
+            document.getElementById('cf-content').innerHTML = spinnerHtml;
             
             $('#financialModal').modal('show'); 
 
             fetch(`/askfin/stock/${stockCode}/profile`)
-                .then(response => response.ok ? response.json() : Promise.reject('서버 응답 오류'))
-                .then(data => {
-                    if (data.error) {
-                        modalBody.innerHTML = `<p class="text-danger">오류: ${data.error}</p>`;
-                        return;
-                    }
+            .then(response => response.ok ? response.json() : Promise.reject('서버 응답 오류'))
+            .then(data => {
+                // 1. 기업 개요 탭 채우기
+                const profileContent = document.getElementById('profile-content');
+                if (data.profile_error) {
+                    profileContent.innerHTML = `<p class="text-danger">오류: ${data.profile_error}</p>`;
+                } else if (data.company_profile) {
                     const profile = data.company_profile;
                     let content = '<dl class="dl-horizontal">';
                     for (const [key, value] of Object.entries(profile)) {
                         content += `<dt>${key}</dt><dd>${value || 'N/A'}</dd>`;
                     }
                     content += '</dl>';
-                    modalBody.innerHTML = content;
-                })
-                .catch(err => {
-                    modalBody.innerHTML = '<p class="text-danger">정보를 불러오는 데 실패했습니다.</p>';
-                    console.error('Fetch Error:', err);
-                });
+                    profileContent.innerHTML = content;
+                } else {
+                    profileContent.innerHTML = `<p class="text-danger">기업 개요 정보를 불러올 수 없습니다.</p>`;
+                }
+
+                // 2. 재무제표 탭 채우기
+                if (data.financials_error) {
+                    const errorMsg = `<p class="text-danger">오류: ${data.financials_error}</p>`;
+                    document.getElementById('bs-content').innerHTML = errorMsg;
+                    document.getElementById('is-content').innerHTML = errorMsg;
+                    document.getElementById('cf-content').innerHTML = errorMsg;
+                } else if (data.financial_statements) {
+                    renderFinancialTable(data.financial_statements.bs, 'bs-content');
+                    renderFinancialTable(data.financial_statements.is, 'is-content');
+                    renderFinancialTable(data.financial_statements.cf, 'cf-content');
+                } else {
+                     const errorMsg = `<p class="text-danger">재무제표 정보를 불러올 수 없습니다.</p>`;
+                    document.getElementById('bs-content').innerHTML = errorMsg;
+                    document.getElementById('is-content').innerHTML = errorMsg;
+                    document.getElementById('cf-content').innerHTML = errorMsg;
+                }
+            })
+            .catch(err => {
+                const errorHtml = '<p class="text-danger">정보를 불러오는 데 실패했습니다.</p>';
+                document.getElementById('profile-content').innerHTML = errorHtml;
+                document.getElementById('bs-content').innerHTML = errorHtml;
+                document.getElementById('is-content').innerHTML = errorHtml;
+                document.getElementById('cf-content').innerHTML = errorHtml;
+                console.error('Modal Fetch Error:', err);
+            });
         }
     });
 });

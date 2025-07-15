@@ -2,10 +2,11 @@ flask
 yfinance
 Flask-SQLAlchemy
 dart-fss
-FinanceDataReader
+finance-datareader 
 pandas
 pytz
 pykrx
 requests
 pymysql
 google-generativeai
+xgboost

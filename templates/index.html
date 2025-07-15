@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros.html" import render_rank_table with context %}
 
 {% block title %}Dashboard{% endblock %}
 
@@ -16,6 +17,10 @@
     .change.positive { color: #d9534f; }
     .change.negative { color: #337ab7; }
     .change.zero { color: #555; }
+    /* 상세 정보 모달 내 테이블 스타일 추가 */
+    .financial-table { font-size: 14px; }
+    .financial-table th, .financial-table td { text-align: right; }
+    .financial-table th:first-child, .financial-table td:first-child { text-align: left; background-color: #f8f9fa; }
 </style>
 {% endblock %}
 
@@ -60,7 +65,7 @@
             <div class="chart-info">
                 <span id="usdkrw-value" class="value">{{ usdkrw_info.value }}</span>
                 <span id="usdkrw-change" class="change {% if usdkrw_info.raw_change > 0 %}positive{% elif usdkrw_info.raw_change < 0 %}negative{% else %}zero{% endif %}">
-                    {{ usdkrw_info.change }} ({{ usdkrw_info.change_pct }})
+                    {{ kospi_info.change }} ({{ usdkrw_info.change_pct }})
                 </span>
             </div>
         </div>
@@ -88,90 +93,36 @@
 
 <div style="display: flex; gap: 40px; flex-wrap: wrap; margin-top: 20px;">
     {% if kospi_top_volume %}
-    <div style="flex: 1;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h4 id="kospi-rank-title" style="margin: 0;">{{ today }} KOSPI 거래량 상위 10</h4>
-            <div class="btn-group btn-group-sm" id="kospi-rank-selector">
-                <button type="button" class="btn btn-default active" data-target="volume">거래량</button>
-                <button type="button" class="btn btn-default" data-target="value">거래대금</button>
-            </div>
-        </div>
-        <table class="table table-striped rank-table" id="kospi-volume-table">
-            <thead><tr><th>종목명</th><th>종가</th><th>거래량</th></tr></thead>
-            <tbody>
-                {% for item in kospi_top_volume %}
-                <tr>
-                    <td class="stock-name" data-code="{{ item.Code }}" style="cursor:pointer; color:blue;">{{ item.Name }}</td>
-                    <td>{{ item.Close | format_price }}</td>
-                    <td>{{ item.Volume | format_kr }}주</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <table class="table table-striped rank-table hidden-table" id="kospi-value-table">
-            <thead><tr><th>종목명</th><th>종가</th><th>거래대금</th></tr></thead>
-            <tbody>
-                {% for item in kospi_top_value %}
-                <tr>
-                    <td class="stock-name" data-code="{{ item.Code }}" style="cursor:pointer; color:blue;">{{ item.Name }}</td>
-                    <td>{{ item.Close | format_price }}</td>
-                    <td>{{ item.TradingValue | format_kr }}원</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+        {{ render_rank_table('kospi', 'KOSPI', kospi_top_volume, kospi_top_value, today) }}
     {% endif %}
     
     {% if kosdaq_top_volume %}
-    <div style="flex: 1;">
-         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h4 id="kosdaq-rank-title" style="margin: 0;">{{ today }} KOSDAQ 거래량 상위 10</h4>
-            <div class="btn-group btn-group-sm" id="kosdaq-rank-selector">
-                <button type="button" class="btn btn-default active" data-target="volume">거래량</button>
-                <button type="button" class="btn btn-default" data-target="value">거래대금</button>
-            </div>
-        </div>
-        <table class="table table-striped rank-table" id="kosdaq-volume-table">
-            <thead><tr><th>종목명</th><th>종가</th><th>거래량</th></tr></thead>
-            <tbody>
-                {% for item in kosdaq_top_volume %}
-                <tr>
-                    <td class="stock-name" data-code="{{ item.Code }}" style="cursor:pointer; color:blue;">{{ item.Name }}</td>
-                    <td>{{ item.Close | format_price }}</td>
-                    <td>{{ item.Volume | format_kr }}주</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <table class="table table-striped rank-table hidden-table" id="kosdaq-value-table">
-            <thead><tr><th>종목명</th><th>종가</th><th>거래대금</th></tr></thead>
-            <tbody>
-                {% for item in kosdaq_top_value %}
-                <tr>
-                    <td class="stock-name" data-code="{{ item.Code }}" style="cursor:pointer; color:blue;">{{ item.Name }}</td>
-                    <td>{{ item.Close | format_price }}</td>
-                    <td>{{ item.TradingValue | format_kr }}원</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+        {{ render_rank_table('kosdaq', 'KOSDAQ', kosdaq_top_volume, kosdaq_top_value, today) }}
     {% endif %}
 </div>
 
-<div class="modal fade" id="newsModal" tabindex="-1" role="dialog" aria-labelledby="newsModalLabel" aria-hidden="true">
+<div class="modal fade" id="stockDetailModal" tabindex="-1" role="dialog" aria-labelledby="stockDetailModalLabel">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="newsModalLabel">종목 뉴스</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
+                <h4 class="modal-title" id="stockDetailModalLabel">기업 정보</h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
-            <div class="modal-body" id="newsModalBody"></div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" role="tablist">
+                    <li role="presentation" class="active"><a href="#news-content" aria-controls="news" role="tab" data-toggle="tab">관련 뉴스</a></li>
+                    <li role="presentation"><a href="#profile-content" aria-controls="profile" role="tab" data-toggle="tab">기업 개요</a></li>
+                    <li role="presentation"><a href="#reports-content" aria-controls="reports" role="tab" data-toggle="tab">주요 공시</a></li>
+                </ul>
+
+                <div class="tab-content" style="padding-top: 20px;">
+                    <div role="tabpanel" class="tab-pane active" id="profile-content"></div>
+                    <div role="tabpanel" class="tab-pane" id="reports-content"></div>
+                    <div role="tabpanel" class="tab-pane" id="news-content"></div>
+                </div>
+            </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">닫기</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">닫기</button>
             </div>
         </div>
     </div>
@@ -181,12 +132,29 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- 차트 생성 로직 (페이지 로드 시 한 번만 실행) ---
+    // --- 차트 툴팁 옵션을 활성화 ---
     const chartDefaultOptions = { 
         responsive: true, 
-        maintainAspectRatio: false, // 중요: 차트가 커지는 현상 방지
+        maintainAspectRatio: false,
         scales: { y: { beginAtZero: false } }, 
-        plugins: { legend: { display: false } }, 
+        plugins: { 
+            legend: { display: false },
+            tooltip: { // 툴팁 활성화 및 상세 설정
+                enabled: true,
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                    label: function(context) {
+                        let label = context.dataset.label || '';
+                        if (label) { label += ': '; }
+                        if (context.parsed.y !== null) {
+                            label += new Intl.NumberFormat('en-US', { style: 'decimal' }).format(context.parsed.y);
+                        }
+                        return label;
+                    }
+                }
+            }
+        }, 
         elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } } 
     };
     
@@ -225,7 +193,6 @@ document.addEventListener('DOMContentLoaded', function() {
     createChart('usdkrwChart', {{ usdkrw_data | tojson }}, 'rgba(75, 192, 192, 1)');
     createChart('wtiChart', {{ wti_data | tojson }}, 'rgba(255, 159, 64, 1)');
     
-    // --- 실시간 숫자 데이터 업데이트 로직 ---
     function updateLatestData() {
         fetch('/api/latest-data')
             .then(response => response.ok ? response.json() : Promise.reject('Network response was not ok.'))
@@ -258,7 +225,6 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(updateLatestData, 30000);
     }
 
-    // --- 테이블 순위 전환 로직 ---
     function setupRankSwitcher(selectorId, titleId, marketPrefix) {
         const selector = document.getElementById(selectorId);
         if (!selector) return;
@@ -287,27 +253,74 @@ document.addEventListener('DOMContentLoaded', function() {
     setupRankSwitcher('kospi-rank-selector', 'kospi-rank-title', 'kospi');
     setupRankSwitcher('kosdaq-rank-selector', 'kosdaq-rank-title', 'kosdaq');
 
-    // --- 뉴스 모달 로직 ---
     document.body.addEventListener('click', function(event) {
         if (event.target.classList.contains('stock-name')) {
             const stockCode = event.target.getAttribute('data-code');
             const stockName = event.target.textContent.trim();
-            const modalTitle = document.getElementById('newsModalLabel');
-            const modalBody = document.getElementById('newsModalBody');
             
-            modalTitle.textContent = `${stockName} 관련 뉴스`;
-            modalBody.innerHTML = '<div class="text-center p-4"><div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div></div>';
-            $('#newsModal').modal('show');
+            document.getElementById('stockDetailModalLabel').textContent = `${stockName} (${stockCode})`;
+            const spinnerHtml = '<div class="text-center p-4"><div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div></div>';
+            document.getElementById('profile-content').innerHTML = spinnerHtml;
+            document.getElementById('reports-content').innerHTML = spinnerHtml;
+            document.getElementById('news-content').innerHTML = spinnerHtml;
+            
+            $('#stockDetailModal').modal('show');
 
+            // 1. 기업 프로필 및 DART 공시 목록 가져오기
+            fetch(`/askfin/stock/${stockCode}/profile`)
+                .then(response => response.ok ? response.json() : Promise.reject('서버 응답 오류'))
+                .then(data => {
+                    // 기업 개요 탭
+                    const profileContent = document.getElementById('profile-content');
+                    if (data.profile_error) {
+                        profileContent.innerHTML = `<p class="text-danger">오류: ${data.profile_error}</p>`;
+                    } else if (data.company_profile) {
+                        const profile = data.company_profile;
+                        let content = '<dl class="dl-horizontal">';
+                        for (const [key, value] of Object.entries(profile)) {
+                            content += `<dt>${key}</dt><dd>${value || 'N/A'}</dd>`;
+                        }
+                        content += '</dl>';
+                        profileContent.innerHTML = content;
+                    } else {
+                        profileContent.innerHTML = `<p class="text-danger">기업 개요 정보를 불러올 수 없습니다.</p>`;
+                    }
+
+                    // 주요 공시 탭
+                    const reportsContent = document.getElementById('reports-content');
+                    if (data.reports_error) {
+                        reportsContent.innerHTML = `<p class="text-danger">오류: ${data.reports_error}</p>`;
+                    } else if (data.report_list && data.report_list.length > 0) {
+                        let reportsHtml = '<ul class="list-group list-group-flush">';
+                        data.report_list.forEach(report => {
+                            reportsHtml += `<li class="list-group-item">
+                                              <a href="${report.url}" target="_blank" rel="noopener noreferrer" style="color: #337ab7;">${report.report_nm}</a>
+                                              <small class="d-block text-muted mt-1">${report.flr_nm} - ${report.rcept_dt}</small>
+                                            </li>`;
+                        });
+                        reportsHtml += '</ul>';
+                        reportsContent.innerHTML = reportsHtml;
+                    } else {
+                        reportsContent.innerHTML = '<p class="text-muted text-center p-4">최근 1년간 주요 공시가 없습니다.</p>';
+                    }
+                })
+                .catch(err => {
+                    const errorHtml = '<p class="text-danger">정보를 불러오는 데 실패했습니다.</p>';
+                    document.getElementById('profile-content').innerHTML = errorHtml;
+                    document.getElementById('reports-content').innerHTML = errorHtml;
+                });
+
+            // 2. 관련 뉴스 가져오기
             fetch(`/news/${stockCode}`)
                 .then(response => response.ok ? response.json() : Promise.reject('Network response was not ok.'))
                 .then(data => {
+                    const newsContent = document.getElementById('news-content');
                     if (data.error) {
-                        modalBody.innerHTML = `<p class="p-3">뉴스를 불러오는 데 실패했습니다: ${data.error}</p>`;
+                        newsContent.innerHTML = `<p class="p-3">뉴스를 불러오는 데 실패했습니다: ${data.error}</p>`;
                         return;
                     }
                     if (data.length === 0) {
-                         modalBody.innerHTML = `<p class="p-3">관련 뉴스가 없습니다.</p>`;
+                         newsContent.innerHTML = `<p class="p-3">관련 뉴스가 없습니다.</p>`;
                          return;
                     }
                     let newsHtml = '<ul class="list-group list-group-flush">';
@@ -315,10 +328,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         newsHtml += `<li class="list-group-item"><a href="${newsItem.url}" target="_blank" rel="noopener noreferrer" style="color: #337ab7;">${newsItem.title}</a><small class="d-block text-muted mt-1">${newsItem.press} - ${newsItem.date}</small></li>`;
                     });
                     newsHtml += '</ul>';
-                    modalBody.innerHTML = newsHtml;
+                    newsContent.innerHTML = newsHtml;
                 })
                 .catch(error => {
-                    modalBody.innerHTML = `<p class="p-3">뉴스를 불러오는 중 오류가 발생했습니다: ${error}</p>`;
+                    document.getElementById('news-content').innerHTML = `<p class="p-3">뉴스를 불러오는 중 오류가 발생했습니다: ${error}</p>`;
                 });
         }
     });

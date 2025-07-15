@@ -15,7 +15,8 @@ from blueprints.tables import tables_bp
 from blueprints.join import join_bp
 from blueprints.data import data_bp
 from blueprints.auth import auth_bp
-from blueprints.askfin import askfin_bp, initialize_global_data # <-- initialize_global_data 임포트 추가
+
+from blueprints.askfin import askfin_bp, initialize_global_data, GLOBAL_TICKER_NAME_MAP
 from blueprints.search import search_bp
 
 from db.extensions import db
@@ -23,7 +24,6 @@ from db.extensions import db
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# --- Template Filters (서식 지정) ---
 @app.template_filter('format_kr')
 def format_kr(value):
     try:
@@ -47,46 +47,35 @@ def format_price(value):
 app.jinja_env.filters['format_kr'] = format_kr
 app.jinja_env.filters['format_price'] = format_price
 
-# --- 데이터 조회 함수들 ---
 CACHE_PATH = 'cache/market_data.json'
 
 def get_latest_business_day():
     today = datetime.now(timezone('Asia/Seoul'))
-    # 장 마감 시간(15시 30분) 이후가 아니면 전일 데이터 기준
-    # 15시 40분으로 변경: 데이터 업데이트 시간 고려
+
     if today.hour < 15 or (today.hour == 15 and today.minute < 40):
         today = today - timedelta(days=1)
     
-    # 최근 10일 중 영업일 찾기 (데이터가 존재하는 날)
     for i in range(10): 
         date_to_check = today - timedelta(days=i)
         date_str = date_to_check.strftime('%Y%m%d')
         try:
-            # pykrx의 get_market_ohlcv는 영업일에만 데이터를 반환함
-            # 삼성전자(005930)와 같은 고유한 종목 코드로 체크
+
             df = stock.get_market_ohlcv(date_str, date_str, "005930")
             if not df.empty:
                 return date_str
         except Exception:
-            # 오류 발생 시 다음 날짜 확인
             continue
-    # 10일 안에 영업일을 찾지 못하면 오늘 날짜 반환 (최악의 경우)
     return today.strftime('%Y%m%d')
 
 def get_market_rank_data(date_str):
     kospi_df = stock.get_market_ohlcv(date_str, market="KOSPI").reset_index()
     kosdaq_df = stock.get_market_ohlcv(date_str, market="KOSDAQ").reset_index()
     
-    # pykrx의 '티커'를 'Code'로, 종목 이름을 'Name'으로 변경
     for df in [kospi_df, kosdaq_df]:
         tickers = df['티커']
-        # pykrx 0.0.120 버전 이상에서 get_market_ticker_name이 느려질 수 있으므로,
-        # 이 부분도 initialize_global_data에서 GLOBAL_TICKER_NAME_MAP을 활용하도록
-        # askfin.py에서 get_target_stocks를 최적화했음을 가정함.
-        # 여기서는 여전히 사용되므로, 성능에 영향을 줄 수 있으나, 
-        # index 페이지 로딩 시에만 발생하므로 askfin.py의 주식 분석만큼 치명적이진 않음.
-        # 향후 이 부분도 GLOBAL_TICKER_NAME_MAP 사용으로 변경 고려.
-        names = [stock.get_market_ticker_name(ticker) for ticker in tickers]
+        
+        names = [GLOBAL_TICKER_NAME_MAP.get(ticker, ticker) for ticker in tickers]
+
         df['Name'] = names
         df.rename(columns={'티커': 'Code', '종가': 'Close', '거래량': 'Volume', '거래대금': 'TradingValue'}, inplace=True)
     return kospi_df.to_dict('records'), kosdaq_df.to_dict('records')
@@ -109,7 +98,6 @@ def calculate_change_info(df, name):
         'change_pct': f"{change_pct:+.2f}%", 'raw_change': change
     }
 
-# --- 뉴스 API 라우트 ---
 @app.route('/news/<string:code>')
 def get_news(code):
     try:

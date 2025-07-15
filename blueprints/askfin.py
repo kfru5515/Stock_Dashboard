@@ -119,28 +119,11 @@ def initialize_global_data():
         GLOBAL_NAME_TICKER_MAP = {name: ticker for ticker, name in GLOBAL_TICKER_NAME_MAP.items()}
         print(f"  - 종목 코드/이름 매핑 생성 완료. 총 {len(GLOBAL_NAME_TICKER_MAP)}개 매핑.")
 
-        # 3. (선택 사항) themes.json 로딩 - 필요하다면 여기서도 미리 로드 가능
-        # try:
-        #     with open('themes.json', 'r', encoding='utf-8') as f:
-        #         global THEME_MAP
-        #         THEME_MAP = json.load(f)
-        #     print("  - 테마 데이터 로드 완료.")
-        # except FileNotFoundError:
-        #     print("  - themes.json 파일을 찾을 수 없습니다. 기본 테마 맵을 사용합니다.")
-        #     # 기본 THEME_MAP 정의 (현재 get_target_stocks에 정의되어 있음)
-        #     pass
-
         print("[애플리케이션 초기화] 모든 필수 주식 데이터 로딩 완료.")
 
     except Exception as e:
         print(f"[초기화 오류] 필수 주식 데이터 로딩 실패: {e}")
         traceback.print_exc()
-        # 이 시점에 오류가 나면 애플리케이션 동작에 치명적이므로,
-        # 실제 배포 환경에서는 서버를 종료하거나 경고를 명확히 표시해야 합니다.
-        # 예를 들어, sys.exit(1)을 사용하여 프로그램 종료
-        # import sys
-        # sys.exit(1)
-
 
 # --- Helper Functions (Updated to use global cached data) ---
 
@@ -151,10 +134,8 @@ def _load_ticker_maps():
     """
     global GLOBAL_TICKER_NAME_MAP, GLOBAL_NAME_TICKER_MAP
     if GLOBAL_NAME_TICKER_MAP is None:
-        # 이 경우는 initialize_global_data가 호출되지 않았거나 실패한 경우.
-        # 실제 운영 환경에서는 initialize_global_data가 먼저 호출되도록 보장해야 함.
         print("경고: _load_ticker_maps() 호출 시 글로벌 종목 맵이 초기화되지 않았습니다. 강제로 초기화 시도.")
-        initialize_global_data() # 비상시 재초기화 시도
+        initialize_global_data()
 
 def _get_fdr_indicator(indicator_info, intent_json):
     """FinanceDataReader를 통해 일별 지표를 조회하고 결과를 반환하는 헬퍼 함수"""
@@ -260,79 +241,87 @@ def execute_indicator_lookup(intent_json):
 @askfin_bp.route('/stock/<code>/profile')
 def get_stock_profile(code):
     """
-    [최종 완성] 시장 정보를 명시적으로 지정하여 일괄 조회함으로써
-    안정성과 속도를 모두 확보한 최종 API.
+    [수정] DART API를 사용하여 '주요 공시' 목록을 조회하도록 변경합니다.
     """
+    response_data = {}
+    company_name = None
+
+    # --- 1. 기업 개요 정보 조회 (pykrx) ---
     try:
         profile_data = {}
         latest_business_day = stock.get_nearest_business_day_in_a_week()
 
-        # --- 1. fdr에서 종목의 기본 정보 및 소속 시장(Market) 확인 (GLOBAL_KRX_LISTING 사용) ---
         if GLOBAL_KRX_LISTING is None:
-            # 비상시 로딩 또는 오류 처리
             initialize_global_data()
-            if GLOBAL_KRX_LISTING is None:
-                return jsonify({"error": "종목 목록 데이터 초기화 실패."}), 500
-
+        
         krx_list = GLOBAL_KRX_LISTING
         target_info = krx_list[krx_list['Code'] == code]
         if target_info.empty:
             return jsonify({"error": f"종목코드 '{code}'를 찾을 수 없습니다."}), 404
         
         target_info = target_info.iloc[0]
-        market = target_info.get('Market', 'KOSPI') # 기본값 KOSPI
+        market = target_info.get('Market', 'KOSPI')
         sector = target_info.get('Sector')
+        company_name = target_info.get('Name', 'N/A')
         
-        profile_data['기업명'] = target_info.get('Name', 'N/A')
+        profile_data['기업명'] = company_name
         profile_data['업종'] = sector
         profile_data['주요제품'] = target_info.get('Industry', 'N/A')
 
-        # --- 2. 확인된 시장(Market)의 데이터를 pykrx로 일괄 조회 ---
-        print(f"'{market}' 시장의 전체 데이터를 일괄 조회합니다...")
         df_ohlcv = stock.get_market_ohlcv(latest_business_day, market=market)
         df_cap = stock.get_market_cap(latest_business_day, market=market)
         df_funda = stock.get_market_fundamental(latest_business_day, market=market)
-        print("일괄 조회 완료.")
 
-        # --- 3. 일괄 조회된 데이터에서 해당 종목 정보 추출 ---
         current_price = df_ohlcv.loc[code, '종가']
         market_cap = df_cap.loc[code, '시가총액']
         funda = df_funda.loc[code]
 
         profile_data['현재가'] = f"{current_price:,} 원"
-        if market_cap > 1_0000_0000_0000:
-            profile_data['시가총액'] = f"{market_cap / 1_0000_0000_0000:.2f} 조원"
-        else:
-            profile_data['시가총액'] = f"{market_cap / 1_0000_0000:.2f} 억원"
+        profile_data['시가총액'] = f"{market_cap / 1_0000_0000_0000:.2f} 조원" if market_cap > 1_0000_0000_0000 else f"{market_cap / 1_0000_0000:.2f} 억원"
         
         eps = funda.get('EPS', 0)
-        per = funda.get('PER', 0)
-        pbr = funda.get('PBR', 0)
-        div = funda.get('DIV', 0)
-        profile_data['PER'] = f"{per:.2f} 배" if per > 0 else "N/A"
-        profile_data['PBR'] = f"{pbr:.2f} 배" if pbr > 0 else "N/A"
-        profile_data['배당수익률'] = f"{div:.2f} %" if div > 0 else "N/A"
-
-        # --- 4. 적정주가 계산 ---
-        if sector and eps > 0:
-            # 업종 평균 PER 계산을 위해 krx_list와 df_funda를 병합
-            merged_df = krx_list.set_index('Code').join(df_funda)
-            sector_pers = merged_df[merged_df['Sector'] == sector]['PER']
-            sector_pers = sector_pers[sector_pers > 0]
-            
-            if not sector_pers.empty:
-                avg_per = sector_pers.mean()
-                fair_price = eps * avg_per
-                upside = ((fair_price / current_price) - 1) * 100 if current_price > 0 else 0
-                profile_data['적정주가(업종PER기반)'] = f"{int(fair_price):,} 원"
-                profile_data['상승여력'] = f"{upside:.2f} %"
-
-        return jsonify({"company_profile": profile_data})
+        profile_data['PER'] = f"{funda.get('PER', 0):.2f} 배"
+        profile_data['PBR'] = f"{funda.get('PBR', 0):.2f} 배"
+        profile_data['배당수익률'] = f"{funda.get('DIV', 0):.2f} %"
+        
+        response_data["company_profile"] = profile_data
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": f"기업 상세 정보 처리 중 오류 발생: {str(e)}"}), 500
+        response_data["profile_error"] = f"기업 개요 정보 처리 중 오류 발생: {str(e)}"
 
+    # --- 2. DART 주요 공시 목록 조회 ---
+    if company_name:
+        try:
+            corp_list = dart.get_corp_list()
+            corp = corp_list.find_by_corp_name(company_name, exactly=True)[0] if corp_list.find_by_corp_name(company_name, exactly=True) else None
+            
+            if not corp:
+                raise ValueError(f"DART에서 '{company_name}'을(를) 찾을 수 없습니다.")
+            
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365)
+            reports = corp.search_filings(bgn_de=start_date.strftime('%Y%m%d'), end_de=end_date.strftime('%Y%m%d'), last_reprt_at='Y')
+            
+            if reports:
+                report_list = []
+                for r in reports[:15]: # 최근 15개 공시만 표시
+                    report_list.append({
+                        'report_nm': r.report_nm,
+                        'flr_nm': r.flr_nm,
+                        'rcept_dt': r.rcept_dt,
+                        # [FIX] 'url' 속성 대신 rcept_no를 사용해 URL을 직접 구성합니다.
+                        'url': f"http://dart.fss.or.kr/dsaf001/main.do?rcpNo={r.rcept_no}"
+                    })
+                response_data["report_list"] = report_list
+            else:
+                response_data["report_list"] = []
+
+        except Exception as e:
+            traceback.print_exc()
+            response_data["reports_error"] = f"공시 목록 조회 중 오류 발생: {str(e)}"
+    
+    return jsonify(response_data)
 def get_target_stocks(target_str):
     """
     [수정됨] 타겟 문자열에 해당하는 종목 리스트(DataFrame)를 반환하는 함수 (캐시된 데이터 사용)
@@ -412,7 +401,7 @@ def parse_period(period_str):
     except (ValueError, TypeError):
         pass
 
-    return today - timedelta(days=365), today # 기본값: 1년
+    return today - timedelta(days=365), today 
 
 
 def get_interest_rate_hike_dates(api_key):
@@ -620,20 +609,18 @@ def _fetch_and_analyze_single_stock(stock_code, stock_name, overall_start, overa
     """
     try:
         print(f"      데이터 조회 시작: {stock_name}({stock_code}) - {overall_start.strftime('%Y-%m-%d')} ~ {overall_end.strftime('%Y-%m-%d')}")
-        # 전체 기간에 대한 데이터를 한 번만 조회
+
         overall_prices = fdr.DataReader(stock_code, overall_start, overall_end)
         print(f"      데이터 조회 완료: {stock_name}({stock_code})")
 
         if overall_prices.empty or len(overall_prices) < 2:
-            return None # 데이터가 충분하지 않으면 None 반환
+            return None 
 
-        # 전체 기간의 시작 가격과 종료 가격 (참고용)
         start_price = int(overall_prices['Open'].iloc[0])
         end_price = int(overall_prices['Close'].iloc[-1])
 
         period_returns = []
         for start, end in event_periods:
-            # 이미 조회된 전체 데이터에서 해당 이벤트 기간만 슬라이싱
             prices_in_period = overall_prices.loc[start:end]
             
             if len(prices_in_period) > 1:
@@ -661,21 +648,16 @@ def analyze_top_performers(target_stocks, event_periods, overall_period):
     또한, 여러 종목의 데이터 조회를 병렬로 처리합니다.
     """
     analysis_results = []
-    # 시가총액 상위 50개 종목으로 제한하여 API 호출 관리
     top_stocks = target_stocks.nlargest(min(len(target_stocks), 50), 'Marcap').reset_index(drop=True)
     print(f"시가총액 상위 {len(top_stocks)}개 종목에 대한 수익률 분석을 시작합니다...")
     overall_start, overall_end = overall_period
 
-    # ThreadPoolExecutor를 사용하여 데이터 조회를 병렬로 처리
-    # 동시에 처리할 작업자 수 증가 (네트워크 I/O 바운드 작업에 유리)
     with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor: # 20에서 30으로 증가
-        # 각 종목에 대한 작업 제출
         future_to_stock = {
             executor.submit(_fetch_and_analyze_single_stock, stock['Code'], stock['Name'], overall_start, overall_end, event_periods): stock
             for index, stock in top_stocks.iterrows()
         }
 
-        # 작업 완료 시 결과 처리
         for i, future in enumerate(concurrent.futures.as_completed(future_to_stock)):
             stock_info = future_to_stock[future]
             stock_code, stock_name = stock_info['Code'], stock_info['Name']
@@ -810,13 +792,10 @@ def get_bok_data(bok_api_key, stats_code, item_code, start_date, end_date):
 def askfin_page():
     return render_template('askfin.html')
 
-# QUERY_CACHE는 ANALYSIS_CACHE로 통합 관리되므로 제거하거나 필요에 따라 사용
-# QUERY_CACHE = {} 
-
 @askfin_bp.route('/analyze', methods=['POST'])
 def analyze_query():
     """
-    [폴백 기능 제거] JSON 분석 실패 시 오류를 반환하도록 수정된 API.
+    [수정됨] JSON 분석 실패 시, 일반 대화형 AI 답변으로 폴백하는 기능이 추가된 API.
     """
     if not model:
         return jsonify({"error": "모델이 초기화되지 않았습니다. API 키를 확인하세요."}), 500
@@ -853,11 +832,27 @@ def analyze_query():
                 cache_key = new_cache_key 
             
             except (json.JSONDecodeError, IndexError) as e:
-                # JSON 분석 실패 시, 일반 대화형 답변 대신 오류 반환
-                print(f"⚠️ JSON 분석 실패: {e}. '{user_query}'에 대해 분석을 계속할 수 없습니다.")
-                return jsonify({
-                    "error": f"AI가 질문을 이해하고 분석 가능한 형식으로 변환하지 못했습니다: {e}"
-                }), 400 # 400 Bad Request 또는 500 Internal Server Error 적절히 선택
+                # --- [수정된 부분 시작] ---
+                # JSON 분석 실패 시, 일반 대화형 답변으로 폴백
+                print(f" JSON 분석 실패({e}). 일반 대화형 모델로 폴백합니다.")
+                try:
+                    # 금융 분석 프롬프트가 아닌 일반적인 프롬프트로 모델 재호출
+                    general_prompt = f"다음 질문에 대해 친절하고 상세하게 답변해줘: {user_query}"
+                    fallback_response = model.generate_content(general_prompt)
+                    
+                    # 프론트엔드가 처리할 수 있는 형태로 답변 포맷팅
+                    final_result = {
+                        "analysis_subject": "일반 답변",
+                        "result": [fallback_response.text.replace('\n', '<br>')]
+                    }
+                    return jsonify(final_result)
+                
+                except Exception as fallback_e:
+                    # 폴백 모델 호출조차 실패한 경우, 최종 오류 반환
+                    print(f" 폴백 모델 호출 실패: {fallback_e}")
+                    traceback.print_exc()
+                    return jsonify({"error": "질문을 분석하는데 실패했고, 일반 답변도 가져올 수 없었습니다."}), 500
+                # --- [수정된 부분 끝] ---
 
         if not intent_json:
             return jsonify({"error": "AI가 유효한 분석 결과를 반환하지 못했습니다."}), 500
@@ -874,7 +869,13 @@ def analyze_query():
                 "result": ["안녕하세요! 금융에 대해 무엇이든 물어보세요."]
             }
         else:
-            final_result = {"error": f"알 수 없는 질문 유형입니다: {query_type}"}, 400
+            print(f" 알 수 없는 질문 유형({query_type}). 일반 대화형 모델로 폴백합니다.")
+            general_prompt = f"다음 질문에 대해 친절하게 답변해줘: {user_query}"
+            fallback_response = model.generate_content(general_prompt)
+            final_result = {
+                "analysis_subject": "일반 답변",
+                "result": [fallback_response.text.replace('\n', '<br>')]
+            }
             
         return jsonify(final_result)
 
@@ -887,4 +888,3 @@ def new_chat():
     """대화 기록(세션)을 초기화합니다."""
     session.pop('chat_history', None)
     return jsonify({"status": "success", "message": "새 대화를 시작합니다."})
-
