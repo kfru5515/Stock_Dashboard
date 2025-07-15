@@ -102,9 +102,11 @@
             <div class="message ai-message">안녕하세요! 무엇을 분석해 드릴까요?</div>
         </div>
     </div>
+
     <div id="loading-spinner-container" class="spinner-container">
         <div class="spinner"></div>
     </div>
+
     <div id="askfin-form-container">
         <form id="askfin-form" onsubmit="return false;">
             <input type="text" class="form-control" id="query-input" placeholder="질문을 입력하세요...">
@@ -113,7 +115,6 @@
         </form>
     </div>
 </div>
-
 <div class="modal fade" id="financialModal" tabindex="-1" role="dialog" aria-labelledby="modal-title-label">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -208,58 +209,82 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- 3. 메인 분석 요청 함수 ---
     function fetchAnalysis(query, page = 1) {
-        if (!query) return;
-        currentQuery = query;
+    if (!query) return; 
+    currentQuery = query;
 
-        if (page === 1) {
-            currentCacheKey = null;
-            addMessageToChat(query, 'user-message');
-            queryInput.value = '';
-        }
-        
-        spinnerContainer.style.display = 'block'; // 스피너 보이기
+    if (page === 1) {
+        currentCacheKey = null;
+        addMessageToChat(query, 'user-message');
+        queryInput.value = '';
+    }
+    
+    const spinnerMessage = addMessageToChat('', 'ai-message', '<div class="spinner" style="display:block; margin: 0;"></div>');
 
-        fetch("{{ url_for('askfin.analyze_query') }}", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: query, page: page, cache_key: currentCacheKey })
-        })
-        .then(response => response.ok ? response.json() : Promise.reject(response))
+    fetch("{{ url_for('askfin.analyze_query') }}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query, page: page, cache_key: currentCacheKey })
+    })
+    .then(response => response.ok ? response.json() : Promise.reject(response))
         .then(data => {
-            if (data.cache_key) {
-                currentCacheKey = data.cache_key;
-            }
+            spinnerMessage.remove();
+
+            if (data.cache_key) { currentCacheKey = data.cache_key; }
             if (data.error) {
                 addMessageToChat(`오류: ${data.error}`, 'ai-message');
                 return;
             }
+
             const result = data.result;
             let responseHtml = `<h5>${data.analysis_subject} 분석 결과</h5>`;
+            if (data.description) { responseHtml += `<p><small>${data.description}</small></p>`; }
+
             if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'object') {
                 const valueLabel = result[0].label || '결과값';
-                let table = `<table class="table table-sm table-hover"><thead><tr><th>순위</th><th>종목명</th><th>과거 가격</th><th>현재 가격</th><th>${valueLabel}</th></tr></thead><tbody>`;
+                let table = `<table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>순위</th><th>종목명</th><th>과거 가격</th><th>현재 가격</th><th>${valueLabel}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+                
+                // --- ▼▼▼ 데이터 처리 부분을 더 안전하게 수정 ▼▼▼ ---
                 result.forEach((item, index) => {
                     const rank = ((data.pagination.current_page - 1) * 20) + index + 1;
-                    const startPrice = item.start_price ? `${parseInt(item.start_price).toLocaleString()} 원` : 'N/A';
-                    const endPrice = item.end_price ? `${parseInt(item.end_price).toLocaleString()} 원` : 'N/A';
-                    const displayValue = (item.value !== null && item.value !== undefined) ? item.value.toFixed(2) : 'N/A';
-                    const valueColor = item.value > 0 ? '#d9534f' : (item.value < 0 ? '#337ab7' : '#333');
-                    table += `<tr><td>${rank}</td><td><a href="#" class="stock-info-btn" data-code="${item.code}" data-name="${item.name}">${item.name}</a></td><td>${startPrice}</td><td>${endPrice}</td><td style="color: ${valueLabel.includes('수익률') ? valueColor : '#333'}; font-weight: bold;">${displayValue}</td></tr>`;
+
+                    // 각 키가 존재하는지 확인 후 안전하게 값을 가져옴
+                    const itemName = item && item.name ? item.name : '이름 없음';
+                    const itemCode = item && item.code ? item.code : '코드 없음';
+                    const startPrice = item && item.start_price ? `${parseInt(item.start_price).toLocaleString()} 원` : 'N/A';
+                    const endPrice = item && item.end_price ? `${parseInt(item.end_price).toLocaleString()} 원` : 'N/A';
+                    const displayValue = item && (item.value !== null && item.value !== undefined) ? item.value.toFixed(2) : 'N/A';
+                    const valueColor = item && item.value > 0 ? '#d9534f' : (item.value < 0 ? '#337ab7' : '#333');
+                    
+                    table += `<tr>
+                                <td>${rank}</td>
+                                <td><a href="#" class="stock-info-btn" data-code="${itemCode}" data-name="${itemName}">${itemName}</a></td>
+                                <td>${startPrice}</td>
+                                <td>${endPrice}</td>
+                                <td style="color: ${valueLabel.includes('수익률') ? valueColor : '#333'}; font-weight: bold;">${displayValue}</td>
+                              </tr>`;
                 });
+                // --- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ ---
+
                 table += `</tbody></table>`;
                 responseHtml += table;
                 responseHtml += renderPagination(data.pagination);
+            
             } else if (Array.isArray(result) && result.length > 0) {
                 responseHtml += `<p>${result.join('<br>')}</p>`;
             }
+            
             addMessageToChat('', 'ai-message', responseHtml);
         })
         .catch(error => {
+            spinnerMessage.remove();
             addMessageToChat('분석 중 심각한 오류가 발생했습니다. 브라우저의 개발자 콘솔(F12)을 확인해주세요.', 'ai-message');
             console.error('Fetch error:', error);
-        })
-        .finally(() => {
-            spinnerContainer.style.display = 'none'; // 항상 스피너 숨기기
         });
     }
 

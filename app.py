@@ -9,18 +9,19 @@ import yfinance as yf
 from pykrx import stock
 import requests
 
+# --- Blueprints Import ---
 from blueprints.analysis import analysis_bp
 from blueprints.tables import tables_bp
 from blueprints.join import join_bp
 from blueprints.data import data_bp
 from blueprints.auth import auth_bp
-from blueprints.askfin import askfin_bp
+from blueprints.askfin import askfin_bp, initialize_global_data # <-- initialize_global_data 임포트 추가
 from blueprints.search import search_bp
 
 from db.extensions import db
 
 app = Flask(__name__)
-app.secret_key = '1234'
+app.secret_key = os.urandom(24)
 
 # --- Template Filters (서식 지정) ---
 @app.template_filter('format_kr')
@@ -51,24 +52,40 @@ CACHE_PATH = 'cache/market_data.json'
 
 def get_latest_business_day():
     today = datetime.now(timezone('Asia/Seoul'))
+    # 장 마감 시간(15시 30분) 이후가 아니면 전일 데이터 기준
+    # 15시 40분으로 변경: 데이터 업데이트 시간 고려
     if today.hour < 15 or (today.hour == 15 and today.minute < 40):
         today = today - timedelta(days=1)
+    
+    # 최근 10일 중 영업일 찾기 (데이터가 존재하는 날)
     for i in range(10): 
         date_to_check = today - timedelta(days=i)
         date_str = date_to_check.strftime('%Y%m%d')
         try:
+            # pykrx의 get_market_ohlcv는 영업일에만 데이터를 반환함
+            # 삼성전자(005930)와 같은 고유한 종목 코드로 체크
             df = stock.get_market_ohlcv(date_str, date_str, "005930")
             if not df.empty:
                 return date_str
         except Exception:
+            # 오류 발생 시 다음 날짜 확인
             continue
+    # 10일 안에 영업일을 찾지 못하면 오늘 날짜 반환 (최악의 경우)
     return today.strftime('%Y%m%d')
 
 def get_market_rank_data(date_str):
     kospi_df = stock.get_market_ohlcv(date_str, market="KOSPI").reset_index()
     kosdaq_df = stock.get_market_ohlcv(date_str, market="KOSDAQ").reset_index()
+    
+    # pykrx의 '티커'를 'Code'로, 종목 이름을 'Name'으로 변경
     for df in [kospi_df, kosdaq_df]:
         tickers = df['티커']
+        # pykrx 0.0.120 버전 이상에서 get_market_ticker_name이 느려질 수 있으므로,
+        # 이 부분도 initialize_global_data에서 GLOBAL_TICKER_NAME_MAP을 활용하도록
+        # askfin.py에서 get_target_stocks를 최적화했음을 가정함.
+        # 여기서는 여전히 사용되므로, 성능에 영향을 줄 수 있으나, 
+        # index 페이지 로딩 시에만 발생하므로 askfin.py의 주식 분석만큼 치명적이진 않음.
+        # 향후 이 부분도 GLOBAL_TICKER_NAME_MAP 사용으로 변경 고려.
         names = [stock.get_market_ticker_name(ticker) for ticker in tickers]
         df['Name'] = names
         df.rename(columns={'티커': 'Code', '종가': 'Close', '거래량': 'Volume', '거래대금': 'TradingValue'}, inplace=True)
@@ -139,15 +156,10 @@ def get_latest_data():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-
-# AskFin 라우트 
-@app.route("/askfin")
-def askfin_page():
-    return render_template("askfin.html")
-
-
-
+# AskFin 라우트 (블루프린트로 이미 등록됨)
+# @app.route("/askfin")
+# def askfin_page():
+#     return render_template("askfin.html")
 
 # --- 메인 라우트 (안정성 강화) ---
 @app.route('/')
@@ -171,7 +183,7 @@ def index():
             new_cache['kospi_all_data'] = kospi_all_data
             new_cache['kosdaq_all_data'] = kosdaq_all_data
         except Exception as e:
-            print(f"Error fetching pykrx data: {e}")
+            print(f"Error fetching pykrx data for index page: {e}")
         cache = new_cache
         with open(CACHE_PATH, 'w', encoding='utf-8') as f:
             json.dump(cache, f, ensure_ascii=False, indent=2)
@@ -179,7 +191,6 @@ def index():
     kospi_all_data = cache.get('kospi_all_data', [])
     kosdaq_all_data = cache.get('kosdaq_all_data', [])
 
-    # --- 각 데이터 조회 및 변동률 계산 (개별 try-except로 안정성 확보) ---
     default_info = {'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
     kospi_info, kosdaq_info, usdkrw_info, wti_info = default_info, default_info, default_info, default_info
     kospi_data, kosdaq_data, usdkrw_data, wti_data = [], [], [], []
@@ -221,13 +232,11 @@ def index():
     except Exception as e:
         print(f"Error fetching WTI data: {e}")
         
-    # 날짜 형식 통일
     for data_list in [kospi_data, kosdaq_data, usdkrw_data, wti_data]:
         for item in data_list:
             if isinstance(item.get('Date'), datetime):
                 item['Date'] = item['Date'].strftime('%Y-%m-%d')
     
-    # --- 순위 데이터 정렬 ---
     top_kospi_volume = sorted(kospi_all_data, key=lambda x: x.get('Volume', 0), reverse=True)[:10]
     top_kospi_value = sorted(kospi_all_data, key=lambda x: x.get('TradingValue', 0), reverse=True)[:10]
     top_kosdaq_volume = sorted(kosdaq_all_data, key=lambda x: x.get('Volume', 0), reverse=True)[:10]
@@ -243,20 +252,13 @@ def index():
         today=today_str_display)
 
 
-    # --- 블루프린트 및 서버 실행 (필요 시 주석 해제) ---
-#from blueprints.tables import tables_bp
-# from blueprints.join import join_bp
-# from blueprints.data import data_bp
-# from blueprints.auth import auth_bp
-from blueprints.askfin import askfin_bp
-app.register_blueprint(askfin_bp)
-
-#app.register_blueprint(auth_bp, url_prefix='/auth')
-# app.register_blueprint(tables_bp)
-# app.register_blueprint(join_bp)
-# app.register_blueprint(data_bp)
-
-
+app.register_blueprint(auth_bp, url_prefix='/auth')
+app.register_blueprint(analysis_bp)
+app.register_blueprint(tables_bp)
+app.register_blueprint(join_bp)
+app.register_blueprint(data_bp)
+app.register_blueprint(askfin_bp) 
+app.register_blueprint(search_bp)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://humanda5:humanda5@localhost/final_join'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -264,12 +266,11 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
 
-app.register_blueprint(auth_bp, url_prefix='/auth')
-app.register_blueprint(analysis_bp)
-app.register_blueprint(tables_bp)
-app.register_blueprint(join_bp)  # <-- 여기 한 번만 등록!
-app.register_blueprint(data_bp)
-app.register_blueprint(search_bp)
+with app.app_context():
+    initialize_global_data()
+    print("--- 모든 초기 데이터 로딩 완료 ---")
+
 
 if __name__ == '__main__':
+
     app.run(debug=True, port=5000)
