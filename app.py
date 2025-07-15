@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, session
+from flask import Flask, render_template, jsonify
 import FinanceDataReader as fdr
 import pandas as pd
 from pytz import timezone
@@ -156,16 +156,10 @@ def get_latest_data():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# AskFin 라우트 (블루프린트로 이미 등록됨)
-# @app.route("/askfin")
-# def askfin_page():
-#     return render_template("askfin.html")
 
-# --- 메인 라우트 (안정성 강화) ---
 @app.route('/')
 @app.route('/index')
 def index():
-    # --- 캐시 관리 ---
     os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
     try:
         with open(CACHE_PATH, 'r', encoding='utf-8') as f:
@@ -252,7 +246,6 @@ def index():
         today=today_str_display)
 
 
-<<<<<<< HEAD
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(analysis_bp)
 app.register_blueprint(tables_bp)
@@ -260,42 +253,6 @@ app.register_blueprint(join_bp)
 app.register_blueprint(data_bp)
 app.register_blueprint(askfin_bp) 
 app.register_blueprint(search_bp)
-=======
-# 최근조회종목정보 모든페이지에서 조회할 수 있음
-@app.context_processor
-def inject_recent_stocks():
-    def get_recent_stocks():
-        recent_codes = session.get('recent_stocks', [])
-        recent_stocks = []
-        for code in recent_codes:
-            try:
-                ticker = yf.Ticker(code)
-                info = ticker.info
-                name = info.get('shortName', code)
-                price = info.get('currentPrice', 'N/A')
-                recent_stocks.append({'code': code, 'name': name, 'price': price})
-            except Exception:
-                recent_stocks.append({'code': code, 'name': code, 'price': 'N/A'})
-        return recent_stocks
-
-    return dict(recent_stocks=get_recent_stocks())
-
-
-    # --- 블루프린트 및 서버 실행 (필요 시 주석 해제) ---
-#from blueprints.tables import tables_bp
-# from blueprints.join import join_bp
-# from blueprints.data import data_bp
-# from blueprints.auth import auth_bp
-from blueprints.askfin import askfin_bp
-app.register_blueprint(askfin_bp)
-
-#app.register_blueprint(auth_bp, url_prefix='/auth')
-# app.register_blueprint(tables_bp)
-# app.register_blueprint(join_bp)
-# app.register_blueprint(data_bp)
-
-
->>>>>>> 73c823cde9a121c51976fd667c9cf38d435bdead
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://humanda5:humanda5@localhost/final_join'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
