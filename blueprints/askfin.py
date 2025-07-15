@@ -291,37 +291,139 @@ def get_stock_profile(code):
         response_data["profile_error"] = f"기업 개요 정보 처리 중 오류 발생: {str(e)}"
 
     # --- 2. DART 주요 공시 목록 조회 ---
+   # --- 2. DART 정보 통합 조회 ---
     if company_name:
         try:
             corp_list = dart.get_corp_list()
-            corp = corp_list.find_by_corp_name(company_name, exactly=True)[0] if corp_list.find_by_corp_name(company_name, exactly=True) else None
             
-            if not corp:
+            # --- START OF MODIFICATION ---
+            # Search for the corporation by name
+            found_corps = corp_list.find_by_corp_name(company_name, exactly=True)
+            
+            corp = None
+            if found_corps: # Check if the list is not empty
+                corp = found_corps[0] # Assign the first found corporation
+            
+            if not corp: # Explicitly check if corp is None after assignment
                 raise ValueError(f"DART에서 '{company_name}'을(를) 찾을 수 없습니다.")
+            # --- END OF MODIFICATION ---
+
+            # 2-1. 주요 공시 목록 (dart-fss 사용 유지)
+            reports = corp.search_filings(bgn_de=(datetime.now() - timedelta(days=365)).strftime('%Y%m%d'), last_reprt_at='Y')
+            response_data["report_list"] = [{
+                'report_nm': r.report_nm, 'flr_nm': r.flr_nm, 'rcept_dt': r.rcept_dt,
+                'url': f"http://dart.fss.or.kr/dsaf001/main.do?rcpNo={r.rcept_no}"
+            } for r in reports[:15]] if reports else []
+
+            # 2-2. 주요 재무정보 (DART API 직접 호출)
+            api_url = "https://opendart.fss.or.kr/api/fnlttSinglAcnt.json"
+            fs_data_list = [] 
             
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=365)
-            reports = corp.search_filings(bgn_de=start_date.strftime('%Y%m%d'), end_de=end_date.strftime('%Y%m%d'), last_reprt_at='Y')
-            
-            if reports:
-                report_list = []
-                for r in reports[:15]: # 최근 15개 공시만 표시
-                    report_list.append({
-                        'report_nm': r.report_nm,
-                        'flr_nm': r.flr_nm,
-                        'rcept_dt': r.rcept_dt,
-                        # [FIX] 'url' 속성 대신 rcept_no를 사용해 URL을 직접 구성합니다.
-                        'url': f"http://dart.fss.or.kr/dsaf001/main.do?rcpNo={r.rcept_no}"
-                    })
-                response_data["report_list"] = report_list
+            current_year = datetime.now().year
+            years_to_fetch = [str(year) for year in range(current_year, current_year - 4, -1)]
+
+            for year in years_to_fetch:
+                for reprt_code in ['11011', '11013', '11012']:
+                    params = {
+                        'crtfc_key': DART_API_KEY,
+                        'corp_code': corp.corp_code, # 'corp' is now guaranteed to be defined here
+                        'bsns_year': str(year),
+                        'reprt_code': reprt_code,
+                        'fs_div': 'CFS'
+                    }
+                    res = requests.get(api_url, params=params)
+                    data = res.json()
+
+                    if data.get('status') == '000' and data.get('list'):
+                        for item in data['list']:
+                            if 'thstrm_end_dt' in item and item['thstrm_end_dt']:
+                                item['report_date_key'] = item['thstrm_end_dt']
+                            elif 'thstrm_dt' in item and item['thstrm_dt']:
+                                date_range_str = item['thstrm_dt']
+                                match = re.search(r'(\d{4}\.\d{2}\.\d{2})$', date_range_str.strip())
+                                if match:
+                                    item['report_date_key'] = match.group(1)
+                                else:
+                                    item['report_date_key'] = date_range_str.strip()
+                            else:
+                                item['report_date_key'] = None
+                        fs_data_list.extend(data['list'])
+                        break
+                    elif params['fs_div'] == 'CFS':
+                        params['fs_div'] = 'OFS'
+                        res = requests.get(api_url, params=params)
+                        data = res.json()
+                        if data.get('status') == '000' and data.get('list'):
+                             for item in data['list']:
+                                if 'thstrm_end_dt' in item and item['thstrm_end_dt']:
+                                    item['report_date_key'] = item['thstrm_end_dt']
+                                elif 'thstrm_dt' in item and item['thstrm_dt']:
+                                    date_range_str = item['thstrm_dt']
+                                    match = re.search(r'(\d{4}\.\d{2}\.\d{2})$', date_range_str.strip())
+                                    if match:
+                                        item['report_date_key'] = match.group(1)
+                                    else:
+                                        item['report_date_key'] = date_range_str.strip()
+                                else:
+                                    item['report_date_key'] = None
+                             fs_data_list.extend(data['list'])
+                             break
+
+            if fs_data_list:
+                df = pd.DataFrame(fs_data_list)
+                
+                df = df.drop_duplicates(subset=['rcept_no', 'account_nm'], keep='last')
+                
+                df['thstrm_amount'] = df['thstrm_amount'].astype(str).str.replace(',', '', regex=False).str.strip()
+                df['thstrm_amount'] = pd.to_numeric(df['thstrm_amount'], errors='coerce')
+                df.dropna(subset=['thstrm_amount'], inplace=True)
+                
+                def extract_and_clean_date(date_string): # This helper function is now defined here again or needs to be outside if used multiple places
+                    if not isinstance(date_string, str): # Add this check for safety
+                        return None
+                    match = re.search(r'(\d{4}\.\d{2}\.\d{2})$', date_string.strip())
+                    if match:
+                        return match.group(1)
+                    parts = date_string.split('~')
+                    if len(parts) > 1:
+                        match = re.search(r'(\d{4}\.\d{2}\.\d{2})$', parts[-1].strip())
+                        if match:
+                            return match.group(1)
+                    return None
+                
+                # Use the report_date_key if it was set, otherwise apply the cleaning to thstrm_dt
+                if 'report_date_key' not in df.columns: # Fallback if direct assignment didn't happen for all
+                    df['report_date_key'] = df['thstrm_dt'].astype(str).apply(extract_and_clean_date)
+
+
+                df['report_date_key'] = pd.to_datetime(df['report_date_key'], format='%Y.%m.%d', errors='coerce')
+                df.dropna(subset=['report_date_key'], inplace=True)
+                
+                df_pivot = df.pivot_table(index='account_nm', columns='report_date_key', values='thstrm_amount', aggfunc='first')
+                df_pivot = df_pivot.fillna(0)
+
+                df_pivot = df_pivot.sort_index(axis=1) 
+                
+                display_columns = df_pivot.columns[-4:] if len(df_pivot.columns) >= 4 else df_pivot.columns
+                
+                response_data["key_financial_info"] = json.dumps(
+                    {
+                        "columns": [col.strftime('%Y.%m') for col in display_columns],
+                        "index": list(df_pivot.index),
+                        "data": df_pivot[display_columns].values.tolist()
+                    }, ensure_ascii=False
+                )
+                print("2024년도 주요 재무정보 API 호출 성공 및 처리 완료")
             else:
-                response_data["report_list"] = []
+                response_data["financials_error"] = "주요 재무정보를 가져올 수 없습니다. DART API에서 데이터를 찾을 수 없거나 파싱 오류."
 
         except Exception as e:
+            print(f"재무제표 데이터 처리 중 치명적인 오류 발생: {e}")
             traceback.print_exc()
-            response_data["reports_error"] = f"공시 목록 조회 중 오류 발생: {str(e)}"
+            response_data["financials_error"] = f"재무제표를 불러오는 데 실패했습니다: {e}"
     
     return jsonify(response_data)
+
 def get_target_stocks(target_str):
     """
     [수정됨] 타겟 문자열에 해당하는 종목 리스트(DataFrame)를 반환하는 함수 (캐시된 데이터 사용)

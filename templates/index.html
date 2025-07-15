@@ -6,7 +6,7 @@
 {% block head %}
 <style>
     .btn-group > .btn.active { background-color: #5cb85c; color: white; border-color: #4cae4c; z-index: 2; }
-    .hidden-table { display: none; }
+    .hidden-table { display: none; } /* 이 클래스는 macro에서만 사용되고, JS에서 직접 display를 제어할 것이므로 유지 */
     .chart-wrapper { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
     .chart-container { position: relative; flex: 1 1 250px; min-width: 250px; height: 220px; }
     .chart-header { display: flex; justify-content: space-between; align-items: baseline; }
@@ -65,7 +65,7 @@
             <div class="chart-info">
                 <span id="usdkrw-value" class="value">{{ usdkrw_info.value }}</span>
                 <span id="usdkrw-change" class="change {% if usdkrw_info.raw_change > 0 %}positive{% elif usdkrw_info.raw_change < 0 %}negative{% else %}zero{% endif %}">
-                    {{ kospi_info.change }} ({{ usdkrw_info.change_pct }})
+                    {{ usdkrw_info.change }} ({{ usdkrw_info.change_pct }})
                 </span>
             </div>
         </div>
@@ -110,13 +110,15 @@
             </div>
             <div class="modal-body">
                 <ul class="nav nav-tabs" role="tablist">
-                    <li role="presentation" class="active"><a href="#news-content" aria-controls="news" role="tab" data-toggle="tab">관련 뉴스</a></li>
-                    <li role="presentation"><a href="#profile-content" aria-controls="profile" role="tab" data-toggle="tab">기업 개요</a></li>
+                    <li role="presentation" class="active"><a href="#profile-content" aria-controls="profile" role="tab" data-toggle="tab">기업 개요</a></li>
+                    <li role="presentation"><a href="#financials-content" aria-controls="financials" role="tab" data-toggle="tab">주요 재무정보</a></li>
                     <li role="presentation"><a href="#reports-content" aria-controls="reports" role="tab" data-toggle="tab">주요 공시</a></li>
+                    <li role="presentation"><a href="#news-content" aria-controls="news" role="tab" data-toggle="tab">관련 뉴스</a></li>
                 </ul>
 
                 <div class="tab-content" style="padding-top: 20px;">
                     <div role="tabpanel" class="tab-pane active" id="profile-content"></div>
+                    <div role="tabpanel" class="tab-pane" id="financials-content"></div>
                     <div role="tabpanel" class="tab-pane" id="reports-content"></div>
                     <div role="tabpanel" class="tab-pane" id="news-content"></div>
                 </div>
@@ -131,41 +133,24 @@
 
 {% block scripts %}
 <script>
+// Chart instances to store references for resize
+let kospiChartInstance = null;
+let kosdaqChartInstance = null;
+let usdkrwChartInstance = null;
+let wtiChartInstance = null;
+
+
 document.addEventListener('DOMContentLoaded', function() {
-    // --- 차트 툴팁 옵션을 활성화 ---
     const chartDefaultOptions = { 
-        responsive: true, 
-        maintainAspectRatio: false,
-        scales: { y: { beginAtZero: false } }, 
-        plugins: { 
-            legend: { display: false },
-            tooltip: { // 툴팁 활성화 및 상세 설정
-                enabled: true,
-                mode: 'index',
-                intersect: false,
-                callbacks: {
-                    label: function(context) {
-                        let label = context.dataset.label || '';
-                        if (label) { label += ': '; }
-                        if (context.parsed.y !== null) {
-                            label += new Intl.NumberFormat('en-US', { style: 'decimal' }).format(context.parsed.y);
-                        }
-                        return label;
-                    }
-                }
-            }
-        }, 
+        responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } }, 
+        plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } }, 
         elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } } 
     };
     
     function parseChartJsData(data) {
         if (!data || !Array.isArray(data)) return { labels: [], closes: [] };
         return { 
-            labels: data.map(item => { 
-                if (!item.Date) return ''; 
-                const parts = item.Date.split('-'); 
-                return `${parts[1]}/${parts[2]}`; 
-            }), 
+            labels: data.map(item => item.Date ? `${item.Date.split('-')[1]}/${item.Date.split('-')[2]}`: ''), 
             closes: data.map(item => item.Close) 
         }; 
     }
@@ -174,17 +159,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const canvas = document.getElementById(canvasId);
         if (canvas && chartData) {
             const parsedData = parseChartJsData(chartData);
-            new Chart(canvas, { 
-                type: 'line', 
-                data: { 
-                    labels: parsedData.labels, 
-                    datasets: [{ 
-                        data: parsedData.closes, 
-                        borderColor: color 
-                    }] 
-                }, 
-                options: chartDefaultOptions 
-            });
+            if (window[canvasId + 'Instance']) { 
+                window[canvasId + 'Instance'].destroy();
+            }
+            const newChart = new Chart(canvas, { type: 'line', data: { labels: parsedData.labels, datasets: [{ data: parsedData.closes, borderColor: color }] }, options: chartDefaultOptions });
+            window[canvasId + 'Instance'] = newChart;
         }
     }
 
@@ -193,65 +172,60 @@ document.addEventListener('DOMContentLoaded', function() {
     createChart('usdkrwChart', {{ usdkrw_data | tojson }}, 'rgba(75, 192, 192, 1)');
     createChart('wtiChart', {{ wti_data | tojson }}, 'rgba(255, 159, 64, 1)');
     
-    function updateLatestData() {
-        fetch('/api/latest-data')
-            .then(response => response.ok ? response.json() : Promise.reject('Network response was not ok.'))
-            .then(data => {
-                if (data.error) {
-                    console.error("Error fetching latest data:", data.error);
-                    return;
-                }
-                function updateIndicator(name, info) {
-                    const valueEl = document.getElementById(`${name}-value`);
-                    const changeEl = document.getElementById(`${name}-change`);
-                    if (!valueEl || !changeEl || !info) return;
-                    
-                    valueEl.textContent = info.value;
-                    changeEl.textContent = `${info.change} (${info.change_pct})`;
-                    changeEl.className = 'change';
-                    if (info.raw_change > 0) changeEl.classList.add('positive');
-                    else if (info.raw_change < 0) changeEl.classList.add('negative');
-                    else changeEl.classList.add('zero');
-                }
-                updateIndicator('kospi', data.kospi);
-                updateIndicator('kosdaq', data.kosdaq);
-                updateIndicator('usdkrw', data.usdkrw);
-                updateIndicator('wti', data.wti);
-            })
-            .catch(error => console.error("Update fetch error:", error));
-    }
-
-    if(document.getElementById('kospi-value')) {
-        setInterval(updateLatestData, 30000);
-    }
-
-    function setupRankSwitcher(selectorId, titleId, marketPrefix) {
-        const selector = document.getElementById(selectorId);
+    function setupRankSwitcher(marketPrefix) {
+        const selector = document.getElementById(`${marketPrefix}-rank-selector`);
         if (!selector) return;
         selector.addEventListener('click', function(event) {
             if (event.target.tagName !== 'BUTTON') return;
             const targetType = event.target.getAttribute('data-target');
-            const title = document.getElementById(titleId);
-            const today = "{{ today }}";
-            selector.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            
+            const titleElement = document.getElementById(`${marketPrefix}-rank-title`);
             const volumeTable = document.getElementById(`${marketPrefix}-volume-table`);
             const valueTable = document.getElementById(`${marketPrefix}-value-table`);
 
+            titleElement.textContent = `{{ today }} ${marketPrefix.toUpperCase()} ${targetType === 'volume' ? '거래량' : '거래대금'} 상위 10`;
+            selector.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
             if (targetType === 'volume') {
-                volumeTable.classList.remove('hidden-table');
-                valueTable.classList.add('hidden-table');
-                title.textContent = `${today} ${marketPrefix.toUpperCase()} 거래량 상위 10`;
-            } else if (targetType === 'value') {
-                volumeTable.classList.add('hidden-table');
-                valueTable.classList.remove('hidden-table');
-                title.textContent = `${today} ${marketPrefix.toUpperCase()} 거래대금 상위 10`;
+                volumeTable.style.display = 'block';
+                valueTable.style.display = 'none';
+            } else { 
+                volumeTable.style.display = 'none';
+                valueTable.style.display = 'block';
             }
+
+            if (window.kospiChartInstance) window.kospiChartInstance.resize();
+            if (window.kosdaqChartInstance) window.kosdaqChartInstance.resize();
+            if (window.usdkrwChartInstance) window.usdkrwChartInstance.resize();
+            if (window.wtiChartInstance) window.wtiChartInstance.resize();
         });
     }
-    setupRankSwitcher('kospi-rank-selector', 'kospi-rank-title', 'kospi');
-    setupRankSwitcher('kosdaq-rank-selector', 'kosdaq-rank-title', 'kosdaq');
+    setupRankSwitcher('kospi');
+    setupRankSwitcher('kosdaq');
+
+
+    function renderFinancialTable(statementJson, targetElementId, notFoundMessage = '정보 없음') {
+        const targetElement = document.getElementById(targetElementId);
+        if (!statementJson) {
+            targetElement.innerHTML = `<p class="text-muted text-center p-4">${notFoundMessage}</p>`; return;
+        }
+        try {
+            const stmt = JSON.parse(statementJson);
+            let table = '<div class="table-responsive"><table class="table table-bordered table-hover financial-table">';
+            table += '<thead><tr><th>항목</th>';
+            stmt.columns.forEach(col => { table += `<th>${col}</th>`; });
+            table += '</tr></thead><tbody>';
+            stmt.data.forEach((rowData, rowIndex) => {
+                table += `<tr><td><strong>${stmt.index[rowIndex]}</strong></td>`;
+                rowData.forEach(cellData => { table += `<td>${(typeof cellData === 'number') ? cellData.toLocaleString() : (cellData || ' ')}</td>`; });
+                table += '</tr>';
+            });
+            table += '</tbody></table></div>';
+            targetElement.innerHTML = table;
+        } catch (e) {
+            targetElement.innerHTML = '<p class="text-danger">정보를 표시할 수 없습니다.</p>';
+        }
+    }
 
     document.body.addEventListener('click', function(event) {
         if (event.target.classList.contains('stock-name')) {
@@ -260,78 +234,66 @@ document.addEventListener('DOMContentLoaded', function() {
             
             document.getElementById('stockDetailModalLabel').textContent = `${stockName} (${stockCode})`;
             const spinnerHtml = '<div class="text-center p-4"><div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div></div>';
-            document.getElementById('profile-content').innerHTML = spinnerHtml;
-            document.getElementById('reports-content').innerHTML = spinnerHtml;
-            document.getElementById('news-content').innerHTML = spinnerHtml;
+            ['profile-content', 'financials-content', 'reports-content', 'news-content'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.innerHTML = spinnerHtml;
+            });
             
             $('#stockDetailModal').modal('show');
 
-            // 1. 기업 프로필 및 DART 공시 목록 가져오기
-            fetch(`/askfin/stock/${stockCode}/profile`)
-                .then(response => response.ok ? response.json() : Promise.reject('서버 응답 오류'))
+            fetch(`/askfin/stock/${stockCode}/profile`).then(res => res.ok ? res.json() : Promise.reject('Server error'))
                 .then(data => {
-                    // 기업 개요 탭
+                    // 기업 개요
                     const profileContent = document.getElementById('profile-content');
-                    if (data.profile_error) {
-                        profileContent.innerHTML = `<p class="text-danger">오류: ${data.profile_error}</p>`;
-                    } else if (data.company_profile) {
-                        const profile = data.company_profile;
+                    if(data.company_profile) {
                         let content = '<dl class="dl-horizontal">';
-                        for (const [key, value] of Object.entries(profile)) {
-                            content += `<dt>${key}</dt><dd>${value || 'N/A'}</dd>`;
-                        }
-                        content += '</dl>';
-                        profileContent.innerHTML = content;
+                        for (const [key, value] of Object.entries(data.company_profile)) content += `<dt>${key}</dt><dd>${value || 'N/A'}</dd>`;
+                        profileContent.innerHTML = content + '</dl>';
                     } else {
-                        profileContent.innerHTML = `<p class="text-danger">기업 개요 정보를 불러올 수 없습니다.</p>`;
+                        profileContent.innerHTML = `<p class="text-danger">${data.profile_error || '기업 개요를 불러올 수 없습니다.'}</p>`;
                     }
 
-                    // 주요 공시 탭
+                    // 주요 재무정보
+                    const financialsContent = document.getElementById('financials-content');
+                    if (data.financials_error) {
+                        financialsContent.innerHTML = `<p class="text-danger text-center p-4">${data.financials_error}</p>`;
+                    } else {
+                        renderFinancialTable(data.key_financial_info, 'financials-content', '주요 재무정보를 불러올 수 없습니다.');
+                    }
+
+                    // 주요 공시
                     const reportsContent = document.getElementById('reports-content');
                     if (data.reports_error) {
                         reportsContent.innerHTML = `<p class="text-danger">오류: ${data.reports_error}</p>`;
                     } else if (data.report_list && data.report_list.length > 0) {
-                        let reportsHtml = '<ul class="list-group list-group-flush">';
-                        data.report_list.forEach(report => {
-                            reportsHtml += `<li class="list-group-item">
-                                              <a href="${report.url}" target="_blank" rel="noopener noreferrer" style="color: #337ab7;">${report.report_nm}</a>
-                                              <small class="d-block text-muted mt-1">${report.flr_nm} - ${report.rcept_dt}</small>
-                                            </li>`;
+                        let html = '<ul class="list-group list-group-flush">';
+                        data.report_list.forEach(r => {
+                            html += `<li class="list-group-item"><a href="${r.url}" target="_blank" rel="noopener noreferrer">${r.report_nm}</a><small class="d-block text-muted mt-1">${r.flr_nm} - ${r.rcept_dt}</small></li>`;
                         });
-                        reportsHtml += '</ul>';
-                        reportsContent.innerHTML = reportsHtml;
+                        reportsContent.innerHTML = html + '</ul>';
                     } else {
                         reportsContent.innerHTML = '<p class="text-muted text-center p-4">최근 1년간 주요 공시가 없습니다.</p>';
                     }
-                })
-                .catch(err => {
-                    const errorHtml = '<p class="text-danger">정보를 불러오는 데 실패했습니다.</p>';
+                }).catch(err => {
+                    const errorHtml = `<p class="text-danger">전체 정보를 불러오는 데 실패했습니다: ${err}</p>`;
                     document.getElementById('profile-content').innerHTML = errorHtml;
+                    document.getElementById('financials-content').innerHTML = errorHtml;
                     document.getElementById('reports-content').innerHTML = errorHtml;
                 });
 
-            // 2. 관련 뉴스 가져오기
-            fetch(`/news/${stockCode}`)
-                .then(response => response.ok ? response.json() : Promise.reject('Network response was not ok.'))
+            fetch(`/news/${stockCode}`).then(res => res.ok ? res.json() : Promise.reject('Server error'))
                 .then(data => {
                     const newsContent = document.getElementById('news-content');
-                    if (data.error) {
-                        newsContent.innerHTML = `<p class="p-3">뉴스를 불러오는 데 실패했습니다: ${data.error}</p>`;
-                        return;
-                    }
-                    if (data.length === 0) {
-                         newsContent.innerHTML = `<p class="p-3">관련 뉴스가 없습니다.</p>`;
-                         return;
+                    if (data.error || data.length === 0) {
+                        newsContent.innerHTML = `<p class="p-3 text-muted text-center">${data.error || '관련 뉴스가 없습니다.'}</p>`; return;
                     }
                     let newsHtml = '<ul class="list-group list-group-flush">';
-                    data.forEach(newsItem => {
-                        newsHtml += `<li class="list-group-item"><a href="${newsItem.url}" target="_blank" rel="noopener noreferrer" style="color: #337ab7;">${newsItem.title}</a><small class="d-block text-muted mt-1">${newsItem.press} - ${newsItem.date}</small></li>`;
+                    data.forEach(item => {
+                        newsHtml += `<li class="list-group-item"><a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.title}</a><small class="d-block text-muted mt-1">${item.press} - ${item.date}</small></li>`;
                     });
-                    newsHtml += '</ul>';
-                    newsContent.innerHTML = newsHtml;
-                })
-                .catch(error => {
-                    document.getElementById('news-content').innerHTML = `<p class="p-3">뉴스를 불러오는 중 오류가 발생했습니다: ${error}</p>`;
+                    newsContent.innerHTML = newsHtml + '</ul>';
+                }).catch(err => {
+                    document.getElementById('news-content').innerHTML = `<p class="p-3 text-danger">뉴스 로딩 오류: ${err}</p>`;
                 });
         }
     });
