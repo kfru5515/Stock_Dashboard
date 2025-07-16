@@ -1,31 +1,145 @@
 {% extends "base.html" %}
 {% from "macros.html" import render_rank_table with context %}
 
-{% block title %}Dashboard{% endblock %}
-
 {% block head %}
 <style>
-    .btn-group > .btn.active { background-color: #5cb85c; color: white; border-color: #4cae4c; z-index: 2; }
-    .hidden-table { display: none; } /* 이 클래스는 macro에서만 사용되고, JS에서 직접 display를 제어할 것이므로 유지 */
-    .chart-wrapper { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
-    .chart-container { position: relative; flex: 1 1 250px; min-width: 250px; height: 220px; }
-    .chart-header { display: flex; justify-content: space-between; align-items: baseline; }
-    .chart-header h3 { margin-bottom: 0; font-size: 18px; }
-    .chart-info { font-size: 14px; text-align: right; white-space: nowrap; }
-    .chart-info .value { font-weight: bold; font-size: 16px; }
-    .chart-info .change { margin-left: 8px; font-size: 13px; }
-    .change.positive { color: #d9534f; }
-    .change.negative { color: #337ab7; }
+    /* General Layout & Responsiveness */
+    body {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    .chart-wrapper {
+        display: flex;
+        flex-wrap: wrap; /* Allow items to wrap to the next line */
+        gap: 20px; /* Space between chart containers */
+        margin-bottom: 20px;
+    }
+    .chart-container {
+        flex: 1 1 250px; /* Allow containers to grow/shrink, with a base of 250px */
+        min-width: 250px; /* Minimum width for chart containers */
+        height: 220px; /* Fixed height for charts */
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        padding: 15px;
+        background-color: #fff;
+        display: flex;
+        flex-direction: column; /* Ensure header and canvas stack */
+    }
+
+    /* Chart Headers */
+    .chart-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 10px;
+    }
+    .chart-header h3 {
+        margin-bottom: 0;
+        font-size: 18px;
+        color: #333;
+    }
+    .chart-info {
+        font-size: 14px;
+        text-align: right;
+        white-space: nowrap;
+    }
+    .chart-info .value {
+        font-weight: bold;
+        font-size: 16px;
+        color: #000;
+    }
+    .chart-info .change {
+        margin-left: 8px;
+        font-size: 13px;
+    }
+    .change.positive { color: #d9534f; } /* Bootstrap 'danger' color */
+    .change.negative { color: #337ab7; } /* Bootstrap 'primary' color */
     .change.zero { color: #555; }
-    /* 상세 정보 모달 내 테이블 스타일 추가 */
+
+    /* Rank Tables Section */
+    .rank-tables-section {
+        display: flex;
+        flex-wrap: wrap; /* Allow tables to wrap */
+        gap: 40px; /* Space between the KOSPI and KOSDAQ rank sections */
+        margin-top: 20px;
+        justify-content: center; /* Center rank tables if less than 2 */
+    }
+
+    /* Individual Rank Table Container (inside macros.html) */
+    /* This style applies to the outermost div within render_rank_table macro */
+    /* The macro itself sets flex: 1; min-width: 250px; */
+    .rank-table-container {
+        /* flex and min-width are already in the macro's div style attribute */
+        /* Overriding flex: 1; min-width: 250px; if necessary. */
+        /* For two columns using Bootstrap: */
+        flex: 1 1 calc(50% - 20px); /* Adjust to fit two columns with gap */
+        max-width: calc(50% - 20px); /* Prevent them from becoming too wide */
+        min-width: 300px; /* Ensure a reasonable minimum width */
+    }
+
+
+    /* Rank Table Buttons */
+    .btn-group > .btn.active { 
+        background-color: #5cb85c; /* Success green */
+        color: white; 
+        border-color: #4cae4c; 
+        z-index: 2; /* To make active button overlap borders properly */
+    }
+    .btn-group .btn {
+        /* Ensure consistent button sizing */
+        padding: 5px 10px;
+        font-size: 13px;
+        line-height: 1.5;
+        border-radius: 4px;
+    }
+
+    /* Rank Tables (The actual <table> element from macros.html) */
+    .rank-table { 
+        width: 100%;            /* Ensure table takes full width of its container */
+        table-layout: fixed;    /* Crucial: Fix column widths, prevent content-based resizing */
+        border-collapse: collapse; /* Collapse borders for cleaner look */
+    }
+
+    .rank-table th,
+    .rank-table td {
+        padding: 8px;
+        text-align: right;      /* Default for numbers */
+        white-space: nowrap;    /* Prevent text wrapping in cells */
+        overflow: hidden;       /* Hide overflow content */
+        text-overflow: ellipsis; /* Show '...' for overflow */
+        vertical-align: middle; /* Align content vertically */
+    }
+
+    /* Explicit Column Widths for 3-column layout */
+    .rank-table th:nth-child(1), .rank-table td:nth-child(1) { 
+        width: 45%; /* 종목명 (more space) */
+        text-align: left; /* 종목명은 왼쪽 정렬 */
+    }   
+    .rank-table th:nth-child(2), .rank-table td:nth-child(2) { 
+        width: 25%; /* 종가 */
+    } 
+    .rank-table th:nth-child(3), .rank-table td:nth-child(3) { 
+        width: 30%; /* 거래량 / 거래대금 (can be long numbers) */
+    } 
+
+    /* Utilities */
+    .hidden-table { 
+        display: none; 
+    }
+
+    /* Modal Styling */
     .financial-table { font-size: 14px; }
     .financial-table th, .financial-table td { text-align: right; }
     .financial-table th:first-child, .financial-table td:first-child { text-align: left; background-color: #f8f9fa; }
+    .nav-tabs-sub { border-bottom: 1px solid #ddd; margin-bottom: 15px; padding-left: 15px; }
+    .nav-tabs-sub > li { float: left; margin-bottom: -1px; }
+    .nav-tabs-sub > li > a { padding: 8px 12px; line-height: 1.42857143; border: 1px solid transparent; border-radius: 4px 4px 0 0; color: #555; }
+    .nav-tabs-sub > li.active > a, .nav-tabs-sub > li.active > a:hover, .nav-tabs-sub > li.active > a:focus { color: #555; cursor: default; background-color: #fff; border: 1px solid #ddd; border-bottom-color: transparent; }
+    .tab-content-sub { padding: 10px 0; }
 </style>
 {% endblock %}
 
 {% block content %}
-<h1>Dashboard</h1>
 
 <div class="chart-wrapper">
     {% if kospi_data and kospi_info.value != 'N/A' %}
@@ -91,7 +205,7 @@
 
 <hr>
 
-<div style="display: flex; gap: 40px; flex-wrap: wrap; margin-top: 20px;">
+<div class="rank-tables-section"> {# Use the new class here #}
     {% if kospi_top_volume %}
         {{ render_rank_table('kospi', 'KOSPI', kospi_top_volume, kospi_top_value, today) }}
     {% endif %}
@@ -110,15 +224,29 @@
             </div>
             <div class="modal-body">
                 <ul class="nav nav-tabs" role="tablist">
-                    <li role="presentation" class="active"><a href="#profile-content" aria-controls="profile" role="tab" data-toggle="tab">기업 개요</a></li>
+                    <li role="presentation"class="active"><a href="#news-content" aria-controls="news" role="tab" data-toggle="tab">관련 뉴스</a></li>
+                    <li role="presentation"><a href="#profile-content" aria-controls="profile" role="tab" data-toggle="tab">기업 개요</a></li>
                     <li role="presentation"><a href="#financials-content" aria-controls="financials" role="tab" data-toggle="tab">주요 재무정보</a></li>
                     <li role="presentation"><a href="#reports-content" aria-controls="reports" role="tab" data-toggle="tab">주요 공시</a></li>
-                    <li role="presentation"><a href="#news-content" aria-controls="news" role="tab" data-toggle="tab">관련 뉴스</a></li>
                 </ul>
 
                 <div class="tab-content" style="padding-top: 20px;">
                     <div role="tabpanel" class="tab-pane active" id="profile-content"></div>
-                    <div role="tabpanel" class="tab-pane" id="financials-content"></div>
+                    
+                    <div role="tabpanel" class="tab-pane" id="financials-tab-wrapper">
+                        <ul class="nav nav-tabs nav-tabs-sub" role="tablist">
+                            <li role="presentation" class="active"><a href="#financials-balance-sheet" aria-controls="balance-sheet" role="tab" data-toggle="tab">재무상태표</a></li>
+                            <li role="presentation"><a href="#financials-income-statement" aria-controls="income-statement" role="tab" data-toggle="tab">손익계산서</a></li>
+                            <li role="presentation"><a href="#financials-cash-flow" aria-controls="cash-flow" role="tab" data-toggle="tab">현금흐름표</a></li>
+                            <li role="presentation"><a href="#financials-all" aria-controls="all-financials" role="tab" data-toggle="tab">전체 재무정보</a></li>
+                        </ul>
+                        <div class="tab-content tab-content-sub">
+                            <div role="tabpanel" class="tab-pane active" id="financials-balance-sheet"></div>
+                            <div role="tabpanel" class="tab-pane" id="financials-income-statement"></div>
+                            <div role="tabpanel" class="tab-pane" id="financials-cash-flow"></div>
+                            <div role="tabpanel" class="tab-pane" id="financials-all"></div>
+                        </div>
+                    </div>
                     <div role="tabpanel" class="tab-pane" id="reports-content"></div>
                     <div role="tabpanel" class="tab-pane" id="news-content"></div>
                 </div>
@@ -132,6 +260,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // Chart instances to store references for resize
 let kospiChartInstance = null;
@@ -159,19 +288,41 @@ document.addEventListener('DOMContentLoaded', function() {
         const canvas = document.getElementById(canvasId);
         if (canvas && chartData) {
             const parsedData = parseChartJsData(chartData);
-            if (window[canvasId + 'Instance']) { 
+            // Destroy existing chart instance if it exists
+            if (window[canvasId + 'Instance']) {
                 window[canvasId + 'Instance'].destroy();
             }
             const newChart = new Chart(canvas, { type: 'line', data: { labels: parsedData.labels, datasets: [{ data: parsedData.closes, borderColor: color }] }, options: chartDefaultOptions });
-            window[canvasId + 'Instance'] = newChart;
+            window[canvasId + 'Instance'] = newChart; // Store the new instance globally
         }
     }
 
+    // 초기 차트 생성 시 인스턴스를 전역 변수에 할당합니다.
     createChart('kospiChart', {{ kospi_data | tojson }}, 'rgba(54, 162, 235, 1)');
     createChart('kosdaqChart', {{ kosdaq_data | tojson }}, 'rgba(255, 99, 132, 1)');
     createChart('usdkrwChart', {{ usdkrw_data | tojson }}, 'rgba(75, 192, 192, 1)');
     createChart('wtiChart', {{ wti_data | tojson }}, 'rgba(255, 159, 64, 1)');
     
+    function updateLatestData() {
+        fetch('/api/latest-data').then(response => response.ok ? response.json() : Promise.reject('Network error'))
+            .then(data => {
+                if (data.error) { console.error("Update Error:", data.error); return; }
+                ['kospi', 'kosdaq', 'usdkrw', 'wti'].forEach(name => {
+                    const info = data[name];
+                    const valEl = document.getElementById(`${name}-value`);
+                    const chgEl = document.getElementById(`${name}-change`);
+                    if (!valEl || !chgEl || !info) return;
+                    valEl.textContent = info.value;
+                    chgEl.textContent = `${info.change} (${info.change_pct})`;
+                    chgEl.className = 'change';
+                    if (info.raw_change > 0) chgEl.classList.add('positive');
+                    else if (info.raw_change < 0) chgEl.classList.add('negative');
+                    else chgEl.classList.add('zero');
+                });
+            }).catch(error => console.error("Update fetch error:", error));
+    }
+    if(document.getElementById('kospi-value')) { setInterval(updateLatestData, 30000); }
+
     function setupRankSwitcher(marketPrefix) {
         const selector = document.getElementById(`${marketPrefix}-rank-selector`);
         if (!selector) return;
@@ -186,23 +337,28 @@ document.addEventListener('DOMContentLoaded', function() {
             selector.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
             
+            // Toggle table display
+            // macros.html에서 hidden-table을 사용하고 있으므로 display: block/none을 직접 제어합니다.
             if (targetType === 'volume') {
                 volumeTable.style.display = 'block';
                 valueTable.style.display = 'none';
-            } else { 
+            } else { // targetType === 'value'
                 volumeTable.style.display = 'none';
                 valueTable.style.display = 'block';
             }
 
-            if (window.kospiChartInstance) window.kospiChartInstance.resize();
-            if (window.kosdaqChartInstance) window.kosdaqChartInstance.resize();
-            if (window.usdkrwChartInstance) window.usdkrwChartInstance.resize();
-            if (window.wtiChartInstance) window.wtiChartInstance.resize();
+            // 차트 리사이즈 호출: DOM 업데이트 후 약간의 지연을 줍니다.
+            // 이 지연은 브라우저가 캔버스 컨테이너의 크기를 정확히 계산할 시간을 줍니다.
+            setTimeout(() => {
+                if (window.kospiChartInstance) window.kospiChartInstance.resize();
+                if (window.kosdaqChartInstance) window.kosdaqChartInstance.resize();
+                if (window.usdkrwChartInstance) window.usdkrwChartInstance.resize();
+                if (window.wtiChartInstance) window.wtiChartInstance.resize();
+            }, 100); // 100ms 지연 (50ms보다 길게 시도)
         });
     }
     setupRankSwitcher('kospi');
     setupRankSwitcher('kosdaq');
-
 
     function renderFinancialTable(statementJson, targetElementId, notFoundMessage = '정보 없음') {
         const targetElement = document.getElementById(targetElementId);
@@ -234,7 +390,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             document.getElementById('stockDetailModalLabel').textContent = `${stockName} (${stockCode})`;
             const spinnerHtml = '<div class="text-center p-4"><div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div></div>';
-            ['profile-content', 'financials-content', 'reports-content', 'news-content'].forEach(id => {
+            
+            // Clear all main tabs and sub-tabs content
+            ['profile-content', 'financials-balance-sheet', 'financials-income-statement', 'financials-cash-flow', 'financials-all', 'reports-content', 'news-content'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) el.innerHTML = spinnerHtml;
             });
@@ -253,13 +411,26 @@ document.addEventListener('DOMContentLoaded', function() {
                         profileContent.innerHTML = `<p class="text-danger">${data.profile_error || '기업 개요를 불러올 수 없습니다.'}</p>`;
                     }
 
-                    // 주요 재무정보
-                    const financialsContent = document.getElementById('financials-content');
-                    if (data.financials_error) {
-                        financialsContent.innerHTML = `<p class="text-danger text-center p-4">${data.financials_error}</p>`;
+                    // START OF MODIFICATION: Render categorized financial tables
+                    const categorizedFinancials = data.categorized_financial_info ? JSON.parse(data.categorized_financial_info) : null;
+                    if (categorizedFinancials) {
+                        renderFinancialTable(categorizedFinancials['재무상태표'], 'financials-balance-sheet', '재무상태표 정보를 불러올 수 없습니다.');
+                        renderFinancialTable(categorizedFinancials['손익계산서'], 'financials-income-statement', '손익계산서 정보를 불러올 수 없습니다.');
+                        renderFinancialTable(categorizedFinancials['현금흐름표'], 'financials-cash-flow', '현금흐름표 정보를 불러올 수 없습니다.');
                     } else {
-                        renderFinancialTable(data.key_financial_info, 'financials-content', '주요 재무정보를 불러올 수 없습니다.');
+                        // If categorized data is not available, show error in all sub-tabs
+                        ['financials-balance-sheet', 'financials-income-statement', 'financials-cash-flow'].forEach(id => {
+                            document.getElementById(id).innerHTML = `<p class="text-danger text-center p-4">재무제표 정보를 불러올 수 없습니다.</p>`;
+                        });
                     }
+
+                    // Render "전체 재무정보" tab using key_financial_info
+                    if (data.key_financial_info) {
+                        renderFinancialTable(data.key_financial_info, 'financials-all', '전체 재무정보를 불러올 수 없습니다.');
+                    } else {
+                        document.getElementById('financials-all').innerHTML = `<p class="text-danger text-center p-4">전체 재무정보를 불러올 수 없습니다.</p>`;
+                    }
+                    // END OF MODIFICATION: Render categorized financial tables
 
                     // 주요 공시
                     const reportsContent = document.getElementById('reports-content');
@@ -277,8 +448,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }).catch(err => {
                     const errorHtml = `<p class="text-danger">전체 정보를 불러오는 데 실패했습니다: ${err}</p>`;
                     document.getElementById('profile-content').innerHTML = errorHtml;
-                    document.getElementById('financials-content').innerHTML = errorHtml;
+                    // Also update the main financials tab wrapper with an error
+                    document.getElementById('financials-tab-wrapper').innerHTML = `<p class="text-danger text-center p-4">재무정보를 불러오는 데 실패했습니다: ${err}</p>`;
                     document.getElementById('reports-content').innerHTML = errorHtml;
+                    console.error('Modal Fetch Error (profile/financials/reports):', err);
                 });
 
             fetch(`/news/${stockCode}`).then(res => res.ok ? res.json() : Promise.reject('Server error'))
@@ -294,6 +467,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     newsContent.innerHTML = newsHtml + '</ul>';
                 }).catch(err => {
                     document.getElementById('news-content').innerHTML = `<p class="p-3 text-danger">뉴스 로딩 오류: ${err}</p>`;
+                    console.error('Modal Fetch Error (news):', err);
                 });
         }
     });

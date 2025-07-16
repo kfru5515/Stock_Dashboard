@@ -1,15 +1,26 @@
 {# KOSPI/KOSDAQ 순위 테이블을 생성하는 매크로 #}
 {% macro render_rank_table(market_prefix, title_market_name, volume_data, value_data, today) %}
-<div style="flex: 1; min-width: 300px;">
+<div style="flex: 1; min-width: 250px;"> {# 이전 단계에서 줄인 최소 너비 유지 #}
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h4 id="{{ market_prefix }}-rank-title" style="margin: 0;">{{ today }} {{ title_market_name }} 거래량 상위 10</h4>
+        {# 초기 제목도 '거래대금'으로 변경 #}
+        <h4 id="{{ market_prefix }}-rank-title" style="margin: 0;">{{ today }} {{ title_market_name }} 거래대금 상위 10</h4>
         <div class="btn-group btn-group-sm" id="{{ market_prefix }}-rank-selector">
-            <button type="button" class="btn btn-default active" data-target="volume">거래량</button>
-            <button type="button" class="btn btn-default" data-target="value">거래대금</button>
+            {# '거래량' 버튼에서 active 클래스 제거 #}
+            <button type="button" class="btn btn-default" data-target="volume">거래량</button>
+            {# '거래대금' 버튼에 active 클래스 추가 #}
+            <button type="button" class="btn btn-default active" data-target="value">거래대금</button>
         </div>
     </div>
-    <table class="table table-striped rank-table" id="{{ market_prefix }}-volume-table">
-        <thead><tr><th>종목명</th><th>종가</th><th>거래량</th></tr></thead>
+    
+    {# 거래량 테이블에 hidden-table 클래스 추가하여 초기에는 숨김 #}
+    <table class="table table-striped rank-table hidden-table" id="{{ market_prefix }}-volume-table">
+        <thead>
+            <tr>
+                <th>종목명</th>
+                <th>종가</th>
+                <th>거래량</th>
+            </tr>
+        </thead>
         <tbody>
             {% for item in volume_data %}
             <tr>
@@ -20,8 +31,16 @@
             {% endfor %}
         </tbody>
     </table>
-    <table class="table table-striped rank-table hidden-table" id="{{ market_prefix }}-value-table">
-        <thead><tr><th>종목명</th><th>종가</th><th>거래대금</th></tr></thead>
+    
+    {# 거래대금 테이블에서 hidden-table 클래스 제거하여 초기에는 표시 #}
+    <table class="table table-striped rank-table" id="{{ market_prefix }}-value-table">
+        <thead>
+            <tr>
+                <th>종목명</th>
+                <th>종가</th>
+                <th>거래대금</th>
+            </tr>
+        </thead>
         <tbody>
             {% for item in value_data %}
             <tr>

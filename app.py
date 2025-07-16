@@ -9,13 +9,11 @@ import yfinance as yf
 from pykrx import stock
 import requests
 
-# --- Blueprints Import ---
 from blueprints.analysis import analysis_bp
 from blueprints.tables import tables_bp
 from blueprints.join import join_bp
 from blueprints.data import data_bp
 from blueprints.auth import auth_bp
-# [수정] askfin 모듈을 직접 임포트하여 순환 참조 문제를 해결합니다.
 from blueprints import askfin
 from blueprints.askfin import askfin_bp, initialize_global_data
 from blueprints.search import search_bp
@@ -25,7 +23,6 @@ from db.extensions import db
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# --- Template Filters ---
 @app.template_filter('format_kr')
 def format_kr(value):
     try:
@@ -42,7 +39,7 @@ def format_kr(value):
 @app.template_filter('format_price')
 def format_price(value):
     try:
-        return f"{float(value):,.2f}"
+        return f"{int(float(value)):,}원"
     except (ValueError, TypeError):
         return value
 
