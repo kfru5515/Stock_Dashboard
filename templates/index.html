@@ -3,6 +3,32 @@
 
 {% block head %}
 <style>
+
+@media (max-width: 768px) {
+
+
+    .chart-wrapper,
+    .rank-tables-section,
+    .indicator-news-section {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px; /* 간격은 20px로 통일 */
+        margin-top: 20px;
+        justify-content: center; 
+        max-width: 1200px; 
+        margin: 0 auto; 
+    }
+
+    .rank-table-container {
+        flex-basis: 100%; 
+        max-width: 100%;
+    }
+
+    .indicator-card, .news-card {
+        flex-basis: 100%;
+    }
+}
+
     /* General Layout & Responsiveness */
     body {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -19,21 +45,19 @@
     .chart-container {
         flex: 280px; 
         min-width: 280px; 
-        height: 220px;
-        border: 0.1px solid #e0e0e000;
+        height: 150px;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        padding: 1px;
-        background-color: #fff;
+        padding: 5px;
         display: flex;
         flex-direction: column;
+        margin-bottom: 50px;
+
     }
 
     .chart-header {
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        margin-bottom: 10px;
     }
     .chart-header h3 {
         margin-bottom: 0;
@@ -62,7 +86,6 @@
         display: flex;
         flex-wrap: wrap;
         gap: 40px;
-        margin-top: 20px;
         justify-content: center;
         max-width: 1200px;
         margin: 0 auto;
@@ -159,13 +182,7 @@
     .nav-tabs-sub > li.active > a, .nav-tabs-sub > li.active > a:hover, .nav-tabs-sub > li.active > a:focus { color: #555; cursor: default; background-color: #fff; border: 1px solid #ddd; border-bottom-color: transparent; }
     .tab-content-sub { padding: 10px 0; }
 
-    /* New: Indicator and News Section Styles */
-    .indicator-news-section {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 20px;
-        margin-top: 20px;
-    }
+
     .indicator-card, .news-card {
         flex: 1 1 calc(50% - 10px); /* Two columns on larger screens */
         min-width: 300px; /* Minimum width for responsiveness */
@@ -283,8 +300,6 @@
     {% endif %}
 </div>
 
-<hr>
-
 <div class="rank-tables-section"> {# Use the new class here #}
     {% if kospi_top_volume %}
         {{ render_rank_table('kospi', 'KOSPI', kospi_top_volume, kospi_top_value, today) }}
@@ -295,7 +310,7 @@
     {% endif %}
 </div>
 
-<hr>
+
 
 <div class="indicator-news-section">
     {# 경제 지표 위젯 #}
@@ -349,31 +364,17 @@
             </div>
             <div class="modal-body">
                 <ul class="nav nav-tabs" role="tablist">
-                    <li role="presentation"class="active"><a href="#news-content" aria-controls="news" role="tab" data-toggle="tab">관련 뉴스</a></li>
+                    <li role="presentation" class="active"><a href="#news-content" aria-controls="news" role="tab" data-toggle="tab">관련 뉴스</a></li>
                     <li role="presentation"><a href="#profile-content" aria-controls="profile" role="tab" data-toggle="tab">기업 개요</a></li>
                     <li role="presentation"><a href="#financials-content" aria-controls="financials" role="tab" data-toggle="tab">주요 재무정보</a></li>
                     <li role="presentation"><a href="#reports-content" aria-controls="reports" role="tab" data-toggle="tab">주요 공시</a></li>
                 </ul>
 
                 <div class="tab-content" style="padding-top: 20px;">
-                    <div role="tabpanel" class="tab-pane active" id="profile-content"></div>
-                    
-                    <div role="tabpanel" class="tab-pane" id="financials-tab-wrapper">
-                        <ul class="nav nav-tabs nav-tabs-sub" role="tablist">
-                            <li role="presentation" class="active"><a href="#financials-balance-sheet" aria-controls="balance-sheet" role="tab" data-toggle="tab">재무상태표</a></li>
-                            <li role="presentation"><a href="#financials-income-statement" aria-controls="income-statement" role="tab" data-toggle="tab">손익계산서</a></li>
-                            <li role="presentation"><a href="#financials-cash-flow" aria-controls="cash-flow" role="tab" data-toggle="tab">현금흐름표</a></li>
-                            <li role="presentation"><a href="#financials-all" aria-controls="all-financials" role="tab" data-toggle="tab">전체 재무정보</a></li>
-                        </ul>
-                        <div class="tab-content tab-content-sub">
-                            <div role="tabpanel" class="tab-pane active" id="financials-balance-sheet"></div>
-                            <div role="tabpanel" class="tab-pane" id="financials-income-statement"></div>
-                            <div role="tabpanel" class="tab-pane" id="financials-cash-flow"></div>
-                            <div role="tabpanel" class="tab-pane" id="financials-all"></div>
-                        </div>
-                    </div>
+                    <div role="tabpanel" class="tab-pane active" id="news-content"></div>
+                    <div role="tabpanel" class="tab-pane" id="profile-content"></div>
+                    <div role="tabpanel" class="tab-pane" id="financials-content"></div>
                     <div role="tabpanel" class="tab-pane" id="reports-content"></div>
-                    <div role="tabpanel" class="tab-pane" id="news-content"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -382,6 +383,7 @@
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -520,55 +522,58 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     document.body.addEventListener('click', function(event) {
-        if (event.target.classList.contains('stock-name')) {
-            const stockCode = event.target.getAttribute('data-code');
-            const stockName = event.target.textContent.trim();
-            
-            document.getElementById('stockDetailModalLabel').textContent = `${stockName} (${stockCode})`;
-            const spinnerHtml = '<div class="text-center p-4"><div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div></div>';
-            
-            // Clear all main tabs and sub-tabs content
-            ['profile-content', 'financials-balance-sheet', 'financials-income-statement', 'financials-cash-flow', 'financials-all', 'reports-content', 'news-content'].forEach(id => {
-                const el = document.getElementById(id);
-                if(el) el.innerHTML = spinnerHtml;
-            });
-            
-            $('#stockDetailModal').modal('show');
+    if (event.target.classList.contains('stock-name')) {
+        const stockCode = event.target.getAttribute('data-code');
+        const stockName = event.target.textContent.trim();
+        
+        document.getElementById('stockDetailModalLabel').textContent = `${stockName} (${stockCode})`;
+        const spinnerHtml = '<div class="text-center p-4"><div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div></div>';
+        
+        ['news-content', 'profile-content', 'financials-content', 'reports-content'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.innerHTML = spinnerHtml;
+        });
+        
+        $('#stockDetailModal').modal('show');
 
-            fetch(`/askfin/stock/${stockCode}/profile`).then(res => res.ok ? res.json() : Promise.reject('Server error'))
-                .then(data => {
-                    // 기업 개요
+        fetch(`/askfin/stock/${stockCode}/profile`)
+            .then(res => res.ok ? res.json() : Promise.reject('Server error'))
+            .then(data => {
+
+                try {
                     const profileContent = document.getElementById('profile-content');
-                    if(data.company_profile) {
+                    if (data.company_profile) {
                         let content = '<dl class="dl-horizontal">';
-                        for (const [key, value] of Object.entries(data.company_profile)) content += `<dt>${key}</dt><dd>${value || 'N/A'}</dd>`;
+                        for (const [key, value] of Object.entries(data.company_profile)) {
+                            // '업종'과 '주요제품' 키가 아닐 경우에만 content에 추가
+                            if (key !== '업종' && key !== '주요제품') {
+                                content += `<dt>${key}</dt><dd>${value || 'N/A'}</dd>`;
+                            }
+                        }
                         profileContent.innerHTML = content + '</dl>';
                     } else {
                         profileContent.innerHTML = `<p class="text-danger">${data.profile_error || '기업 개요를 불러올 수 없습니다.'}</p>`;
                     }
+                } catch (e) {
+                    console.error('기업 개요 렌더링 에러:', e);
+                    document.getElementById('profile-content').innerHTML = '<p class="text-danger">기업 개요를 표시하는 중 오류가 발생했습니다.</p>';
+                }
 
-                    // START OF MODIFICATION: Render categorized financial tables
-                    const categorizedFinancials = data.categorized_financial_info ? JSON.parse(data.categorized_financial_info) : null;
-                    if (categorizedFinancials) {
-                        renderFinancialTable(categorizedFinancials['재무상태표'], 'financials-balance-sheet', '재무상태표 정보를 불러올 수 없습니다.');
-                        renderFinancialTable(categorizedFinancials['손익계산서'], 'financials-income-statement', '손익계산서 정보를 불러올 수 없습니다.');
-                        renderFinancialTable(categorizedFinancials['현금흐름표'], 'financials-cash-flow', '현금흐름표 정보를 불러올 수 없습니다.');
-                    } else {
-                        // If categorized data is not available, show error in all sub-tabs
-                        ['financials-balance-sheet', 'financials-income-statement', 'financials-cash-flow'].forEach(id => {
-                            document.getElementById(id).innerHTML = `<p class="text-danger text-center p-4">재무제표 정보를 불러올 수 없습니다.</p>`;
-                        });
-                    }
-
-                    // Render "전체 재무정보" tab using key_financial_info
+                // --- 2. 주요 재무정보 처리 ---
+                try {
+                    const financialsContent = document.getElementById('financials-content');
                     if (data.key_financial_info) {
-                        renderFinancialTable(data.key_financial_info, 'financials-all', '전체 재무정보를 불러올 수 없습니다.');
+                        renderFinancialTable(data.key_financial_info, 'financials-content', '주요 재무정보를 불러올 수 없습니다.');
                     } else {
-                        document.getElementById('financials-all').innerHTML = `<p class="text-danger text-center p-4">전체 재무정보를 불러올 수 없습니다.</p>`;
+                        financialsContent.innerHTML = `<p class="text-danger text-center p-4">주요 재무정보를 불러올 수 없습니다.</p>`;
                     }
-                    // END OF MODIFICATION: Render categorized financial tables
+                } catch (e) {
+                    console.error('재무정보 렌더링 에러:', e);
+                    document.getElementById('financials-content').innerHTML = '<p class="text-danger">재무 정보를 표시하는 중 오류가 발생했습니다.</p>';
+                }
 
-                    // 주요 공시
+                // --- 3. 주요 공시 처리 ---
+                try {
                     const reportsContent = document.getElementById('reports-content');
                     if (data.reports_error) {
                         reportsContent.innerHTML = `<p class="text-danger">오류: ${data.reports_error}</p>`;
@@ -581,14 +586,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         reportsContent.innerHTML = '<p class="text-muted text-center p-4">최근 1년간 주요 공시가 없습니다.</p>';
                     }
-                }).catch(err => {
-                    const errorHtml = `<p class="text-danger">전체 정보를 불러오는 데 실패했습니다: ${err}</p>`;
-                    document.getElementById('profile-content').innerHTML = errorHtml;
-                    // Also update the main financials tab wrapper with an error
-                    document.getElementById('financials-tab-wrapper').innerHTML = `<p class="text-danger text-center p-4">재무정보를 불러오는 데 실패했습니다: ${err}</p>`;
-                    document.getElementById('reports-content').innerHTML = errorHtml;
-                    console.error('Modal Fetch Error (profile/financials/reports):', err);
-                });
+                } catch (e) {
+                    console.error('주요 공시 렌더링 에러:', e);
+                    document.getElementById('reports-content').innerHTML = '<p class="text-danger">주요 공시를 표시하는 중 오류가 발생했습니다.</p>';
+                }
+
+            })
+            .catch(err => {
+                const errorHtml = `<p class="text-danger">데이터를 불러오는 데 실패했습니다: ${err}</p>`;
+                document.getElementById('profile-content').innerHTML = errorHtml;
+                document.getElementById('financials-content').innerHTML = errorHtml;
+                document.getElementById('reports-content').innerHTML = errorHtml;
+                console.error('Modal Fetch Error:', err);
+            });
 
             fetch(`/news/${stockCode}`).then(res => res.ok ? res.json() : Promise.reject('Server error'))
                 .then(data => {
