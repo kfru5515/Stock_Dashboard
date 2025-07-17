@@ -19,8 +19,10 @@ from blueprints.auth import auth_bp
 from blueprints import askfin
 from blueprints.askfin import askfin_bp, initialize_global_data
 from blueprints.search import search_bp
+from dotenv import load_dotenv
 
 from db.extensions import db
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -177,7 +179,57 @@ def _get_news_from_naver_scraping():
         news_list.append({'title': '일반 시장 뉴스를 불러오는 데 실패했습니다 (크롤링 오류).', 'press': 'N/A', 'date': 'N/A', 'url': '#'})
     return news_list
 
-# --- 새로 추가된 함수: NewsAPI.org를 통한 일반 시장 뉴스 가져오기 ---
+def get_latest_indicator_value(stats_code, item_code, indicator_name):
+    """한국은행(BOK) ECOS API를 통해 특정 지표의 최신 값을 가져옵니다."""
+    bok_api_key = os.getenv("ECOS_API_KEY")
+    if not bok_api_key:
+        return {'name': indicator_name, 'error': 'ECOS API 키가 없습니다.'}
+
+    try:
+        end_date_str = datetime.now().strftime('%Y%m')
+        start_date_str = (datetime.now() - timedelta(days=60)).strftime('%Y%m')
+        
+        url = (f"https://ecos.bok.or.kr/api/StatisticSearch/{bok_api_key}/json/kr/1/10/"
+               f"{stats_code}/MM/{start_date_str}/{end_date_str}/{item_code}")
+
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        rows = data.get("StatisticSearch", {}).get("row", [])
+        
+        if len(rows) < 2:
+            if len(rows) == 1: 
+                latest = rows[0]
+                return {
+                    'name': indicator_name,
+                    'value': f"{float(latest['DATA_VALUE']):,.2f}",
+                    'date': f"{latest['TIME'][:4]}.{latest['TIME'][4:]}",
+                    'change': 'N/A',
+                    'change_pct': 'N/A',
+                    'raw_change': 0
+                }
+            return {'name': indicator_name, 'error': '비교할 데이터가 부족합니다.'}
+
+        latest = rows[-1]
+        previous = rows[-2]
+        
+        latest_value = float(latest['DATA_VALUE'])
+        previous_value = float(previous['DATA_VALUE'])
+        change = latest_value - previous_value
+        change_pct = (change / previous_value) * 100 if previous_value != 0 else 0
+
+        return {
+            'name': indicator_name,
+            'value': f"{latest_value:,.2f}",
+            'date': f"{latest['TIME'][:4]}.{latest['TIME'][4:]}",
+            'change': f"{change:,.2f}",
+            'change_pct': f"{change_pct:+.2f}%",
+            'raw_change': change
+        }
+    except Exception as e:
+        return {'name': indicator_name, 'error': f'데이터 조회 실패: {e}'}
+
 def get_general_market_news():
     """
     NewsAPI.org를 통해 일반 시장 뉴스를 가져옵니다.

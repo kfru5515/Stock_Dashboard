@@ -26,7 +26,7 @@ GLOBAL_NAME_TICKER_MAP = None
 ANALYSIS_CACHE = {} 
 GLOBAL_SECTOR_MASTER_DF = None 
 GLOBAL_STOCK_SECTOR_MAP = None 
-
+STOCK_DETAIL_CACHE = {} 
 # --- Environment Variable Loading and API Key Setup ---
 load_dotenv()
 
@@ -296,6 +296,13 @@ def get_stock_profile(code):
     """
     response_data = {}
     company_name = None
+    now = time.time()
+    # 캐시 확인: 12시간(43200초)이 지나지 않았으면 캐시된 데이터 사용
+    if code in STOCK_DETAIL_CACHE and (now - STOCK_DETAIL_CACHE[code]['timestamp'] < 43200):
+        print(f"✅ CACHE HIT: 종목코드 '{code}'의 상세 정보를 캐시에서 반환합니다.")
+        return jsonify(STOCK_DETAIL_CACHE[code]['data'])
+
+    print(f"🔥 CACHE MISS: 종목코드 '{code}'의 상세 정보를 API를 통해 새로 조회합니다.")
 
     try:
         profile_data = {}
@@ -468,7 +475,12 @@ def get_stock_profile(code):
             print(f"재무제표 데이터 처리 중 치명적인 오류 발생: {e}")
             traceback.print_exc()
             response_data["financials_error"] = f"재무제표를 불러오는 데 실패했습니다: {e}"
-    
+    if "error" not in response_data:
+        STOCK_DETAIL_CACHE[code] = {
+            'data': response_data,
+            'timestamp': now
+        }
+        
     return jsonify(response_data)
 
 def get_target_stocks(target_str):
@@ -709,8 +721,11 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
     try:
         action_str = intent_json.get("action", "")
 
+        if not action_str: 
+            print("DEBUG: 'action'이 지정되지 않아 기본값 '오른'으로 설정합니다.")
+            action_str = "오른" 
+
         supported_actions = ["오른", "내린", "변동성", "변동", "목표주가"]
-        # Removed the fallback block as per previous request
 
         if cache_key and cache_key in ANALYSIS_CACHE and 'full_result' in ANALYSIS_CACHE[cache_key]:
             sorted_result = ANALYSIS_CACHE[cache_key]['full_result']
@@ -736,6 +751,9 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
                 event_periods = [(start_date, end_date)]
 
             result_data = []
+            
+            print(f"DEBUG: 분석 실행 직전 - action='{action_str}', target 개수={len(target_stocks)}, event periods 개수={len(event_periods)}")
+
             if "오른" in action_str or "내린" in action_str:
                 result_data = analyze_top_performers(target_stocks, event_periods, (start_date, end_date))
             elif "변동성" in action_str or "변동" in action_str:
@@ -826,45 +844,55 @@ def handle_interest_rate_condition(api_key, period_tuple):
             
     return event_periods
 
-# Helper function to fetch data for a single stock for parallel processing
 def _fetch_and_analyze_single_stock(stock_code, stock_name, overall_start, overall_end, event_periods):
     """
     단일 종목의 전체 기간 데이터를 조회하고, 그 안에서 이벤트 기간 수익률을 분석하는 헬퍼 함수 (병렬 처리를 위함)
     """
     try:
-        print(f"      데이터 조회 시작: {stock_name}({stock_code}) - {overall_start.strftime('%Y-%m-%d')} ~ {overall_end.strftime('%Y-%m-%d')}")
-
+        print(f"       데이터 조회 시작: {stock_name}({stock_code})")
         overall_prices = fdr.DataReader(stock_code, overall_start, overall_end)
-        print(f"      데이터 조회 완료: {stock_name}({stock_code})")
 
-        if overall_prices.empty or len(overall_prices) < 2:
-            return None 
+        if overall_prices.empty:
+            print(f"       -> [분석 실패] {stock_name}({stock_code}): fdr.DataReader가 빈 데이터를 반환했습니다.")
+            return None
+
+        print(f"       -> [데이터 확인] {stock_name}({stock_code}): 전체 기간({overall_start.strftime('%Y-%m-%d')}~{overall_end.strftime('%Y-%m-%d')}) 데이터 {len(overall_prices)}개 로드 성공.")
+        print(f"       -> [이벤트 기간 확인] 분석할 이벤트 기간 수: {len(event_periods)}개, 첫 기간: {event_periods[0] if event_periods else 'N/A'}")
 
         start_price = int(overall_prices['Open'].iloc[0])
         end_price = int(overall_prices['Close'].iloc[-1])
 
         period_returns = []
-        for start, end in event_periods:
-            prices_in_period = overall_prices.loc[start:end]
-            
+        for i, (start, end) in enumerate(event_periods):
+            start_ts = pd.to_datetime(start)
+            end_ts = pd.to_datetime(end)
+
+            prices_in_period = overall_prices.loc[start_ts:end_ts]
+            print(f"       -> 이벤트 기간 {i+1} ({start_ts.date()}~{end_ts.date()}) 데이터 슬라이싱 결과: {len(prices_in_period)}개")
+
             if len(prices_in_period) > 1:
                 event_start_price = prices_in_period['Open'].iloc[0]
                 event_end_price = prices_in_period['Close'].iloc[-1]
                 if event_start_price > 0:
                     period_returns.append((event_end_price / event_start_price) - 1)
-        
-        if period_returns:
-            average_return = statistics.mean(period_returns)
-            if pd.notna(average_return):
-                return {
-                    "code": stock_code, "name": stock_name,
-                    "value": round(average_return * 100, 2), "label": "평균 수익률(%)",
-                    "start_price": start_price, # 전체 기간 시작 가격
-                    "end_price": end_price, # 전체 기간 종료 가격
-                }
+
+        if not period_returns:
+            print(f"       -> [분석 실패] {stock_name}({stock_code}): 유효한 수익률을 계산할 수 있는 이벤트 기간이 없습니다.")
+            return None
+
+        average_return = statistics.mean(period_returns)
+        if pd.notna(average_return):
+            return {
+                "code": stock_code, "name": stock_name,
+                "value": round(average_return * 100, 2), "label": "평균 수익률(%)",
+                "start_price": start_price,
+                "end_price": end_price,
+            }
+
     except Exception as e:
-        print(f" - {stock_name}({stock_code}) 분석 중 오류 발생: {e}")
-    return None # 오류 발생 시 또는 유효한 수익률이 없으면 None 반환
+        print(f"       -> [분석 실패] {stock_name}({stock_code}) 분석 중 예외 발생: {e}")
+
+    return None
 
 def analyze_top_performers(target_stocks, event_periods, overall_period):
     """
@@ -872,11 +900,22 @@ def analyze_top_performers(target_stocks, event_periods, overall_period):
     또한, 여러 종목의 데이터 조회를 병렬로 처리합니다.
     """
     analysis_results = []
-    top_stocks = target_stocks.nlargest(min(len(target_stocks), 50), 'Marcap').reset_index(drop=True)
+    
+    try:
+        print("DEBUG: nlargest 실행 전, target_stocks 정보:")
+        target_stocks.info() 
+        
+        top_stocks = target_stocks.nlargest(min(len(target_stocks), 50), 'Marcap').reset_index(drop=True)
+
+    except Exception as e:
+
+        print(target_stocks)
+        return [] 
+
     print(f"시가총액 상위 {len(top_stocks)}개 종목에 대한 수익률 분석을 시작합니다...")
     overall_start, overall_end = overall_period
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor: # 20에서 30으로 증가
+    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
         future_to_stock = {
             executor.submit(_fetch_and_analyze_single_stock, stock['Code'], stock['Name'], overall_start, overall_end, event_periods): stock
             for index, stock in top_stocks.iterrows()
@@ -889,9 +928,9 @@ def analyze_top_performers(target_stocks, event_periods, overall_period):
                 result = future.result()
                 if result:
                     analysis_results.append(result)
-                print(f"   ({i + 1}/{len(top_stocks)}) {stock_name}({stock_code}) 분석 완료.")
+                print(f"   ({i + 1}/{len(top_stocks)}) {stock_name}({stock_code}) 분석 완료.")
             except Exception as exc:
-                print(f"   - {stock_name}({stock_code}) 분석 중 예외 발생: {exc}")
+                print(f"   - {stock_name}({stock_code}) 분석 중 예외 발생: {exc}")
     
     return analysis_results
 
