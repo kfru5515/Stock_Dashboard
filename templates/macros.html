@@ -1,6 +1,6 @@
 {# KOSPI/KOSDAQ 순위 테이블을 생성하는 매크로 #}
 {% macro render_rank_table(market_prefix, title_market_name, volume_data, value_data, today) %}
-<div style="flex: 1; min-width: 250px;"> {# 이전 단계에서 줄인 최소 너비 유지 #}
+<div class="rank-table-container"> {# 이전 단계에서 줄인 최소 너비 유지 #}
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         {# 초기 제목도 '거래대금'으로 변경 #}
         <h4 id="{{ market_prefix }}-rank-title" style="margin: 0;">{{ today }} {{ title_market_name }} 거래대금 상위 10</h4>

@@ -8,7 +8,9 @@ import json
 import yfinance as yf
 from pykrx import stock
 import requests
+from bs4 import BeautifulSoup # BeautifulSoup 임포트 확인
 
+# --- Blueprints Import ---
 from blueprints.analysis import analysis_bp
 from blueprints.tables import tables_bp
 from blueprints.join import join_bp
@@ -23,6 +25,7 @@ from db.extensions import db
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
+# --- Template Filters ---
 @app.template_filter('format_kr')
 def format_kr(value):
     try:
@@ -39,7 +42,7 @@ def format_kr(value):
 @app.template_filter('format_price')
 def format_price(value):
     try:
-        return f"{int(float(value)):,}원"
+        return f"{int(float(value)):,}원" # 정수형으로 '원' 붙이기
     except (ValueError, TypeError):
         return value
 
@@ -57,11 +60,9 @@ def get_latest_business_day():
 def get_market_rank_data(date_str):
     """지정된 날짜의 KOSPI, KOSDAQ 순위 정보를 가져옵니다."""
     
-    # 종가, 거래량, 거래대금 등이 모두 포함된 OHLCV 데이터프레임 가져오기
     kospi_df = stock.get_market_ohlcv(date_str, market="KOSPI").reset_index()
     kosdaq_df = stock.get_market_ohlcv(date_str, market="KOSDAQ").reset_index()
 
-    # Debugging prints - 이제 merge 전의 상태를 확인합니다.
     print(f"DEBUG (Before Rename): kospi_df columns: {kospi_df.columns}")
     print(f"DEBUG (Before Rename): kospi_df head:\n{kospi_df.head()}")
 
@@ -70,17 +71,18 @@ def get_market_rank_data(date_str):
         names = [askfin.GLOBAL_TICKER_NAME_MAP.get(ticker, ticker) for ticker in tickers]
         df['Name'] = names
         
-        # '거래대금' 컬럼이 이미 ohlcv_df에 있으므로, 그 이름을 'TradingValue'로 변경
-        # 동시에 다른 컬럼들도 변경
         df.rename(columns={
             '티커': 'Code',
             '종가': 'Close',
             '거래량': 'Volume',
-            '거래대금': 'TradingValue' # 이제 이 이름으로 직접 변경합니다.
+            '거래대금': 'TradingValue',
+            '대비': 'Changes',       
+            '등락률': 'ChagesRatio'  
         }, inplace=True)
         
-        # 데이터가 비어있거나 NaN일 경우 0으로 채우는 것은 유지 (안전장치)
         df['TradingValue'] = df['TradingValue'].fillna(0)
+        df['Changes'] = df['Changes'].fillna(0) 
+        df['ChagesRatio'] = df['ChagesRatio'].fillna(0) 
         
     print(f"DEBUG (After Rename): kospi_df columns: {kospi_df.columns}")
     print(f"DEBUG (After Rename): kospi_df head:\n{kospi_df.head()}")
@@ -108,6 +110,9 @@ def calculate_change_info(df, name):
 
 @app.route('/news/<string:code>')
 def get_news(code):
+    """
+    특정 종목에 대한 뉴스를 가져오는 기존 함수 (네이버 금융 스크래핑).
+    """
     try:
         url = f"https://m.stock.naver.com/api/news/stock/{code}?pageSize=10&page=1"
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -131,6 +136,97 @@ def get_news(code):
         return jsonify(formatted_news[:10])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# --- 새로 추가된 함수: 네이버 금융 메인 페이지 스크래핑 (폴백용) ---
+def _get_news_from_naver_scraping():
+    """
+    NewsAPI.org 호출 실패 시 폴백으로 사용될 네이버 금융 메인 뉴스 스크래핑 함수.
+    주의: 웹사이트 구조 변경에 매우 취약하며, IP 차단 가능성이 있습니다.
+    """
+    news_list = []
+    print("DEBUG: Attempting to scrape news from Naver Finance.") # 디버그 추가
+    try:
+        url = "https://finance.naver.com/news/mainnews.naver"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+        response = requests.get(url, headers=headers, timeout=5)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        news_items = soup.select('.main_news .newsList .articleSubject a')
+        press_items = soup.select('.main_news .newsList .articleSummary .press')
+        date_items = soup.select('.main_news .newsList .articleSummary .wdate')
+
+        for i in range(min(len(news_items), 10)): # 최대 10개 뉴스
+            title = news_items[i].get_text(strip=True)
+            link = news_items[i]['href']
+            press = press_items[i].get_text(strip=True) if i < len(press_items) else 'N/A'
+            date_time = date_items[i].get_text(strip=True) if i < len(date_items) else 'N/A'
+
+            if link.startswith('/'):
+                link = f"https://finance.naver.com{link}"
+
+            news_list.append({
+                'title': title,
+                'press': press,
+                'date': date_time,
+                'url': link
+            })
+        print(f"DEBUG: Naver scraping successful. Found {len(news_list)} news items.") # 디버그 추가
+    except Exception as e:
+        print(f"DEBUG: Error fetching general market news via scraping: {e}") # 디버그 추가
+        news_list.append({'title': '일반 시장 뉴스를 불러오는 데 실패했습니다 (크롤링 오류).', 'press': 'N/A', 'date': 'N/A', 'url': '#'})
+    return news_list
+
+# --- 새로 추가된 함수: NewsAPI.org를 통한 일반 시장 뉴스 가져오기 ---
+def get_general_market_news():
+    """
+    NewsAPI.org를 통해 일반 시장 뉴스를 가져옵니다.
+    API 키가 없거나 호출 실패 시 네이버 금융 스크래핑으로 폴백합니다.
+    """
+    news_api_key = os.getenv("NEWS_API_KEY")
+    
+    if not news_api_key:
+        print("DEBUG: NEWS_API_KEY not set. Falling back to Naver scraping.") # 디버그 추가
+        return _get_news_from_naver_scraping()
+
+    news_list = []
+    print("DEBUG: Attempting to fetch news from NewsAPI.org.") # 디버그 추가
+    try:
+        # 'q=finance'로 금융 관련 뉴스 검색, 'language=ko'로 한국어 뉴스 필터링
+        # sortBy=publishedAt으로 최신순 정렬
+        # --- NewsAPI.org URL 오타 수정: https://https:// -> https:// ---
+        api_url = f"https://newsapi.org/v2/everything?q=finance&language=ko&sortBy=publishedAt&apiKey={news_api_key}&pageSize=10"
+        # -----------------------------------------------------------------
+        
+        response = requests.get(api_url, timeout=5)
+        response.raise_for_status() # HTTP 오류 발생 시 예외 발생
+        data = response.json()
+
+        print(f"DEBUG: NewsAPI.org raw response status: {data.get('status')}") # 디버그 추가
+        print(f"DEBUG: NewsAPI.org raw response message: {data.get('message')}") # 디버그 추가
+        
+        if data.get('status') == 'ok' and data.get('articles'):
+            for article in data['articles']:
+                # NewsAPI의 응답 구조에 맞게 데이터 추출
+                news_list.append({
+                    'title': article.get('title', '제목 없음'),
+                    'press': article.get('source', {}).get('name', 'N/A'),
+                    'date': article.get('publishedAt', '')[:10], # YYYY-MM-DD 형식으로 자르기
+                    'url': article.get('url', '#')
+                })
+            print(f"DEBUG: NewsAPI.org successful. Found {len(news_list)} news items.") # 디버그 추가
+        else:
+            print(f"DEBUG: NewsAPI.org responded with error or no articles. Falling back to Naver scraping.") # 디버그 추가
+            return _get_news_from_naver_scraping() # API 응답은 받았지만 데이터가 없거나 오류일 때 스크래핑으로 폴백
+
+    except requests.exceptions.RequestException as e:
+        print(f"DEBUG: NewsAPI.org network error: {e}. Falling back to Naver scraping.") # 디버그 추가
+        return _get_news_from_naver_scraping() # 네트워크 오류 시 스크래핑으로 폴백
+    except Exception as e:
+        print(f"DEBUG: NewsAPI.org unexpected error: {e}. Falling back to Naver scraping.") # 디버그 추가
+        return _get_news_from_naver_scraping() # 기타 오류 시 스크래핑으로 폴백
+    
+    return news_list
 
 @app.route('/api/latest-data')
 def get_latest_data():
@@ -170,16 +266,33 @@ def index():
             kospi_all_data, kosdaq_all_data = get_market_rank_data(latest_bday)
             new_cache['kospi_all_data'] = kospi_all_data
             new_cache['kosdaq_all_data'] = kosdaq_all_data
+            
+            new_cache['cpi_info'] = get_latest_indicator_value("901Y001", "0", "소비자물가지수")
+            new_cache['interest_rate_info'] = get_latest_indicator_value("722Y001", "0001000", "기준금리")
+            new_cache['market_news'] = get_general_market_news() # NewsAPI.org 또는 스크래핑
+            # ----------------------------------------------------
+
         except Exception as e:
             print(f"Error fetching pykrx data for index page: {e}")
             new_cache['kospi_all_data'] = []
             new_cache['kosdaq_all_data'] = []
+
+            new_cache['cpi_info'] = {'name': '소비자물가지수', 'value': 'N/A', 'date': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0, 'error': str(e)}
+            new_cache['interest_rate_info'] = {'name': '기준금리', 'value': 'N/A', 'date': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0, 'error': str(e)}
+            new_cache['market_news'] = [{'title': '데이터 로딩 오류', 'press': 'N/A', 'date': 'N/A', 'url': '#'}]
+
         cache = new_cache
         with open(CACHE_PATH, 'w', encoding='utf-8') as f:
             json.dump(cache, f, ensure_ascii=False, indent=2)
 
     kospi_all_data = cache.get('kospi_all_data', [])
     kosdaq_all_data = cache.get('kosdaq_all_data', [])
+    
+    # --- 새로 추가: 템플릿으로 전달할 변수들 ---
+    cpi_info = cache.get('cpi_info', {'name': '소비자물가지수', 'value': 'N/A', 'date': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0, 'error': '데이터 없음'})
+    interest_rate_info = cache.get('interest_rate_info', {'name': '기준금리', 'value': 'N/A', 'date': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0, 'error': '데이터 없음'})
+    market_news = cache.get('market_news', [{'title': '뉴스를 불러올 수 없습니다.', 'press': 'N/A', 'date': 'N/A', 'url': '#'}])
+    # ------------------------------------------
 
     default_info = {'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
     kospi_info, kosdaq_info, usdkrw_info, wti_info = default_info, default_info, default_info, default_info
@@ -193,6 +306,9 @@ def index():
         kospi_df_full = fdr.DataReader('KS11', start=start_date, end=end_date)
         kospi_info = calculate_change_info(kospi_df_full, 'KOSPI')
         kospi_df_full.reset_index(inplace=True)
+        if 'index' in kospi_df_full.columns:
+            kospi_df_full.rename(columns={'index': 'Date'}, inplace=True)
+        kospi_df_full['Date'] = pd.to_datetime(kospi_df_full['Date'])
         kospi_data = kospi_df_full.tail(30).to_dict('records')
     except Exception as e: print(f"Error fetching KOSPI data: {e}")
 
@@ -200,6 +316,10 @@ def index():
         kosdaq_df_full = fdr.DataReader('KQ11', start=start_date, end=end_date)
         kosdaq_info = calculate_change_info(kosdaq_df_full, 'KOSDAQ')
         kosdaq_df_full.reset_index(inplace=True)
+        
+        if 'index' in kosdaq_df_full.columns:
+            kosdaq_df_full.rename(columns={'index': 'Date'}, inplace=True)
+        kosdaq_df_full['Date'] = pd.to_datetime(kosdaq_df_full['Date'])
         kosdaq_data = kosdaq_df_full.tail(30).to_dict('records')
     except Exception as e: print(f"Error fetching KOSDAQ data: {e}")
 
@@ -207,12 +327,18 @@ def index():
         usdkrw_df_full = fdr.DataReader('USD/KRW', start=start_date, end=end_date)
         usdkrw_info = calculate_change_info(usdkrw_df_full, 'USD/KRW')
         usdkrw_df_full.reset_index(inplace=True)
+        if 'index' in usdkrw_df_full.columns:
+            usdkrw_df_full.rename(columns={'index': 'Date'}, inplace=True)
+        usdkrw_df_full['Date'] = pd.to_datetime(usdkrw_df_full['Date'])
         usdkrw_data = usdkrw_df_full.tail(30).to_dict('records')
     except Exception as e: print(f"Error fetching USD/KRW data: {e}")
 
     try:
         wti_df_full = get_wti_data(days_to_fetch)
+        wti_df_full['Date'] = pd.to_datetime(wti_df_full['Date'])
+
         wti_df_full_for_calc = wti_df_full.copy()
+    
         wti_df_full_for_calc.set_index('Date', inplace=True)
         wti_info = calculate_change_info(wti_df_full_for_calc, 'WTI')
         wti_data = wti_df_full.tail(30).to_dict('records')
@@ -220,18 +346,24 @@ def index():
         
     for data_list in [kospi_data, kosdaq_data, usdkrw_data, wti_data]:
         for item in data_list:
-            if isinstance(item.get('Date'), datetime):
-                item['Date'] = item['Date'].strftime('%Y-%m-%d')
+            if 'Date' in item:
+                if isinstance(item['Date'], datetime):
+                    item['Date'] = item['Date'].strftime('%Y-%m-%d')
+                elif isinstance(item['Date'], pd.Timestamp):
+                    item['Date'] = item['Date'].strftime('%Y-%m-%d')
+                elif isinstance(item['Date'], str):
+                    pass
+                else:
+                    item['Date'] = str(item['Date'])
     
-    # --- START OF MODIFICATION ---
-    # Ensure 'TradingValue' key exists in all dictionaries for KOSPI data
     for item in kospi_all_data:
-        item.setdefault('TradingValue', 0) # Sets 'TradingValue' to 0 if it doesn't exist
-
-    # Ensure 'TradingValue' key exists in all dictionaries for KOSDAQ data
+        item.setdefault('TradingValue', 0) 
+        item.setdefault('Changes', 0) 
+        item.setdefault('ChagesRatio', 0) 
     for item in kosdaq_all_data:
-        item.setdefault('TradingValue', 0) # Sets 'TradingValue' to 0 if it doesn't exist
-    # --- END OF MODIFICATION ---
+        item.setdefault('TradingValue', 0)
+        item.setdefault('Changes', 0) 
+        item.setdefault('ChagesRatio', 0) 
 
     top_kospi_volume = sorted(kospi_all_data, key=lambda x: x.get('Volume', 0), reverse=True)[:10]
     top_kospi_value = sorted(kospi_all_data, key=lambda x: x.get('TradingValue', 0), reverse=True)[:10]
@@ -246,9 +378,14 @@ def index():
         kospi_info=kospi_info, kosdaq_info=kosdaq_info, usdkrw_info=usdkrw_info, wti_info=wti_info,
         kospi_top_volume=top_kospi_volume, kosdaq_top_volume=top_kosdaq_volume,
         kospi_top_value=top_kospi_value, kosdaq_top_value=top_kosdaq_value,
-        today=today_str_display)
+        
+        today=today_str_display,
+        
+        cpi_info=cpi_info,
+        interest_rate_info=interest_rate_info,
+        market_news=market_news
+        )
 
-# --- App Setup ---
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(analysis_bp)
 app.register_blueprint(tables_bp)
@@ -263,7 +400,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
 with app.app_context():
-    initialize_global_data()
+    initialize_global_data() 
     print("--- 모든 초기 데이터 로딩 완료 ---")
 
 if __name__ == '__main__':

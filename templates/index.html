@@ -9,24 +9,26 @@
     }
     .chart-wrapper {
         display: flex;
-        flex-wrap: wrap; /* Allow items to wrap to the next line */
-        gap: 20px; /* Space between chart containers */
+        flex-wrap: wrap;
+        gap: 20px;
         margin-bottom: 20px;
+        justify-content: center; 
+        max-width: 1200px; 
+        margin: 0 auto; 
     }
     .chart-container {
-        flex: 1 1 250px; /* Allow containers to grow/shrink, with a base of 250px */
-        min-width: 250px; /* Minimum width for chart containers */
-        height: 220px; /* Fixed height for charts */
-        border: 1px solid #e0e0e0;
+        flex: 280px; 
+        min-width: 280px; 
+        height: 220px;
+        border: 0.1px solid #e0e0e000;
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        padding: 15px;
+        padding: 1px;
         background-color: #fff;
         display: flex;
-        flex-direction: column; /* Ensure header and canvas stack */
+        flex-direction: column;
     }
 
-    /* Chart Headers */
     .chart-header {
         display: flex;
         justify-content: space-between;
@@ -56,13 +58,33 @@
     .change.negative { color: #337ab7; } /* Bootstrap 'primary' color */
     .change.zero { color: #555; }
 
-    /* Rank Tables Section */
     .rank-tables-section {
         display: flex;
-        flex-wrap: wrap; /* Allow tables to wrap */
-        gap: 40px; /* Space between the KOSPI and KOSDAQ rank sections */
+        flex-wrap: wrap;
+        gap: 40px;
         margin-top: 20px;
-        justify-content: center; /* Center rank tables if less than 2 */
+        justify-content: center;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    /* news & 지표  */
+    .indicator-news-section {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0px;
+        margin-top: 0px;
+        justify-content: center; 
+        max-width: 1200px; 
+        margin: 0 auto; 
+    }
+    .indicator-card, .news-card {
+        flex: 1 1 calc(50% - 10px); 
+        min-width: 350px; 
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        padding: 15px;
+        background-color: #fff;
     }
 
     /* Individual Rank Table Container (inside macros.html) */
@@ -72,9 +94,9 @@
         /* flex and min-width are already in the macro's div style attribute */
         /* Overriding flex: 1; min-width: 250px; if necessary. */
         /* For two columns using Bootstrap: */
-        flex: 1 1 calc(50% - 20px); /* Adjust to fit two columns with gap */
-        max-width: calc(50% - 20px); /* Prevent them from becoming too wide */
-        min-width: 300px; /* Ensure a reasonable minimum width */
+        flex: 1 0 calc(50% - 20px); /* flex-shrink 값을 0으로 변경 */
+        max-width: calc(50% - 20px);
+        min-width: 300px;
     }
 
 
@@ -136,10 +158,68 @@
     .nav-tabs-sub > li > a { padding: 8px 12px; line-height: 1.42857143; border: 1px solid transparent; border-radius: 4px 4px 0 0; color: #555; }
     .nav-tabs-sub > li.active > a, .nav-tabs-sub > li.active > a:hover, .nav-tabs-sub > li.active > a:focus { color: #555; cursor: default; background-color: #fff; border: 1px solid #ddd; border-bottom-color: transparent; }
     .tab-content-sub { padding: 10px 0; }
+
+    /* New: Indicator and News Section Styles */
+    .indicator-news-section {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-top: 20px;
+    }
+    .indicator-card, .news-card {
+        flex: 1 1 calc(50% - 10px); /* Two columns on larger screens */
+        min-width: 300px; /* Minimum width for responsiveness */
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        padding: 15px;
+        background-color: #fff;
+    }
+    .indicator-card h4, .news-card h4 {
+        margin-top: 0;
+        margin-bottom: 10px;
+        color: #333;
+    }
+    .indicator-item {
+        margin-bottom: 8px;
+    }
+    .indicator-item .value {
+        font-weight: bold;
+        margin-right: 5px;
+    }
+    .news-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .news-list li {
+        margin-bottom: 8px;
+        border-bottom: 1px dashed #eee;
+        padding-bottom: 8px;
+    }
+    .news-list li:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    .news-list a {
+        font-weight: bold;
+        color: #007bff;
+        text-decoration: none;
+    }
+    .news-list a:hover {
+        text-decoration: underline;
+    }
+    .news-list small {
+        color: #6c757d;
+        font-size: 0.85em;
+        margin-top: 2px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+
 
 <div class="chart-wrapper">
     {% if kospi_data and kospi_info.value != 'N/A' %}
@@ -213,6 +293,51 @@
     {% if kosdaq_top_volume %}
         {{ render_rank_table('kosdaq', 'KOSDAQ', kosdaq_top_volume, kosdaq_top_value, today) }}
     {% endif %}
+</div>
+
+<hr>
+
+<div class="indicator-news-section">
+    {# 경제 지표 위젯 #}
+    <div class="indicator-card">
+        <h4>주요 경제 지표</h4>
+        <div class="indicator-item">
+            <strong>{{ cpi_info.name }}:</strong> 
+            <span class="value">{{ cpi_info.value }}</span> 
+            <span class="change {% if cpi_info.raw_change > 0 %}positive{% elif cpi_info.raw_change < 0 %}negative{% else %}zero{% endif %}">
+                ({{ cpi_info.change_pct }})
+            </span>
+            <small class="text-muted">({{ cpi_info.date }})</small>
+            {% if cpi_info.error %}<p class="text-danger"><small>{{ cpi_info.error }}</small></p>{% endif %}
+        </div>
+        <div class="indicator-item">
+            <strong>{{ interest_rate_info.name }}:</strong> 
+            <span class="value">{{ interest_rate_info.value }}</span> 
+            <span class="change {% if interest_rate_info.raw_change > 0 %}positive{% elif interest_rate_info.raw_change < 0 %}negative{% else %}zero{% endif %}">
+                ({{ interest_rate_info.change_pct }})
+            </span>
+            <small class="text-muted">({{ interest_rate_info.date }})</small>
+            {% if interest_rate_info.error %}<p class="text-danger"><small>{{ interest_rate_info.error }}</small></p>{% endif %}
+        </div>
+        {# 추가 지표가 있다면 여기에 추가 #}
+    </div>
+
+    {# 시장 주요 뉴스 피드 #}
+    <div class="news-card">
+        <h4>시장 주요 뉴스</h4>
+        <ul class="news-list">
+            {% if market_news %}
+                {% for news_item in market_news %}
+                    <li>
+                        <a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer">{{ news_item.title }}</a>
+                        <small>{{ news_item.press }} - {{ news_item.date }}</small>
+                    </li>
+                {% endfor %}
+            {% else %}
+                <li><p class="text-muted text-center">뉴스를 불러올 수 없습니다.</p></li>
+            {% endif %}
+        </ul>
+    </div>
 </div>
 
 <div class="modal fade" id="stockDetailModal" tabindex="-1" role="dialog" aria-labelledby="stockDetailModalLabel">
@@ -324,39 +449,50 @@ document.addEventListener('DOMContentLoaded', function() {
     if(document.getElementById('kospi-value')) { setInterval(updateLatestData, 30000); }
 
     function setupRankSwitcher(marketPrefix) {
-        const selector = document.getElementById(`${marketPrefix}-rank-selector`);
-        if (!selector) return;
-        selector.addEventListener('click', function(event) {
-            if (event.target.tagName !== 'BUTTON') return;
-            const targetType = event.target.getAttribute('data-target');
-            const titleElement = document.getElementById(`${marketPrefix}-rank-title`);
-            const volumeTable = document.getElementById(`${marketPrefix}-volume-table`);
-            const valueTable = document.getElementById(`${marketPrefix}-value-table`);
+        const rankSelector = document.getElementById(`${marketPrefix}-rank-selector`);
+        if (!rankSelector) return;
+
+        rankSelector.addEventListener('click', function(event) {
+            const clickedButton = event.target;
+            if (clickedButton.tagName !== 'BUTTON') return;
+
+            const container = clickedButton.closest('.rank-table-container');
+            if (!container) return; 
+
+            const targetType = clickedButton.getAttribute('data-target');
+            const titleElement = container.querySelector(`#${marketPrefix}-rank-title`);
+            const volumeTable = container.querySelector(`#${marketPrefix}-volume-table`);
+            const valueTable = container.querySelector(`#${marketPrefix}-value-table`);
+
+            if (!titleElement || !volumeTable || !valueTable) return;
+
+            container.style.width = `${container.offsetWidth}px`;
 
             titleElement.textContent = `{{ today }} ${marketPrefix.toUpperCase()} ${targetType === 'volume' ? '거래량' : '거래대금'} 상위 10`;
-            selector.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            // Toggle table display
-            // macros.html에서 hidden-table을 사용하고 있으므로 display: block/none을 직접 제어합니다.
+            container.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+            clickedButton.classList.add('active');
+
             if (targetType === 'volume') {
-                volumeTable.style.display = 'block';
+                volumeTable.style.display = 'table';
                 valueTable.style.display = 'none';
-            } else { // targetType === 'value'
+            } else {
                 volumeTable.style.display = 'none';
-                valueTable.style.display = 'block';
+                valueTable.style.display = 'table';
             }
 
-            // 차트 리사이즈 호출: DOM 업데이트 후 약간의 지연을 줍니다.
-            // 이 지연은 브라우저가 캔버스 컨테이너의 크기를 정확히 계산할 시간을 줍니다.
+            setTimeout(() => {
+                container.style.width = '';
+            }, 0);
+
             setTimeout(() => {
                 if (window.kospiChartInstance) window.kospiChartInstance.resize();
                 if (window.kosdaqChartInstance) window.kosdaqChartInstance.resize();
                 if (window.usdkrwChartInstance) window.usdkrwChartInstance.resize();
                 if (window.wtiChartInstance) window.wtiChartInstance.resize();
-            }, 100); // 100ms 지연 (50ms보다 길게 시도)
+            }, 100);
         });
     }
+
     setupRankSwitcher('kospi');
     setupRankSwitcher('kosdaq');
 

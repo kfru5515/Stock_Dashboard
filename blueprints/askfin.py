@@ -103,6 +103,21 @@ First, classify the query_type as "stock_analysis" or "indicator_lookup".
     ```json
     {{"query_type": "general_inquiry", "target": "주식", "action": "추천", "recommendation_type": "초보"}}
     ```
+9. User Query: "CPI지수는"
+    JSON Output:
+    ```json
+    {{"query_type": "indicator_lookup", "period": "최근", "condition": null, "target": "CPI 지수", "action": "조회"}}
+    ```
+10. User Query: "환율"
+    JSON Output:
+    ```json
+    {{"query_type": "indicator_lookup", "period": "최근", "condition": null, "target": "환율", "action": "조회"}}
+    ```
+11. User Query: "기준금리 얼마"
+    JSON Output:
+    ```json
+    {{"query_type": "indicator_lookup", "period": "최근", "condition": null, "target": "기준금리", "action": "조회"}}
+    ```
 
 ## Task:
 User Query: "{user_query}"
@@ -112,23 +127,20 @@ except Exception as e:
     print(f"AskFin Blueprint: 모델 초기화 실패 - {e}")
     model = None
 
-# --- Initial Data Loading Function (Call this once at application startup) ---
+# --- Initial Data Loading Function ---
 def initialize_global_data():
     """
     서버 시작 시 한 번만 호출되어 전역으로 사용될 주식 기본 데이터를 로드하고 캐시합니다.
     """
     global GLOBAL_KRX_LISTING, GLOBAL_TICKER_NAME_MAP, GLOBAL_NAME_TICKER_MAP
-    # GLOBAL_SECTOR_MASTER_DF, GLOBAL_STOCK_SECTOR_MAP 전역 변수는 이제 필요 없으므로 제거하거나 주석 처리합니다.
 
     print("[애플리케이션 초기화] 필수 주식 데이터 로딩 시작...")
     try:
-        # 1. KRX 전체 종목 목록 로딩 (FinanceDataReader)
         print("  - KOSPI 및 KOSDAQ 종목 목록 (FDR) 로딩 중...")
         GLOBAL_KRX_LISTING = fdr.StockListing('KRX')
         print(f"  - 종목 목록 로딩 완료. 총 {len(GLOBAL_KRX_LISTING)}개 종목.")
         print(f"  - GLOBAL_KRX_LISTING 컬럼: {GLOBAL_KRX_LISTING.columns.tolist()}")
 
-        # FinanceDataReader의 'Industry' 컬럼 값 확인 (추가)
         if 'Industry' in GLOBAL_KRX_LISTING.columns:
             print("\n  - FinanceDataReader 'Industry' 컬럼 고유값 (상위 20개):")
             for industry in GLOBAL_KRX_LISTING['Industry'].dropna().unique().tolist()[:20]:
@@ -145,7 +157,6 @@ def initialize_global_data():
         GLOBAL_NAME_TICKER_MAP = {name: ticker for ticker, name in GLOBAL_TICKER_NAME_MAP.items()}
         print(f"  - 종목 코드/이름 매핑 생성 완료. 총 {len(GLOBAL_NAME_TICKER_MAP)}개 매핑.")
         
-        # pykrx 업종 데이터 로딩 관련 모든 코드를 삭제하거나 주석 처리합니다.
 
         print("[애플리케이션 초기화] 모든 필수 주식 데이터 로딩 완료.")
 
@@ -169,22 +180,38 @@ def _get_fdr_indicator(indicator_info, intent_json):
     try:
         name = indicator_info['name']
         code = indicator_info['code']
+
+
+        period_str = intent_json.get("period")
+        req_start_date, req_end_date = parse_period(period_str)
+        query_start_date = req_end_date - timedelta(days=90) 
+        query_end_date = req_end_date 
         
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=60)
-        data = fdr.DataReader(code, start_date, end_date)
+        data = fdr.DataReader(code, query_start_date, query_end_date) 
         
-        if data.empty or len(data) < 2:
+        if data.empty:
             return {"error": f"{name} 데이터 조회에 실패했습니다."}
 
-        latest = data['Close'].iloc[-1]
-        previous = data['Close'].iloc[-2]
-        change = latest - previous
-        change_str = f"{abs(change):.2f} 상승" if change > 0 else f"{abs(change):.2f} 하락" if change < 0 else "변동 없음"
-        latest_date = data.index[-1].strftime('%Y년 %m월 %d일')
-        
-        result_sentence = f"가장 최근({latest_date}) {name}는(은) {latest:,.2f}이며, 전일 대비 {change_str}했습니다."
-        
+        target_data_in_period = data.loc[data.index <= req_end_date].sort_index(ascending=True)
+
+        if target_data_in_period.empty:
+             return {"error": f"{name} 지표에 대해 요청하신 기간({req_end_date.strftime('%Y년 %m월 %d일')})의 데이터를 찾을 수 없습니다."}
+
+        latest_for_period = target_data_in_period['Close'].iloc[-1]
+        latest_date_for_period = target_data_in_period.index[-1]
+
+        previous_data_in_period = data.loc[data.index < latest_date_for_period].sort_index(ascending=True)
+        previous_for_period = None
+        if not previous_data_in_period.empty:
+            previous_for_period = previous_data_in_period['Close'].iloc[-1]
+
+        if previous_for_period is not None:
+            change = latest_for_period - previous_for_period
+            change_str = f"{abs(change):.2f} 상승" if change > 0 else f"{abs(change):.2ff} 하락" if change < 0 else "변동 없음"
+            result_sentence = f"요청하신 기간의 마지막({latest_date_for_period.strftime('%Y년 %m월 %d일')}) {name}는(은) {latest_for_period:,.2f}이며, 직전 영업일 대비 {change_str}했습니다."
+        else:
+            result_sentence = f"요청하신 기간의 마지막({latest_date_for_period.strftime('%Y년 %m월 %d일')}) {name}는(은) {latest_for_period:,.2f}입니다. 직전 영업일 데이터가 없어 변동 정보를 제공할 수 없습니다."
+
         return {
             "query_intent": intent_json,
             "analysis_subject": name,
@@ -234,7 +261,6 @@ def execute_indicator_lookup(intent_json):
     """
     target = intent_json.get("target", "")
 
-    # 데이터 소스 1: FinanceDataReader (일별 데이터)
     FDR_INDICATOR_MAP = {
         "환율": {"code": "USD/KRW", "name": "원/달러 환율"},
         "유가": {"code": "WTI", "name": "WTI 국제 유가"},
@@ -248,7 +274,6 @@ def execute_indicator_lookup(intent_json):
         if key in target or value['name'] in target:
             return _get_fdr_indicator(value, intent_json)
             
-    # 데이터 소스 2: 한국은행 ECOS (월별 데이터)
     BOK_INDICATOR_MAP = {
         "CPI": {"stats_code": "901Y001", "item_code": "0", "name": "소비자물가지수"},
         "기준금리": {"stats_code": "722Y001", "item_code": "0001000", "name": "한국 기준금리"},
@@ -258,7 +283,6 @@ def execute_indicator_lookup(intent_json):
         if key in target or value['name'] in target:
             return _get_bok_indicator(value, intent_json)
 
-    # 어떤 맵에서도 찾지 못한 경우
     return {
         "query_intent": intent_json,
         "analysis_subject": "알 수 없는 지표",
@@ -273,7 +297,6 @@ def get_stock_profile(code):
     response_data = {}
     company_name = None
 
-    # --- 1. 기업 개요 정보 조회 (pykrx) ---
     try:
         profile_data = {}
         latest_business_day = stock.get_nearest_business_day_in_a_week()
@@ -317,8 +340,7 @@ def get_stock_profile(code):
         traceback.print_exc()
         response_data["profile_error"] = f"기업 개요 정보 처리 중 오류 발생: {str(e)}"
 
-    # --- 2. DART 주요 공시 목록 조회 ---
-   # --- 2. DART 정보 통합 조회 ---
+
     if company_name:
         try:
             corp_list = dart.get_corp_list()
@@ -335,14 +357,12 @@ def get_stock_profile(code):
                 raise ValueError(f"DART에서 '{company_name}'을(를) 찾을 수 없습니다.")
             # --- END OF MODIFICATION ---
 
-            # 2-1. 주요 공시 목록 (dart-fss 사용 유지)
             reports = corp.search_filings(bgn_de=(datetime.now() - timedelta(days=365)).strftime('%Y%m%d'), last_reprt_at='Y')
             response_data["report_list"] = [{
                 'report_nm': r.report_nm, 'flr_nm': r.flr_nm, 'rcept_dt': r.rcept_dt,
                 'url': f"http://dart.fss.or.kr/dsaf001/main.do?rcpNo={r.rcept_no}"
             } for r in reports[:15]] if reports else []
 
-            # 2-2. 주요 재무정보 (DART API 직접 호출)
             api_url = "https://opendart.fss.or.kr/api/fnlttSinglAcnt.json"
             fs_data_list = [] 
             
@@ -455,7 +475,6 @@ def get_target_stocks(target_str):
     """
     [수정됨] 타겟 문자열에 해당하는 종목 리스트(DataFrame)를 반환하는 함수 (캐시된 데이터 사용)
     """
-    # 전역으로 캐시된 KRX 종목 리스트 사용
     global GLOBAL_KRX_LISTING, GLOBAL_NAME_TICKER_MAP
 
     if GLOBAL_KRX_LISTING is None:
@@ -464,14 +483,13 @@ def get_target_stocks(target_str):
         if GLOBAL_KRX_LISTING is None:
             return pd.DataFrame(columns=['Name', 'Code']), "초기화 실패"
 
-    krx = GLOBAL_KRX_LISTING # FinanceDataReader에서 로드한 전체 KRX 종목 리스트
+    krx = GLOBAL_KRX_LISTING 
 
     GENERIC_TARGETS = {"주식", "종목", "급등주", "우량주", "인기주", "전체"}
     
     analysis_subject = "시장 전체"
-    target_stocks = krx # 기본적으로 전체 KRX 리스트를 대상으로 시작
+    target_stocks = krx 
 
-    # 파일 경로 조작을 위해 os 모듈 import 필요 (askfin.py 파일 상단에 추가되어 있어야 함)
     import os 
 
     if target_str and target_str.strip() and target_str not in GENERIC_TARGETS:
@@ -480,14 +498,11 @@ def get_target_stocks(target_str):
         keyword = target_str.replace(" 관련주", "").replace(" 테마주", "").replace(" 테마", "").replace("주", "").strip()
         lower_keyword = keyword.lower()
 
-        # 디버그: 사용자 키워드 확인
         print(f"--- 디버그 시작 (get_target_stocks) ---")
         print(f"디버그: 사용자 입력 키워드: '{keyword}' (소문자: '{lower_keyword}')")
 
-        # 1. themes.json 파일에서 테마 검색 (최우선)
         themes_from_file = {}
         try:
-            # askfin.py가 blueprints 폴더에 있으므로, cache 폴더는 '../cache'가 됩니다.
             themes_file_path = os.path.join(os.path.dirname(__file__), '..', 'cache', 'themes.json')
 
             print(f"디버그: themes.json을 찾을 경로: {themes_file_path}") # 디버그 출력 추가
@@ -495,26 +510,18 @@ def get_target_stocks(target_str):
             with open(themes_file_path, 'r', encoding='utf-8') as f:
                 themes_from_file = json.load(f)
             print(f"디버그: 'themes.json' 파일 로드 성공. 총 {len(themes_from_file)}개 테마.")
-            # 디버그: 로드된 themes.json의 첫 5개 키만 출력
             print(f"디버그: themes.json 키 목록 (상위 5개): {list(themes_from_file.keys())[:5]}...")
         except FileNotFoundError:
             print("경고: 'themes.json' 파일을 찾을 수 없습니다. 경로를 확인해주세요.")
-            # themes.json이 없으면 themes_from_file은 비어있게 됨
         except Exception as e:
             print(f"경고: 'themes.json' 파일 로드 중 오류 발생: {e}")
 
         found_by_theme_file = False
         target_codes_from_theme = []
 
-        # themes.json의 키(테마명) 또는 키워드가 테마명에 포함되는지 검색
         for theme_name_in_file, stock_list_in_file in themes_from_file.items():
-            # 디버그: 각 테마명과의 매칭 시도 확인
             print(f"디버그: '{lower_keyword}' vs '{theme_name_in_file.lower()}' 매칭 시도...")
             
-            # --- 매칭 로직 강화 (이 부분이 가장 중요하게 수정됨) ---
-            # 1. 사용자 키워드와 themes.json 테마명이 완전히 일치하거나
-            # 2. themes.json 테마명 안에 사용자 키워드가 포함되거나
-            # 3. 사용자 키워드 안에 themes.json 테마명이 포함되는 경우 (예: '시스템반도체관련' 안에 '시스템반도체'가 포함됨)
             if (lower_keyword == theme_name_in_file.lower() or 
                 lower_keyword in theme_name_in_file.lower() or 
                 theme_name_in_file.lower() in lower_keyword): 
@@ -529,23 +536,18 @@ def get_target_stocks(target_str):
                 found_by_theme_file = True
                 break
         
-        # 디버그: themes.json에서 추출된 종목 코드 확인
         print(f"디버그: themes.json에서 추출된 종목 코드 수: {len(target_codes_from_theme)}")
         if len(target_codes_from_theme) > 0:
             print(f"디버그: 추출된 첫 5개 종목 코드: {target_codes_from_theme[:5]}")
 
         if found_by_theme_file:
-            # themes.json에서 찾은 종목 코드를 기반으로 필터링
-            # 디버그: GLOBAL_KRX_LISTING 정보 확인
-            print(f"디버그: GLOBAL_KRX_LISTING의 첫 5개 행:\n{krx.head()}")
-            print(f"디버그: GLOBAL_KRX_LISTING의 컬럼: {krx.columns.tolist()}")
 
-            # 필터링 전 target_codes_from_theme에 있는 코드들이 krx['Code']에 존재하는지 확인
+            print(f"디버그: GLOBAL_KRX_LISTING의 첫 5개 행:\n{krx.head()}")
+
             codes_in_krx_check = krx[krx['Code'].isin(target_codes_from_theme)]
             print(f"디버그: GLOBAL_KRX_LISTING에 존재하는 테마 종목 코드 수: {len(codes_in_krx_check)}")
             if len(codes_in_krx_check) == 0 and len(target_codes_from_theme) > 0:
                 print("디버그: 경고! themes.json의 종목 코드 중 GLOBAL_KRX_LISTING에 매칭되는 것이 없습니다. 코드 형식 불일치 가능성.")
-                # 예시로 themes.json의 첫 코드와 krx의 첫 코드를 출력하여 비교
                 if target_codes_from_theme:
                     print(f"디버그: themes.json 첫 종목 코드: '{target_codes_from_theme[0]}'")
                 if not krx.empty:
@@ -676,7 +678,6 @@ def analyze_target_price_upside(target_stocks):
         df['괴리율'] = df['괴리율'].str.strip('%').astype(float)
         df = df.dropna(subset=['목표주가', '현재가', '괴리율'])
 
-        # 여기서도 GLOBAL_KRX_LISTING을 사용하여 중복 호출 방지
         if GLOBAL_KRX_LISTING is None:
             initialize_global_data()
         krx_list = GLOBAL_KRX_LISTING[['Name', 'Code']]
@@ -1071,8 +1072,7 @@ def analyze_query():
                     traceback.print_exc()
                     return jsonify({"error": "질문을 분석하는데 실패했고, 일반 답변도 가져올 수 없었습니다."}), 500
         
-        # intent_json이 존재하지 않거나(JSON 파싱은 성공했으나 내용이 없는 등) query_type이 없는 경우 처리
-        if not intent_json or not intent_json.get("query_type"): # query_type이 없는 경우도 여기서 처리
+        if not intent_json or not intent_json.get("query_type"): 
             print(f"디버그: Gemini가 반환한 JSON이 유효하지 않거나 query_type이 없습니다: {intent_json}")
             print(f" 알 수 없는 질문 유형 또는 유효하지 않은 JSON. 일반 대화형 모델로 폴백합니다.")
             general_prompt = f"다음 질문에 대해 친절하게 답변해줘: {user_query}"
@@ -1087,7 +1087,6 @@ def analyze_query():
         
         if query_type == "stock_analysis":
             final_result = execute_stock_analysis(intent_json, page, user_query, cache_key)
-            # 주식 분석 결과가 없으면 일반 답변으로 폴백
             if not final_result.get('result') or (isinstance(final_result.get('result'), list) and len(final_result['result']) == 0):
                 print(f"디버그: 주식 분석 결과가 0개입니다. 일반 대화형 모델로 폴백합니다.")
                 general_prompt = f"요청하신 '{user_query}'에 대한 주식 데이터를 충분히 찾거나 분석할 수 없었습니다. 다른 질문을 해주시겠어요?"
@@ -1100,7 +1099,6 @@ def analyze_query():
         elif query_type == "indicator_lookup":
             lookup_result = execute_indicator_lookup(intent_json)
             
-            # 지표 조회 결과가 "알 수 없는 지표"이거나 결과가 0개/비어있으면 일반 답변으로 폴백
             if lookup_result.get("analysis_subject") == "알 수 없는 지표" or \
                not lookup_result.get('result') or \
                (isinstance(lookup_result.get('result'), list) and len(lookup_result['result']) == 0):
