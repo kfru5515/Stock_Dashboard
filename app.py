@@ -133,71 +133,57 @@ def get_fdr_or_yf_data(ticker, start, end, interval='1d'):
             print(f"yfinance (daily) also failed for '{ticker}': {yf_e}")
             return pd.DataFrame()
 
-# ==============================================================================
-# 뉴스 가져오기 함수 수정 (BeautifulSoup으로 종목별 뉴스 스크래핑)
-# ==============================================================================
 @app.route('/news/<string:code>')
 def get_news(code):
     """
-    특정 종목에 대한 뉴스를 네이버 금융에서 스크래핑합니다.
+    특정 종목에 대한 뉴스를 네이버 금융 모바일 API에서 가져옵니다.
     """
     formatted_news = []
-    print(f"DEBUG: '{code}' 종목 코드에 대해 네이버 금융에서 뉴스 스크래핑 시도.")
+    print(f"DEBUG: '{code}' 종목 코드에 대해 네이버 모바일 API에서 뉴스 가져오기 시도.")
     try:
-        url = f"https://finance.naver.com/item/news_news.naver?code={code}"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-        response = requests.get(url, headers=headers, timeout=10) # 타임아웃 10초
-        response.raise_for_status() # HTTP 오류 시 예외 발생
-        
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # 뉴스 목록이 있는 테이블 선택 (네이버 증권 종목 뉴스 페이지 구조 분석)
-        # class="type5" 테이블이 뉴스 목록을 담고 있음
-        news_table = soup.find('table', class_='type5')
-        
-        if news_table:
-            rows = news_table.find_all('tr')
-            for row in rows:
-                title_tag = row.find('td', class_='title')
-                source_tag = row.find('td', class_='source')
-                date_tag = row.find('td', class_='date')
-                
-                if title_tag and source_tag and date_tag:
-                    link = title_tag.find('a')
-                    if link and link.get('href'):
-                        title = link.get_text(strip=True)
-                        full_link = f"https://finance.naver.com{link.get('href')}"
-                        source = source_tag.get_text(strip=True)
-                        raw_date = date_tag.get_text(strip=True)
-                        
-                        # 날짜 형식 조정 (예: "2025.07.18 16:00" -> "2025-07-18")
-                        date_parts = raw_date.split(' ')[0].split('.') # '2025.07.18' 부분만
-                        f_date = f"{date_parts[0]}-{date_parts[1].zfill(2)}-{date_parts[2].zfill(2)}" if len(date_parts) == 3 else raw_date
+        url = f"https://m.stock.naver.com/api/news/stock/{code}?pageSize=10&page=1"
+        headers = {"User-Agent": "Mozilla/5.0"} 
+        response = requests.get(url, headers=headers, timeout=5)
+        response.raise_for_status() 
+        raw_data = response.json()
 
-                        formatted_news.append({
-                            'title': title,
-                            'press': source,
-                            'date': f_date,
-                            'url': full_link
-                        })
+        if isinstance(raw_data, list):
+            for data_group in raw_data:
+                if isinstance(data_group, dict) and 'items' in data_group:
+                    for item in data_group.get('items', []):
+                        if isinstance(item, dict):
+                            office_id, article_id = item.get('officeId'), item.get('articleId')
+                            if office_id and article_id:
+                                raw_dt = item.get('datetime', '')
+                                f_date = f"{raw_dt[0:4]}-{raw_dt[4:6]}-{raw_dt[6:8]} {raw_dt[8:10]}:{raw_dt[10:12]}" if len(raw_dt) >= 12 else raw_dt
+                                formatted_news.append({
+                                    'title': item.get('title'),
+                                    'press': item.get('officeName'),
+                                    'date': f_date,
+                                    'url': f"https://n.news.naver.com/mnews/article/{office_id}/{article_id}"
+                                })
         
         if not formatted_news:
-            print(f"DEBUG: '{code}'에 대한 뉴스를 스크래핑했으나 찾은 뉴스 항목이 0개입니다.")
-            return jsonify({"error": "관련 뉴스가 없습니다. (스크래핑 결과 없음)"}), 500
+            print(f"DEBUG: '{code}'에 대한 뉴스를 API에서 가져왔으나 항목이 0개입니다.")
+            return jsonify({"error": "관련 뉴스가 없습니다. (API 결과 없음)"}), 500
 
-        print(f"DEBUG: '{code}'에 대한 뉴스 {len(formatted_news)}개 성공적으로 스크래핑.")
-        return jsonify(formatted_news[:10]) # 최대 10개 반환
+        print(f"DEBUG: '{code}'에 대한 뉴스 {len(formatted_news)}개 성공적으로 가져옴.")
+        return jsonify(formatted_news[:10]) 
 
     except requests.exceptions.Timeout:
-        print(f"DEBUG: 뉴스 스크래핑 요청 타임아웃 발생 (종목코드: {code})")
-        return jsonify({"error": "뉴스 요청 시간 초과 (스크래핑 실패)"}), 500
+        print(f"DEBUG: 뉴스 API 요청 타임아웃 발생 (종목코드: {code})")
+        return jsonify({"error": "뉴스 요청 시간 초과 (API 호출 실패)"}), 500
     except requests.exceptions.RequestException as e:
-        print(f"DEBUG: 뉴스 스크래핑 요청 오류 (종목코드: {code}): {e}")
-        return jsonify({"error": f"뉴스 스크래핑 실패: {str(e)}"}), 500
+        print(f"DEBUG: 뉴스 API 요청 오류 (종목코드: {code}): {e}")
+        return jsonify({"error": f"뉴스 API 호출 실패: {str(e)}"}), 500
+    except json.JSONDecodeError:
+        print(f"DEBUG: 뉴스 API 응답이 유효한 JSON이 아님 (종목코드: {code})")
+        return jsonify({"error": "뉴스 API 응답 파싱 실패"}), 500
     except Exception as e:
-        print(f"DEBUG: 뉴스 스크래핑 처리 중 알 수 없는 오류 발생 (종목코드: {code}): {e}")
+        print(f"DEBUG: 뉴스 API 처리 중 알 수 없는 오류 발생 (종목코드: {code}): {e}")
         traceback.print_exc()
-        return jsonify({"error": f"뉴스 스크래핑 중 알 수 없는 오류: {str(e)}"}), 500
+        return jsonify({"error": f"뉴스 API 처리 중 알 수 없는 오류: {str(e)}"}), 500
+    
 
 def _get_news_from_naver_scraping():
     """
@@ -212,8 +198,7 @@ def _get_news_from_naver_scraping():
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # 네이버 금융 메인 뉴스 페이지의 최신 구조에 맞게 선택자 업데이트
-        # 일반적으로 'newsList' 내부에 뉴스 항목이 있음.
+
         news_items = soup.select('.main_news .newsList .articleSubject a')
         press_items = soup.select('.main_news .newsList .articleSummary .press')
         date_items = soup.select('.main_news .newsList .articleSummary .wdate')
@@ -273,7 +258,6 @@ def get_latest_indicator_value(stats_code, item_code, indicator_name):
     
 def get_general_market_news():
     news_api_key = os.getenv("NEWS_API_KEY")
-    # NewsAPI.org 키가 없으면 바로 네이버 스크래핑으로 폴백
     if not news_api_key: 
         print("DEBUG: NEWS_API_KEY 없음. 네이버 일반 시장 뉴스 스크래핑으로 폴백합니다.")
         return _get_news_from_naver_scraping()
