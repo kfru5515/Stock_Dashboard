@@ -76,13 +76,11 @@ def get_market_rank_data(date_str):
             '종가': 'Close',
             '거래량': 'Volume',
             '거래대금': 'TradingValue',
-            '대비': 'Changes',       
-            '등락률': 'ChagesRatio'  
+            '등락률': 'ChangeRatio'  
         }, inplace=True)
         
         df['TradingValue'] = df['TradingValue'].fillna(0)
-        df['Changes'] = df['Changes'].fillna(0) 
-        df['ChagesRatio'] = df['ChagesRatio'].fillna(0) 
+        df['ChangeRatio'] = df['ChangeRatio'].fillna(0) 
         
     print(f"DEBUG (After Rename): kospi_df columns: {kospi_df.columns}")
     print(f"DEBUG (After Rename): kospi_df head:\n{kospi_df.head()}")
@@ -137,7 +135,6 @@ def get_news(code):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- 새로 추가된 함수: 네이버 금융 메인 페이지 스크래핑 (폴백용) ---
 def _get_news_from_naver_scraping():
     """
     NewsAPI.org 호출 실패 시 폴백으로 사용될 네이버 금융 메인 뉴스 스크래핑 함수.
@@ -180,8 +177,20 @@ def _get_news_from_naver_scraping():
 def get_latest_indicator_value(stats_code, item_code, indicator_name):
     """한국은행(BOK) ECOS API를 통해 특정 지표의 최신 값을 가져옵니다."""
     bok_api_key = os.getenv("ECOS_API_KEY")
+    # 기본 오류/반환 형태 정의
+    default_response = {
+        'name': indicator_name,
+        'value': 'N/A',
+        'date': 'N/A',
+        'change': 'N/A',
+        'change_pct': 'N/A',
+        'raw_change': 0,
+        'error': None
+    }
+
     if not bok_api_key:
-        return {'name': indicator_name, 'error': 'ECOS API 키가 없습니다.'}
+        default_response['error'] = 'ECOS API 키가 없습니다.'
+        return default_response
 
     try:
         end_date_str = datetime.now().strftime('%Y%m')
@@ -196,23 +205,26 @@ def get_latest_indicator_value(stats_code, item_code, indicator_name):
 
         rows = data.get("StatisticSearch", {}).get("row", [])
         
-        if len(rows) < 2:
-            if len(rows) == 1: 
-                latest = rows[0]
-                return {
-                    'name': indicator_name,
-                    'value': f"{float(latest['DATA_VALUE']):,.2f}",
-                    'date': f"{latest['TIME'][:4]}.{latest['TIME'][4:]}",
-                    'change': 'N/A',
-                    'change_pct': 'N/A',
-                    'raw_change': 0
-                }
-            return {'name': indicator_name, 'error': '비교할 데이터가 부족합니다.'}
+        if len(rows) == 0:
+            default_response['error'] = '조회된 데이터가 없습니다.'
+            return default_response
 
         latest = rows[-1]
-        previous = rows[-2]
-        
         latest_value = float(latest['DATA_VALUE'])
+
+        if len(rows) < 2:
+            # 데이터가 1개만 있을 경우
+            return {
+                'name': indicator_name,
+                'value': f"{latest_value:,.2f}",
+                'date': f"{latest['TIME'][:4]}.{latest['TIME'][4:]}",
+                'change': 'N/A',
+                'change_pct': 'N/A',
+                'raw_change': 0, # 'raw_change' 추가
+                'error': None
+            }
+
+        previous = rows[-2]
         previous_value = float(previous['DATA_VALUE'])
         change = latest_value - previous_value
         change_pct = (change / previous_value) * 100 if previous_value != 0 else 0
@@ -223,11 +235,13 @@ def get_latest_indicator_value(stats_code, item_code, indicator_name):
             'date': f"{latest['TIME'][:4]}.{latest['TIME'][4:]}",
             'change': f"{change:,.2f}",
             'change_pct': f"{change_pct:+.2f}%",
-            'raw_change': change
+            'raw_change': change,
+            'error': None
         }
     except Exception as e:
-        return {'name': indicator_name, 'error': f'데이터 조회 실패: {e}'}
-
+        default_response['error'] = f'데이터 조회 실패: {e}'
+        return default_response
+    
 def get_general_market_news():
     """
     NewsAPI.org를 통해 일반 시장 뉴스를 가져옵니다.
@@ -242,10 +256,9 @@ def get_general_market_news():
     news_list = []
     print("DEBUG: Attempting to fetch news from NewsAPI.org.") 
     try:
-        # sortBy=publishedAt으로 최신순 정렬
-        # --- NewsAPI.org URL 오타 수정: https://https:// -> https:// ---
-        api_url = f"https://newsapi.org/v2/everything?q=finance&language=ko&sortBy=publishedAt&apiKey={news_api_key}&pageSize=10"
-        # -----------------------------------------------------------------
+        # 검색어(query)를 지정하고, 날짜 제한(from=)은 제거하여 최신순으로 가져오도록 함
+        query = "거시경제 OR 금리 OR 환율 OR CPI OR 인플레이션 OR GDP OR 연준 OR 한국은행 OR 무역수지 OR 통화정책 OR 재정정책 OR 경기 침체 OR 세계 경제 OR 공급망 OR 국채 OR 부동산"
+        api_url = f"https://newsapi.org/v2/everything?q={query}&language=ko&sortBy=publishedAt&apiKey={news_api_key}&pageSize=10"
         
         response = requests.get(api_url, timeout=5)
         response.raise_for_status()
@@ -262,17 +275,17 @@ def get_general_market_news():
                     'date': article.get('publishedAt', '')[:10], # YYYY-MM-DD 형식으로 자르기
                     'url': article.get('url', '#')
                 })
-            print(f"DEBUG: NewsAPI.org successful. Found {len(news_list)} news items.") # 디버그 추가
+            print(f"DEBUG: NewsAPI.org successful. Found {len(news_list)} news items.")
         else:
-            print(f"DEBUG: NewsAPI.org responded with error or no articles. Falling back to Naver scraping.") # 디버그 추가
-            return _get_news_from_naver_scraping() # API 응답은 받았지만 데이터가 없거나 오류일 때 스크래핑으로 폴백
+            print(f"DEBUG: NewsAPI.org responded with error or no articles. Falling back to Naver scraping.")
+            return _get_news_from_naver_scraping()
 
     except requests.exceptions.RequestException as e:
-        print(f"DEBUG: NewsAPI.org network error: {e}. Falling back to Naver scraping.") # 디버그 추가
-        return _get_news_from_naver_scraping() # 네트워크 오류 시 스크래핑으로 폴백
+        print(f"DEBUG: NewsAPI.org network error: {e}. Falling back to Naver scraping.")
+        return _get_news_from_naver_scraping()
     except Exception as e:
-        print(f"DEBUG: NewsAPI.org unexpected error: {e}. Falling back to Naver scraping.") # 디버그 추가
-        return _get_news_from_naver_scraping() # 기타 오류 시 스크래핑으로 폴백
+        print(f"DEBUG: NewsAPI.org unexpected error: {e}. Falling back to Naver scraping.")
+        return _get_news_from_naver_scraping()
     
     return news_list
 
@@ -310,8 +323,11 @@ def index():
     if cache.get('date') != latest_bday:
         print(f"[{datetime.now()}] Creating new cache for date: {latest_bday}")
         new_cache = {'date': latest_bday}
+        print(f"DEBUG: Attempting to fetch data for business day: {latest_bday}")
+
         try:
             kospi_all_data, kosdaq_all_data = get_market_rank_data(latest_bday)
+
             new_cache['kospi_all_data'] = kospi_all_data
             new_cache['kosdaq_all_data'] = kosdaq_all_data
             
