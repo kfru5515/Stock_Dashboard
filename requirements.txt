@@ -1,12 +1,24 @@
+# ----- Core Web & App -----
 flask
-yfinance
 Flask-SQLAlchemy
-dart-fss
-finance-datareader 
-pandas
-pytz
-pykrx
-requests
 pymysql
+
+# ----- Data Fetching & Analysis -----
+pandas
+pandas
+numpy
+pytz
+requests
+finance-datareader
+pykrx
+dart-fss
+yfinance
+
+# ----- AI & Machine Learning -----
 google-generativeai
-xgboost
+xgboost # 현재 미사용
+
+# ----- Frontend & Utilities -----
+libsass
+python-dotenv
+beautifulsoup4

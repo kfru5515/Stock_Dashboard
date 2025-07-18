@@ -51,12 +51,13 @@ try:
 You are a financial analyst. Your task is to analyze a user's query and convert it into a structured JSON object.
 First, classify the query_type as "stock_analysis" or "indicator_lookup".
 
-- "stock_analysis": For questions about stock performance under certain conditions (e.g., "most risen", "most fallen", "volatility").
-- "indicator_lookup": For questions asking for a specific economic indicator's value (e.g., "CPI", "interest rate", "oil price").
-- "general_inquiry": For questions asking for general financial advice, trends, recommendations, or information not directly about specific stock analysis or indicator lookup. This includes questions about market sentiment, international affairs, or general advice.
+- "stock_analysis": For questions about stock performance under certain conditions.
+- "indicator_lookup": For questions asking for a specific economic indicator's value.
+- "comparison_analysis": For questions that explicitly compare multiple stocks or themes to find the best/worst performing one.
+- "general_inquiry": For general financial advice, trends, or information not covered by the above.
 
 - You MUST only respond with a JSON object. No other text.
-- For a "condition" involving an indicator, use a condition object.
+- For "comparison_analysis", the "target" MUST be an array of strings.
 
 
 ## JSON Schema:
@@ -118,7 +119,11 @@ First, classify the query_type as "stock_analysis" or "indicator_lookup".
     ```json
     {{"query_type": "indicator_lookup", "period": "최근", "condition": null, "target": "기준금리", "action": "조회"}}
     ```
-
+12. User Query: "인공지능, 2차전지, 반도체 중 지난 1년간 가장 많이 오른 테마는?"
+    JSON Output:
+    ```json
+    {{"query_type": "comparison_analysis", "period": "지난 1년간", "condition": null, "target": ["인공지능", "2차전지", "반도체"], "action": "가장 많이 오른 테마"}}
+    ```
 ## Task:
 User Query: "{user_query}"
 JSON Output:
@@ -254,7 +259,75 @@ def _get_bok_indicator(indicator_info, intent_json):
     except Exception as e:
         return {"error": f"한국은행(BOK) 지표 조회 중 오류가 발생했습니다: {e}"}
 
+def execute_comparison_analysis(intent_json):
+    """
+    여러 테마를 비교 분석하여 가장 성과가 좋은/나쁜 테마를 찾아 반환하는 함수.
+    """
+    try:
+        targets = intent_json.get("target", [])
+        period_str = intent_json.get("period")
+        action_str = intent_json.get("action", "")
 
+        if not isinstance(targets, list) or len(targets) < 2:
+            return {"error": "비교 분석을 위해서는 두 개 이상의 대상이 필요합니다."}
+
+        start_date, end_date = parse_period(period_str)
+        analysis_period_info = f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}"
+        
+        comparison_results = []
+
+        print(f"비교 분석 시작: {targets}")
+        for theme in targets:
+            print(f"  - '{theme}' 테마 분석 중...")
+            target_stocks, _ = get_target_stocks(theme)
+            if target_stocks.empty:
+                print(f"    -> '{theme}'에 해당하는 종목을 찾을 수 없습니다. 건너뜁니다.")
+                continue
+
+
+            performance_data = analyze_top_performers(target_stocks, [(start_date, end_date)], (start_date, end_date))
+            
+            if not performance_data:
+                print(f"    -> '{theme}' 테마의 성과를 분석할 수 없습니다. 건너뜁니다.")
+                continue
+
+            valid_returns = [item['value'] for item in performance_data if 'value' in item and pd.notna(item['value'])]
+            if not valid_returns:
+                continue
+
+            average_return = statistics.mean(valid_returns)
+            
+            comparison_results.append({
+                "theme": theme,
+                "average_return": round(average_return, 2)
+            })
+            print(f"    -> '{theme}' 테마 평균 수익률: {average_return:.2f}%")
+
+        if not comparison_results:
+            return {"error": "요청하신 테마들의 수익률을 분석할 수 없었습니다."}
+
+        reverse_sort = "내린" not in action_str
+        sorted_results = sorted(comparison_results, key=lambda x: x['average_return'], reverse=reverse_sort)
+        
+        result_text = f"**'{', '.join(targets)}' 테마 비교 분석 결과**<br><br>"
+        result_text += f"**분석 기간:** {analysis_period_info}<br><br>"
+        
+        result_text += "| 순위 | 테마 | 주요 종목 평균 수익률 |\n"
+        result_text += "| :--- | :--- | :--- |\n"
+        for i, result in enumerate(sorted_results):
+            result_text += f"| {i+1} | **{result['theme']}** | **{result['average_return']:.2f}%** |\n"
+        
+        result_text += "<br>*본 분석은 각 테마에 포함된 시가총액 상위 종목들을 기준으로 계산되었으며, 실제 수익률과 다를 수 있습니다. 이 정보는 투자 추천이 아니며, 참고 자료로만 활용하시기 바랍니다.*"
+
+        return {
+            "query_intent": intent_json,
+            "analysis_subject": "테마 비교 분석",
+            "result": [result_text]
+        }
+    except Exception as e:
+        traceback.print_exc()
+        return {"error": f"비교 분석 실행 중 오류 발생: {e}"}
+    
 def execute_indicator_lookup(intent_json):
     """
     [최종 수정] 여러 소스의 경제 지표를 조회하는 메인 함수
@@ -297,7 +370,7 @@ def get_stock_profile(code):
     response_data = {}
     company_name = None
     now = time.time()
-    # 캐시 확인: 12시간(43200초)이 지나지 않았으면 캐시된 데이터 사용
+    #  12시간(43200초)이 지나지 않았으면 캐시된 데이터 사용
     if code in STOCK_DETAIL_CACHE and (now - STOCK_DETAIL_CACHE[code]['timestamp'] < 43200):
         print(f"✅ CACHE HIT: 종목코드 '{code}'의 상세 정보를 캐시에서 반환합니다.")
         return jsonify(STOCK_DETAIL_CACHE[code]['data'])
@@ -1134,6 +1207,8 @@ def analyze_query():
                     "analysis_subject": "일반 답변",
                     "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
                 }
+        elif query_type == "comparison_analysis": 
+            final_result = execute_comparison_analysis(intent_json)
 
         elif query_type == "indicator_lookup":
             lookup_result = execute_indicator_lookup(intent_json)

@@ -63,9 +63,6 @@ def get_market_rank_data(date_str):
     kospi_df = stock.get_market_ohlcv(date_str, market="KOSPI").reset_index()
     kosdaq_df = stock.get_market_ohlcv(date_str, market="KOSDAQ").reset_index()
 
-    print(f"DEBUG (Before Rename): kospi_df columns: {kospi_df.columns}")
-    print(f"DEBUG (Before Rename): kospi_df head:\n{kospi_df.head()}")
-
     for df in [kospi_df, kosdaq_df]:
         tickers = df['티커']
         names = [askfin.GLOBAL_TICKER_NAME_MAP.get(ticker, ticker) for ticker in tickers]
@@ -76,15 +73,14 @@ def get_market_rank_data(date_str):
             '종가': 'Close',
             '거래량': 'Volume',
             '거래대금': 'TradingValue',
-            '등락률': 'ChangeRatio'  
+            '등락률': 'ChangeRatio'
         }, inplace=True)
         
+        df['Close'] = df['Close'].fillna(0)
+        df['Volume'] = df['Volume'].fillna(0)
         df['TradingValue'] = df['TradingValue'].fillna(0)
-        df['ChangeRatio'] = df['ChangeRatio'].fillna(0) 
+        df['ChangeRatio'] = df['ChangeRatio'].fillna(0)
         
-    print(f"DEBUG (After Rename): kospi_df columns: {kospi_df.columns}")
-    print(f"DEBUG (After Rename): kospi_df head:\n{kospi_df.head()}")
-
     return kospi_df.to_dict('records'), kosdaq_df.to_dict('records')
 
 
@@ -194,7 +190,8 @@ def get_latest_indicator_value(stats_code, item_code, indicator_name):
 
     try:
         end_date_str = datetime.now().strftime('%Y%m')
-        start_date_str = (datetime.now() - timedelta(days=60)).strftime('%Y%m')
+        # 조회 기간을 60일에서 365일로 늘립니다.
+        start_date_str = (datetime.now() - timedelta(days=365)).strftime('%Y%m')
         
         url = (f"https://ecos.bok.or.kr/api/StatisticSearch/{bok_api_key}/json/kr/1/10/"
                f"{stats_code}/MM/{start_date_str}/{end_date_str}/{item_code}")
@@ -220,7 +217,7 @@ def get_latest_indicator_value(stats_code, item_code, indicator_name):
                 'date': f"{latest['TIME'][:4]}.{latest['TIME'][4:]}",
                 'change': 'N/A',
                 'change_pct': 'N/A',
-                'raw_change': 0, # 'raw_change' 추가
+                'raw_change': 0,
                 'error': None
             }
 
@@ -256,7 +253,6 @@ def get_general_market_news():
     news_list = []
     print("DEBUG: Attempting to fetch news from NewsAPI.org.") 
     try:
-        # 검색어(query)를 지정하고, 날짜 제한(from=)은 제거하여 최신순으로 가져오도록 함
         query = "거시경제 OR 금리 OR 환율 OR CPI OR 인플레이션 OR GDP OR 연준 OR 한국은행 OR 무역수지 OR 통화정책 OR 재정정책 OR 경기 침체 OR 세계 경제 OR 공급망 OR 국채 OR 부동산"
         api_url = f"https://newsapi.org/v2/everything?q={query}&language=ko&sortBy=publishedAt&apiKey={news_api_key}&pageSize=10"
         
@@ -309,6 +305,10 @@ def get_latest_data():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/')
+def index_main():
+    """첫 랜딩 페이지를 렌더링합니다."""
+    return render_template('index_main.html')
+
 @app.route('/index')
 def index():
     os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
@@ -352,11 +352,9 @@ def index():
     kospi_all_data = cache.get('kospi_all_data', [])
     kosdaq_all_data = cache.get('kosdaq_all_data', [])
     
-    # --- 새로 추가: 템플릿으로 전달할 변수들 ---
     cpi_info = cache.get('cpi_info', {'name': '소비자물가지수', 'value': 'N/A', 'date': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0, 'error': '데이터 없음'})
     interest_rate_info = cache.get('interest_rate_info', {'name': '기준금리', 'value': 'N/A', 'date': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0, 'error': '데이터 없음'})
     market_news = cache.get('market_news', [{'title': '뉴스를 불러올 수 없습니다.', 'press': 'N/A', 'date': 'N/A', 'url': '#'}])
-    # ------------------------------------------
 
     default_info = {'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
     kospi_info, kosdaq_info, usdkrw_info, wti_info = default_info, default_info, default_info, default_info
@@ -466,6 +464,10 @@ db.init_app(app)
 with app.app_context():
     initialize_global_data() 
     print("--- 모든 초기 데이터 로딩 완료 ---")
+
+@app.context_processor
+def inject_current_year():
+    return {'current_year': datetime.utcnow().year}
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
