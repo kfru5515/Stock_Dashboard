@@ -8,9 +8,8 @@ import json
 import yfinance as yf
 from pykrx import stock
 import requests
-from bs4 import BeautifulSoup # BeautifulSoup 임포트 확인
+from bs4 import BeautifulSoup 
 
-# --- Blueprints Import ---
 from blueprints.analysis import analysis_bp
 from blueprints.tables import tables_bp
 from blueprints.join import join_bp
@@ -27,7 +26,6 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# --- Template Filters ---
 @app.template_filter('format_kr')
 def format_kr(value):
     try:
@@ -44,7 +42,7 @@ def format_kr(value):
 @app.template_filter('format_price')
 def format_price(value):
     try:
-        return f"{int(float(value)):,}원" # 정수형으로 '원' 붙이기
+        return f"{int(float(value)):,}원" 
     except (ValueError, TypeError):
         return value
 
@@ -238,28 +236,26 @@ def get_general_market_news():
     news_api_key = os.getenv("NEWS_API_KEY")
     
     if not news_api_key:
-        print("DEBUG: NEWS_API_KEY not set. Falling back to Naver scraping.") # 디버그 추가
+        print("DEBUG: NEWS_API_KEY not set. Falling back to Naver scraping.") 
         return _get_news_from_naver_scraping()
 
     news_list = []
-    print("DEBUG: Attempting to fetch news from NewsAPI.org.") # 디버그 추가
+    print("DEBUG: Attempting to fetch news from NewsAPI.org.") 
     try:
-        # 'q=finance'로 금융 관련 뉴스 검색, 'language=ko'로 한국어 뉴스 필터링
         # sortBy=publishedAt으로 최신순 정렬
         # --- NewsAPI.org URL 오타 수정: https://https:// -> https:// ---
         api_url = f"https://newsapi.org/v2/everything?q=finance&language=ko&sortBy=publishedAt&apiKey={news_api_key}&pageSize=10"
         # -----------------------------------------------------------------
         
         response = requests.get(api_url, timeout=5)
-        response.raise_for_status() # HTTP 오류 발생 시 예외 발생
+        response.raise_for_status()
         data = response.json()
 
-        print(f"DEBUG: NewsAPI.org raw response status: {data.get('status')}") # 디버그 추가
-        print(f"DEBUG: NewsAPI.org raw response message: {data.get('message')}") # 디버그 추가
+        print(f"DEBUG: NewsAPI.org raw response status: {data.get('status')}") 
+        print(f"DEBUG: NewsAPI.org raw response message: {data.get('message')}") 
         
         if data.get('status') == 'ok' and data.get('articles'):
             for article in data['articles']:
-                # NewsAPI의 응답 구조에 맞게 데이터 추출
                 news_list.append({
                     'title': article.get('title', '제목 없음'),
                     'press': article.get('source', {}).get('name', 'N/A'),

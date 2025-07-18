@@ -94,7 +94,7 @@
     .indicator-news-section {
         display: flex;
         flex-wrap: wrap;
-        gap: 0px;
+        gap: 20px;
         margin-top: 0px;
         justify-content: center; 
         max-width: 1200px; 
@@ -498,6 +498,10 @@ document.addEventListener('DOMContentLoaded', function() {
     setupRankSwitcher('kospi');
     setupRankSwitcher('kosdaq');
 
+    document.querySelector('#kospi-rank-selector button[data-target="value"]').click();
+    document.querySelector('#kosdaq-rank-selector button[data-target="value"]').click();
+ 
+    
     function renderFinancialTable(statementJson, targetElementId, notFoundMessage = '정보 없음') {
         const targetElement = document.getElementById(targetElementId);
         if (!statementJson) {
