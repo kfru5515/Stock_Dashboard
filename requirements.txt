@@ -13,7 +13,7 @@ finance-datareader
 pykrx
 dart-fss
 yfinance
-
+selenium
 # ----- AI & Machine Learning -----
 google-generativeai
 xgboost # 현재 미사용

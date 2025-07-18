@@ -1207,9 +1207,9 @@ def analyze_query():
                     "analysis_subject": "일반 답변",
                     "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
                 }
-        elif query_type == "comparison_analysis": 
+        elif query_type == "comparison_analysis": # <-- 새로운 비교분석 유형 처리
             final_result = execute_comparison_analysis(intent_json)
-
+            
         elif query_type == "indicator_lookup":
             lookup_result = execute_indicator_lookup(intent_json)
             

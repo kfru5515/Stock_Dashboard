@@ -4,87 +4,377 @@
 
 {% block head %}
 <style>
+    /* Use variables defined in base.html for consistency */
+    body {
+        background-color: var(--dark-bg); /* Ensure dark background */
+        color: var(--text-color); /* Light text on dark background */
+    }
+
+    h1 {
+        color: var(--heading-color) !important; /* Ensure h1 is white */
+        font-weight: 700;
+    }
+    p.lead {
+        color: var(--muted-text-color); /* Muted text for descriptions */
+    }
+    hr {
+        border-color: var(--border-color); /* Light border for separator */
+    }
+
+    /* Overall chat container style */
     #chat-container {
         display: flex;
         flex-direction: column;
         height: 75vh;
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        background-color: #ffffff;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background-color: var(--card-bg); /* Chat background uses card-bg */
+        box-shadow: var(--box-shadow-medium);
+        overflow: hidden;
     }
+
+    /* Message display window */
     #chat-window {
         flex-grow: 1;
         padding: 20px;
         overflow-y: auto;
+        background-color: var(--dark-bg); /* Chat window area is slightly darker */
     }
-    .message-row { display: flex; margin-bottom: 15px; width: 100%; }
-    .message { max-width: 80%; padding: 12px 18px; border-radius: 20px; line-height: 1.6; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-    .user-message-row { justify-content: flex-end !important; }
-    .user-message { background-color: #007bff; color: white; border-bottom-right-radius: 5px; }
-    .ai-message-row { justify-content: flex-start !important; }
-    .ai-message { background-color: #f1f3f5; color: #333; border: 1px solid #e9ecef; border-bottom-left-radius: 5px; }
-    #askfin-form-container { padding: 15px; border-top: 1px solid #e0e0e0; }
-    #askfin-form { display: flex; align-items: center; }
-    #query-input { flex-grow: 1; font-size: 16px; padding: 12px 20px; border-radius: 25px; border: 1px solid #ccc; margin-right: 10px; }
-    #askfin-form button { border-radius: 25px; padding: 12px 20px; flex-shrink: 0; }
-    .spinner { display: inline-block; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; }
+
+    /* Message row basic style (for avatar space and alignment) */
+    .message-row { 
+        display: flex; 
+        margin-bottom: 20px;
+        width: 100%; 
+        align-items: flex-start; /* Align messages to top of row if they have different heights */
+    }
+
+    /* Message bubble common style */
+    .message { 
+        max-width: 75%; 
+        padding: 14px 20px; /* Increased padding */
+        border-radius: 22px; /* More rounded corners */
+        line-height: 1.7; /* Increased line height for readability */
+        font-size: 1rem; /* Base font size for messages */
+        box-shadow: var(--box-shadow-light);
+        word-break: break-word;
+    }
+
+    /* User message style (Right-aligned, primary blue) */
+    .user-message-row {
+        display: flex; /* 혹시 모를 경우를 대비해 명시적으로 flex로 설정 */
+        justify-content: flex-end; /* 이 부분이 flex-end여야 합니다. */
+    }
+    .user-message { 
+        background-color: var(--primary-color); 
+        color: var(--dark-bg); /* Dark text for contrast on primary button */
+        border-bottom-right-radius: 8px; /* Slightly less rounded on one corner */
+    }
+    
+    /* AI message style (Left-aligned, card background) */
+    .ai-message-row { justify-content: flex-start; }
+    .ai-message { 
+        background-color: var(--card-bg); 
+        color: var(--text-color); 
+        border: 1px solid var(--border-color); 
+        border-bottom-left-radius: 8px; /* Slightly less rounded on one corner */
+    }
+
+    /* AI Avatar (using ::before) */
+    .ai-message-row::before {
+        content: 'AI';
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: var(--secondary-color); /* Lighter grey for AI avatar */
+        color: var(--dark-bg); /* Dark text on AI avatar */
+        font-weight: bold;
+        font-size: 14px;
+        flex-shrink: 0;
+        margin-right: 10px;
+        box-shadow: var(--box-shadow-light);
+    }
+
+    /* User Avatar (using ::after) */
+    .user-message-row::after {
+        content: 'ME';
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: var(--primary-color); /* Primary blue for user avatar */
+        color: var(--dark-bg); /* Dark text on user avatar */
+        font-weight: bold;
+        font-size: 14px;
+        flex-shrink: 0;
+        margin-left: 10px;
+        box-shadow: var(--box-shadow-light);
+    }
+
+    /* Bottom input form style */
+    #askfin-form-container { 
+        padding: 15px 20px;
+        border-top: 1px solid var(--border-color);
+        background-color: var(--card-bg); /* Input area background */
+    }
+    #askfin-form { 
+        display: flex; 
+        align-items: center; 
+        gap: 10px;
+    }
+    #query-input { 
+        flex-grow: 1; 
+        font-size: 1.05rem; /* Slightly larger input font */
+        padding: 12px 20px; 
+        border-radius: 25px; 
+        border: 1px solid var(--border-color);
+        background-color: var(--dark-bg); /* Input background is dark */
+        color: var(--text-color);
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+    #query-input::placeholder {
+        color: var(--muted-text-color);
+        opacity: 0.7;
+    }
+    #query-input:focus {
+        border-color: var(--primary-color);
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.1), 0 0 0 0.25rem rgba(0, 170, 255, 0.25);
+        outline: none;
+    }
+    #askfin-form button { 
+        border-radius: 25px; 
+        padding: 12px 20px; 
+        flex-shrink: 0; 
+        font-weight: 600; /* Bolder button text */
+        transition: all 0.2s ease-in-out;
+    }
+    #submit-btn {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+        color: var(--dark-bg); /* Dark text on primary button */
+    }
+    #submit-btn:hover {
+        background-color: #0088cc;
+        border-color: #0088cc;
+        color: white;
+    }
+    #new-chat-btn {
+        background-color: var(--secondary-color);
+        border-color: var(--secondary-color);
+        color: var(--dark-bg); /* Dark text on secondary button */
+    }
+    #new-chat-btn:hover {
+        background-color: #8c939b;
+        border-color: #8c939b;
+        color: white;
+    }
+
+    /* Spinner style */
+    .spinner { 
+        display: inline-block; 
+        width: 30px;
+        height: 30px; 
+        border: 3px solid rgba(255,255,255,0.1);
+        border-top: 3px solid var(--primary-color);
+        border-radius: 50%; 
+        animation: spin 1s linear infinite; 
+    }
+    .ai-message .spinner { 
+        border: 3px solid rgba(255,255,255,0.1); 
+        border-top: 3px solid var(--info-color); 
+    }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    .stock-info-btn { cursor: pointer; color: #0056b3; text-decoration: underline; }
-    #pagination-container { margin-top: 15px; text-align: center; }
-    .page-btn { margin: 0 5px; padding: 5px 10px; border: 1px solid #ddd; background-color: #fff; cursor: pointer; border-radius: 5px; }
-    .page-btn.active { font-weight: bold; background-color: #337ab7; color: #fff; border-color: #337ab7; }
-    /* [추가] 모달 내 테이블 스타일 */
-    .financial-table { font-size: 14px; }
-    .financial-table th, .financial-table td { text-align: right; }
-    .financial-table th:first-child, .financial-table td:first-child { text-align: left; background-color: #f8f9fa; }
+    
+    /* Pagination & Modal styles (consistent with base/index dark theme) */
+    .stock-info-btn { cursor: pointer; color: var(--primary-color); text-decoration: underline; }
+    .stock-info-btn:hover { color: var(--info-color); }
+
+    #pagination-container { 
+        margin-top: 20px;
+        text-align: center; 
+        display: flex;
+        justify-content: center;
+        gap: 5px;
+    }
+    .page-btn { 
+        padding: 8px 15px;
+        border: 1px solid var(--border-color); 
+        background-color: var(--card-bg); 
+        cursor: pointer; 
+        border-radius: 8px;
+        transition: all 0.2s ease-in-out;
+        color: var(--text-color);
+    }
+    .page-btn.active { 
+        font-weight: bold; 
+        background-color: var(--primary-color); 
+        color: #fff; 
+        border-color: var(--primary-color); 
+        box-shadow: var(--box-shadow-light);
+    }
+    .page-btn:hover:not(.active) {
+        background-color: var(--light-bg);
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+    }
+
+    /* Financial table in chat bubble */
+    .ai-message .financial-table {
+        font-size: 0.9rem; /* Slightly smaller in chat bubble */
+        margin-top: 15px;
+        width: 100%;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .ai-message .financial-table th, .ai-message .financial-table td {
+        padding: 8px 12px;
+        text-align: right;
+        border-top: 1px solid var(--border-color);
+        color: var(--text-color);
+    }
+    .ai-message .financial-table th {
+        background-color: var(--primary-color); /* Primary color header */
+        color: var(--dark-bg); /* Dark text on primary header */
+        font-weight: 600;
+    }
+    .ai-message .financial-table th:first-child, .ai-message .financial-table td:first-child {
+        text-align: left;
+        background-color: var(--light-bg); /* Lighter dark background for first column */
+        color: var(--heading-color);
+    }
+    .ai-message .financial-table tbody tr:nth-child(even) td {
+        background-color: rgba(255, 255, 255, 0.03); /* Subtle stripe */
+    }
+    .ai-message .financial-table tbody tr:hover td {
+        background-color: rgba(255, 255, 255, 0.08); /* Lighter hover */
+    }
+
+    /* Modal Enhancements (consistent with base/index dark theme) */
+    .modal-content {
+        border-radius: 12px;
+        box-shadow: var(--box-shadow-medium);
+        background-color: var(--card-bg);
+        color: var(--text-color);
+    }
+    .modal-header {
+        border-bottom: 1px solid var(--border-color);
+        background-color: var(--primary-color);
+        color: var(--dark-bg); /* Dark text on primary header */
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+    }
+    .modal-title {
+        color: var(--dark-bg); /* Dark text for modal title */
+    }
+    .modal-header .btn-close {
+        filter: invert(0.7); /* Adjust close button for visibility */
+    }
+    .nav-tabs .nav-link {
+        border: none;
+        border-bottom: 3px solid transparent;
+        color: var(--muted-text-color);
+        font-weight: 500;
+        transition: all 0.2s ease-in-out;
+        padding: 10px 15px;
+    }
+    .nav-tabs .nav-link.active {
+        color: var(--primary-color);
+        border-color: var(--primary-color);
+        background-color: transparent;
+        font-weight: 600;
+    }
+    .nav-tabs .nav-link:hover:not(.active) {
+        color: var(--primary-color);
+    }
+
+    /* Table, dl, ul styles within modal body */
+    .modal-body .table,
+    .modal-body .dl-horizontal dt,
+    .modal-body .dl-horizontal dd,
+    .modal-body .list-group-item,
+    .modal-body .list-group-item a,
+    .modal-body .list-group-item small {
+        color: var(--text-color) !important;
+    }
+    .modal-body .table th:first-child, .modal-body .table td:first-child { 
+        background-color: var(--light-bg); 
+        color: var(--heading-color) !important;
+    }
+    .modal-body .table th {
+        background-color: var(--primary-color);
+        color: var(--dark-bg) !important;
+    }
+    .modal-body .list-group-item {
+        background-color: var(--dark-bg); /* Darker for list items in modal */
+        border-color: var(--border-color);
+    }
+    .modal-body .list-group-item a:hover {
+        color: var(--primary-color) !important;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<h1>AskFin - 대화형 금융 도우미</h1>
-<p>금융/투자에 대한 질문을 AI와 대화하듯 물어보세요 (예: 최근 3년동안 가장 많이 오른 제약주는?).</p>
-<hr>
+<div class="container py-4">
+    <h1 class="mb-3 text-center">AskFin_Bot</h1>
+    <p class="lead text-center mb-4">금융/투자에 대한 질문을 AI와 대화하듯 물어보세요 (예: 최근 3년동안 가장 많이 오른 제약주는?).</p>
+    <hr class="mb-4">
 
-<div id="chat-container">
-    <div id="chat-window">
-        <div class="message-row ai-message-row">
-            <div class="message ai-message">안녕하세요! 무엇을 분석해 드릴까요?</div>
+    <div id="chat-container">
+        <div id="chat-window">
+            <div class="message-row ai-message-row">
+                <div class="message ai-message">안녕하세요! 무엇을 분석해 드릴까요?</div>
+            </div>
         </div>
-    </div>
 
-    <div id="askfin-form-container">
-        <form id="askfin-form" onsubmit="return false;">
-            <input type="text" class="form-control" id="query-input" placeholder="질문을 입력하세요...">
-            <button type="button" id="submit-btn" class="btn btn-primary">전송</button>
-            <button type="button" id="new-chat-btn" class="btn btn-secondary" style="margin-left: 5px;">새 대화</button>
-        </form>
+        <div id="askfin-form-container">
+            <form id="askfin-form" onsubmit="return false;">
+                <input type="text" class="form-control" id="query-input" placeholder="질문을 입력하세요...">
+                <button type="button" id="submit-btn" class="btn btn-primary">전송</button>
+                <button type="button" id="new-chat-btn" class="btn btn-secondary">새 대화</button>
+            </form>
+        </div>
     </div>
 </div>
 
-<div class="modal fade" id="stockDetailModal" tabindex="-1" role="dialog" aria-labelledby="stockDetailModalLabel">
-    <div class="modal-dialog modal-lg" role="document">
+<div class="modal fade" id="stockDetailModal" tabindex="-1" role="dialog" aria-labelledby="stockDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h4 class="modal-title" id="stockDetailModalLabel">기업 정보</h4>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <ul class="nav nav-tabs" role="tablist">
-                    <li role="presentation" class="active"><a href="#news-content" aria-controls="news" role="tab" data-toggle="tab">관련 뉴스</a></li>
-                    <li role="presentation"><a href="#profile-content" aria-controls="profile" role="tab" data-toggle="tab">기업 개요</a></li>
-                    <li role="presentation"><a href="#financials-content" aria-controls="financials" role="tab" data-toggle="tab">주요 재무정보</a></li>
-                    <li role="presentation"><a href="#reports-content" aria-controls="reports" role="tab" data-toggle="tab">주요 공시</a></li>
+                <ul class="nav nav-tabs" id="stockDetailTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="news-tab" data-bs-toggle="tab" data-bs-target="#news-content" type="button" role="tab" aria-controls="news-content" aria-selected="true">관련 뉴스</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile-content" type="button" role="tab" aria-controls="profile-content" aria-selected="false">기업 개요</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="financials-tab" data-bs-toggle="tab" data-bs-target="#financials-content" type="button" role="tab" aria-controls="financials-content" aria-selected="false">주요 재무정보</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports-content" type="button" role="tab" aria-controls="reports-content" aria-selected="false">주요 공시</button>
+                    </li>
                 </ul>
 
-                <div class="tab-content" style="padding-top: 20px;">
-                    <div role="tabpanel" class="tab-pane active" id="news-content"></div>
-                    <div role="tabpanel" class="tab-pane" id="profile-content"></div>
-                    <div role="tabpanel" class="tab-pane" id="financials-content"></div>
-                    <div role="tabpanel" class="tab-pane" id="reports-content"></div>
+                <div class="tab-content pt-3">
+                    <div class="tab-pane fade show active" id="news-content" role="tabpanel" aria-labelledby="news-tab"></div>
+                    <div class="tab-pane fade" id="profile-content" role="tabpanel" aria-labelledby="profile-tab"></div>
+                    <div class="tab-pane fade" id="financials-content" role="tabpanel" aria-labelledby="financials-tab"></div>
+                    <div class="tab-pane fade" id="reports-content" role="tabpanel" aria-labelledby="reports-tab"></div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">닫기</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
             </div>
         </div>
     </div>
@@ -99,6 +389,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitBtn = document.getElementById('submit-btn');
     const chatWindow = document.getElementById('chat-window');
     const newChatBtn = document.getElementById('new-chat-btn');
+    const stockDetailModal = new bootstrap.Modal(document.getElementById('stockDetailModal'));
 
     // --- State Variables ---
     let currentQuery = '';
@@ -109,7 +400,7 @@ document.addEventListener('DOMContentLoaded', function() {
         rowDiv.className = `message-row ${type}-row`;
 
         const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}`;
+        messageDiv.className = `message ${type}-message`; 
         messageDiv.innerHTML = contentHtml;
 
         rowDiv.appendChild(messageDiv);
@@ -118,7 +409,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         return rowDiv;
     }
-    
     
     function renderPagination(pagination) {
         if (!pagination || pagination.total_pages <= 1) return '';
@@ -133,47 +423,40 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function fetchAnalysis(query, page = 1) {
-    if (!query) return;
+        if (!query) return;
 
-    // query가 변경되었거나, page가 1이고 이전에 이 쿼리에 대한 캐시 키가 없었던 경우에만
-    // 새로운 쿼리로 간주하여 currentCacheKey를 null로 설정합니다.
-    // page가 1이더라도, 이미 currentCacheKey가 존재한다면 재설정하지 않아야 캐시를 사용합니다.
-    if (query !== currentQuery || (page === 1 && !currentCacheKey)) { // 조건 변경
-        currentQuery = query;
-        currentCacheKey = null; 
-        addMessageToChat('user-message', query); // 새 쿼리일 때만 메시지 추가
-        queryInput.value = ''; // 새 쿼리일 때만 입력창 비움
-    }
-    // else if (page === 1 && currentQuery === query && currentCacheKey) {
-    //     // 페이지 1로 돌아오지만 쿼리는 동일하고 캐시 키가 있다면, 사용자 메시지를 다시 추가하지 않음
-    //     // 필요에 따라 사용자에게 캐시 사용 중임을 알리는 메시지 등을 추가할 수 있습니다.
-    // }
-    
-    const spinnerBubble = addMessageToChat('ai-message', '<div class="spinner" style="display:block; margin: 0 auto;"></div>');
-
-    fetch("{{ url_for('askfin.analyze_query') }}", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: currentQuery, page: page, cache_key: currentCacheKey })
-    })
-    .then(response => response.ok ? response.json() : Promise.reject(response))
-    .then(data => {
-        spinnerBubble.remove();
-
-        if (data.cache_key) { currentCacheKey = data.cache_key; } // 서버에서 받은 cache_key를 업데이트
-
-        if (data.error) {
-            addMessageToChat('ai-message', `오류: ${data.error}`);
-            return;
+        if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
+            currentQuery = query;
+            currentCacheKey = null;
+            addMessageToChat('user', query);
+            queryInput.value = '';
         }
+        
+        const spinnerBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
+
+        fetch("{{ url_for('askfin.analyze_query') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: currentQuery, page: page, cache_key: currentCacheKey })
+        })
+        .then(response => response.ok ? response.json() : Promise.reject(response))
+        .then(data => {
+            spinnerBubble.remove();
+
+            if (data.cache_key) { currentCacheKey = data.cache_key; }
+
+            if (data.error) {
+                addMessageToChat('ai', `<p class="text-danger">오류: ${data.error}</p>`);
+                return;
+            }
 
             const result = data.result;
-            let responseHtml = `<h5>${data.analysis_subject} 분석 결과</h5>`;
-            if (data.description) { responseHtml += `<p><small>${data.description}</small></p>`; }
+            let responseHtml = `<h5 class="mb-2" style="color: var(--heading-color);">분석 결과: ${data.analysis_subject}</h5>`;
+            if (data.description) { responseHtml += `<p class="text-muted small mb-3">${data.description}</p>`; }
 
             if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'object') {
                 const valueLabel = result[0].label || '결과값';
-                let table = `<table class="table table-sm table-hover">
+                let table = `<div class="table-responsive"><table class="table table-sm table-hover financial-table">
                                 <thead>
                                     <tr>
                                         <th>순위</th><th>종목명</th><th>과거 가격</th><th>현재 가격</th><th>${valueLabel}</th>
@@ -182,14 +465,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <tbody>`;
                 
                 result.forEach((item, index) => {
-                    const rank = ((data.pagination.current_page - 1) * 20) + index + 1;
+                    const rank = ((data.pagination.current_page - 1) * (data.pagination.per_page || 20)) + index + 1;
                     const itemName = item?.name || 'N/A';
                     const itemCode = item?.code || 'N/A';
                     const startPrice = item?.start_price ? `${parseInt(item.start_price).toLocaleString()} 원` : 'N/A';
                     const endPrice = item?.end_price ? `${parseInt(item.end_price).toLocaleString()} 원` : 'N/A';
                     const displayValue = (item?.value !== null && item?.value !== undefined) ? item.value.toFixed(2) : 'N/A';
                     
-
                     let valueColorClass = '';
                     if (item?.value > 0) {
                         valueColorClass = 'text-danger'; 
@@ -205,19 +487,23 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <td style="font-weight: bold;" class="${valueColorClass}">${displayValue}</td>
                               </tr>`;
                 });
-                table += `</tbody></table>`;
+                table += `</tbody></table></div>`;
                 responseHtml += table;
                 responseHtml += renderPagination(data.pagination);
             
             } else if (Array.isArray(result) && result.length > 0) {
                 responseHtml += `<p>${result.join('<br>')}</p>`;
+            } else if (typeof result === 'string') {
+                 responseHtml += `<p>${result}</p>`;
+            } else {
+                 responseHtml += `<p class="text-muted">분석 결과가 없습니다.</p>`;
             }
             
-            addMessageToChat('ai-message', responseHtml);
+            addMessageToChat('ai', responseHtml);
         })
         .catch(error => {
             spinnerBubble.remove();
-            addMessageToChat('ai-message', '분석 중 심각한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+            addMessageToChat('ai', '<p class="text-danger">분석 중 심각한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</p>');
             console.error('Fetch error:', error);
         });
     }
@@ -249,7 +535,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Event Listeners ---
     submitBtn.addEventListener('click', () => fetchAnalysis(queryInput.value.trim(), 1));
     queryInput.addEventListener('keypress', (event) => {
-        if (event.key === 'Enter') submitBtn.click();
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            submitBtn.click();
+        }
     });
 
     newChatBtn.addEventListener('click', () => {
@@ -258,8 +547,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch("{{ url_for('askfin.new_chat') }}", { method: 'POST' })
         .then(() => {
             chatWindow.innerHTML = '';
-            addMessageToChat('ai-message', '새로운 대화를 시작합니다. 무엇이 궁금하신가요?');
-        });
+            addMessageToChat('ai', '새로운 대화를 시작합니다. 무엇이 궁금하신가요?');
+        }).catch(error => console.error("New chat error:", error));
     });
 
     chatWindow.addEventListener('click', (event) => {
@@ -283,20 +572,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const stockName = target.dataset.name;
             
             document.getElementById('stockDetailModalLabel').textContent = `${stockName} (${stockCode})`; 
-            const spinnerHtml = '<div class="text-center p-4"><div class="spinner" style="display:block; margin: 20px auto;"></div></div>'; // 스피너 HTML 통일 (index.html 참고)
-            ['profile-content', 'financials-content', 'reports-content', 'news-content'].forEach(id => { 
+            const spinnerHtml = '<div class="d-flex justify-content-center my-5"><div class="spinner-border" role="status" style="color: var(--primary-color);"><span class="visually-hidden">Loading...</span></div></div>';
+            ['news-content', 'profile-content', 'financials-content', 'reports-content'].forEach(id => { 
                 const el = document.getElementById(id);
                 if(el) el.innerHTML = spinnerHtml;
             });
             
-            $('#stockDetailModal').modal('show'); 
+            stockDetailModal.show();
 
             fetch(`/askfin/stock/${stockCode}/profile`).then(res => res.ok ? res.json() : Promise.reject('Server error'))
                 .then(data => {
                     const profileContent = document.getElementById('profile-content');
                     if(data.company_profile) {
-                        let content = '<dl class="dl-horizontal">';
-                        for (const [key, value] of Object.entries(data.company_profile)) content += `<dt>${key}</dt><dd>${value || 'N/A'}</dd>`;
+                        let content = '<dl class="row">';
+                        for (const [key, value] of Object.entries(data.company_profile)) {
+                             content += `<dt class="col-sm-3">${key}</dt><dd class="col-sm-9">${value || 'N/A'}</dd>`;
+                        }
                         profileContent.innerHTML = content + '</dl>';
                     } else {
                         profileContent.innerHTML = `<p class="text-danger">${data.profile_error || '기업 개요를 불러올 수 없습니다.'}</p>`;
@@ -311,7 +602,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     const reportsContent = document.getElementById('reports-content');
                     if (data.reports_error) {
-                        reportsContent.innerHTML = `<p class="text-danger">오류: ${data.reports_error}</p>`;
+                        reportsContent.innerHTML = `<p class="text-danger">${data.reports_error}</p>`;
                     } else if (data.report_list && data.report_list.length > 0) {
                         let html = '<ul class="list-group list-group-flush">';
                         data.report_list.forEach(r => {
@@ -329,7 +620,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('Modal Fetch Error (profile/financials/reports):', err);
                 });
 
-            fetch(`/news/${stockCode}`).then(res => res.ok ? res.json() : Promise.reject('Server error'))
+            fetch(`/news/${stockCode}`)
+                .then(res => res.ok ? res.json() : Promise.reject('Server error'))
                 .then(data => {
                     const newsContent = document.getElementById('news-content');
                     if (data.error || data.length === 0) {

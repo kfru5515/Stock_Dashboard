@@ -1,51 +1,257 @@
 {% extends "base.html" %}
 {% from "macros.html" import render_rank_table with context %}
 
-{% block title %}AskFin{% endblock %}
+{% block title %}시장 현황 대시보드 - AskFin{% endblock %}
 
 {% block head %}
 <style>
+    /* Custom Properties for theming (Dark Theme) */
+    :root {
+        --primary-color: #00aaff; /* Brighter blue for dark theme contrast */
+        --secondary-color: #adb5bd; /* Lighter grey for secondary elements */
+        --success-color: #28a745;
+        --danger-color: #f7706c; /* Brighter red for positive change */
+        --info-color: #4ab7f7; /* Lighter blue for info/links and negative change */
+        --warning-color: #ffc107;
+        --light-bg: #495057; /* For subtle lighter dark elements */
+        --dark-bg: #212529; /* Deep dark background */
+        --card-bg: #2c313a; /* Slightly lighter dark for cards */
+        --border-color: #444a50; /* Darker border */
+        --text-color: #FFFFFF; /* 흰색으로 명시적으로 설정 */
+        --muted-text-color: #adb5bd; /* Muted light grey text */
+        --heading-color: #ffffff; /* White headings */
+        --box-shadow-light: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.2);
+        --box-shadow-medium: 0 0.5rem 1rem rgba(0, 0, 0, 0.35); /* Stronger shadows for depth */
+    }
+
+    body {
+        background: var(--dark-bg); /* Solid dark background */
+        color: var(--text-color);
+    }
+
     .card {
         border: none;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        height: 100%;
-        transition: transform 0.2s ease-in-out;
+        border-radius: 12px;
+        box-shadow: var(--box-shadow-medium);
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        overflow: hidden;
+        background-color: var(--card-bg); /* Cards have a dark background */
     }
+
     .card:hover {
         transform: translateY(-5px);
+        box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.5); /* More pronounced lift effect */
     }
-    .chart-canvas-container {
-        height: 150px;
+
+    .card-body {
+        padding: 25px;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--heading-color);
+        font-weight: 600;
+    }
+
+    /* Market Index Cards */
+    .market-index-card .card-title {
+        color: var(--primary-color); /* Primary blue for titles */
+        font-size: 1.15rem;
+    }
+
+    .market-index-card .fw-bold.fs-5 {
+        color: var(--heading-color); /* White for values */
+    }
+
+    .market-index-card .change {
+        font-weight: 600;
+    }
+
+    /* Adjusted for dark theme: danger (red) for positive, primary (blue) for negative. */
+    .text-danger {
+        color: var(--danger-color) !important; /* Brighter red for positive change */
+    }
+
+    .text-primary {
+        color: var(--info-color) !important; /* Lighter blue for negative change */
+    }
+
+
+    /* Chart specific styles */
+    .chart-canvas-container { 
+        height: 180px;
+        padding: 10px 0; 
+        background-color: var(--card-bg); /* Chart background matches card */
+        border-radius: 8px;
+        margin-top: 15px;
+    }
+
+    .chart-interval-selector .btn {
+        border-radius: 20px;
+        padding: 5px 15px;
+        font-size: 0.85rem;
+        border-color: var(--border-color);
+        color: var(--muted-text-color);
+        background-color: var(--light-bg); /* Darker background for buttons */
+        transition: all 0.2s ease-in-out;
+    }
+
+    .chart-interval-selector .btn.active {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+        color: #fff;
+        box-shadow: var(--box-shadow-light);
+    }
+
+    .chart-interval-selector .btn:hover:not(.active) {
+        background-color: var(--card-bg); /* Lighter dark on hover */
+        color: var(--primary-color);
+    }
+
+    /* Rank Tables */
+    .rank-table {
+        width: 100%;
+        margin-bottom: 0;
+        border-radius: 8px;
+        overflow: hidden;
+        background-color: var(--card-bg); /* Table background is dark */
+    }
+
+    .rank-table th, .rank-table td { 
+        font-size: 0.9rem; 
+        vertical-align: middle; 
+        padding: 12px 15px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .rank-table th {
+        background-color: var(--primary-color); /* Primary color header */
+        color: #fff;
+        font-weight: 600;
+        text-align: center;
+    }
+    .rank-table th:first-child { text-align: left; }
+    .rank-table td {
+        background-color: var(--card-bg);
+        color: var(--text-color); /* 일반 텍스트 색상 사용 */
+    }
+    .rank-table tbody tr:nth-child(even) td {
+        background-color: #31363e; /* Slightly different dark for zebra striping */
+    }
+
+    .rank-table tbody tr:hover td {
+        background-color: #3a4049; /* Lighter dark highlight on hover */
+    }
+
+    .rank-table .stock-name {
+        color: var(--text-color) !important; /* 종목명 색상을 흰색으로 명시적으로 설정 및 우선시 */
+        font-weight: 500;
+        text-decoration: none;
+        transition: color 0.2s ease-in-out;
+    }
+    .rank-table .stock-name:hover {
+        text-decoration: underline;
+        color: var(--primary-color) !important; /* 호버 시 primary blue로 */
+    }
+
+    /* News and Indicators */
+    .indicator-item {
         padding: 10px 0;
+        border-bottom: 1px dashed var(--border-color);
     }
-    .rank-table th, .rank-table td {
-        font-size: 0.9rem;
-        vertical-align: middle;
-    }
-    .news-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        max-height: 300px;
-        overflow-y: auto;
-    }
-    .news-list-item {
-        border-bottom: 1px solid #eee;
-        padding: 10px 0;
-    }
-    .news-list-item:last-child {
+    .indicator-item:last-child {
         border-bottom: none;
     }
-    .news-list a {
+    .indicator-item strong {
+        color: var(--heading-color);
+    }
+    .news-list { 
+        list-style: none; 
+        padding: 0; 
+        margin: 0; 
+        max-height: 400px; 
+        overflow-y: auto; 
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+    }
+    .news-list-item { 
+        border-bottom: 1px solid var(--border-color); 
+        padding: 12px 15px;
+        background-color: var(--card-bg);
+    }
+    .news-list-item:last-child { 
+        border-bottom: none; 
+    }
+    .news-list a { 
+        font-weight: 500; 
+        color: var(--text-color);
         text-decoration: none;
-        font-weight: 500;
+        transition: color 0.2s ease-in-out;
     }
-    .news-list small {
+    .news-list a:hover {
+        color: var(--primary-color);
+        text-decoration: underline;
+    }
+    .news-list small { 
+        color: var(--muted-text-color); 
         font-size: 0.8rem;
-        color: #6c757d;
     }
-    .indicator-item {
-        font-size: 0.95rem;
+
+    /* Modal Enhancements (Dark Theme) */
+    .modal-content {
+        border-radius: 12px;
+        box-shadow: var(--box-shadow-medium);
+        background-color: var(--card-bg); /* Modal background is dark */
+        color: var(--text-color);
+    }
+    .modal-header {
+        border-bottom: 1px solid var(--border-color);
+        background-color: var(--primary-color); /* Primary color header */
+        color: #fff;
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+    }
+    .modal-title {
+        color: #fff;
+    }
+    .modal-header .btn-close {
+        filter: invert(1); /* White close button */
+    }
+    .nav-tabs .nav-link {
+        border: none;
+        border-bottom: 3px solid transparent;
+        color: var(--muted-text-color);
+        font-weight: 500;
+        transition: all 0.2s ease-in-out;
+        padding: 10px 15px;
+    }
+    .nav-tabs .nav-link.active {
+        color: var(--primary-color);
+        border-color: var(--primary-color);
+        background-color: transparent;
+        font-weight: 600;
+    }
+    .nav-tabs .nav-link:hover:not(.active) {
+        color: var(--primary-color);
+    }
+    .financial-table th, .financial-table td { 
+        font-size: 13px;
+        padding: 8px 12px;
+        color: var(--text-color); /* Ensure text is light in modal tables */
+    }
+    .financial-table th:first-child, .financial-table td:first-child { 
+        background-color: var(--light-bg); /* Lighter dark background for first column */
+        font-weight: 500;
+        color: var(--heading-color); /* White for heading text in first col */
+    }
+
+    /* General Bootstrap overrides/enhancements */
+    .container-fluid {
+        padding-top: 30px;
+        padding-bottom: 30px;
+    }
+    .g-4 {
+        --bs-gutter-x: 1.5rem;
+        --bs-gutter-y: 1.5rem;
     }
 </style>
 {% endblock %}
@@ -53,16 +259,21 @@
 {% block content %}
 <div class="container-fluid px-4">
     <div class="row g-4 mb-4">
-        <div class="col-12 col-md-6 col-xl-3">
+        <div class="col-12 col-md-6 col-xl-3 market-index-card">
             <div class="card">
                 <div class="card-body">
                     {% if kospi_data and kospi_info.value != 'N/A' %}
-                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                    <div class="d-flex justify-content-between align-items-baseline">
                         <h5 class="card-title mb-0">KOSPI</h5>
-                        <div class="text-end">
-                            <span id="kospi-value" class="fw-bold fs-6">{{ kospi_info.value }}</span><br>
-                            <span id="kospi-change" class="change small {% if kospi_info.raw_change > 0 %}text-danger{% elif kospi_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">{{ kospi_info.change }} ({{ kospi_info.change_pct }})</span>
+                        <span id="kospi-value" class="fw-bold fs-5 font-monospace">{{ kospi_info.value }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="btn-group btn-group-sm chart-interval-selector" role="group">
+                            <button type="button" class="btn btn-outline-secondary active" data-ticker="KS11" data-chart-id="kospiChart" data-interval="daily">일</button>
+                            <button type="button" class="btn btn-outline-secondary" data-ticker="KS11" data-chart-id="kospiChart" data-interval="weekly">주</button>
+                            <button type="button" class="btn btn-outline-secondary" data-ticker="KS11" data-chart-id="kospiChart" data-interval="monthly">월</button>
                         </div>
+                        <span id="kospi-change" class="change small {% if kospi_info.raw_change > 0 %}text-danger{% elif kospi_info.raw_change < 0 %}text-primary{% endif %}">{{ kospi_info.change }} ({{ kospi_info.change_pct }})</span>
                     </div>
                     <div class="chart-canvas-container"><canvas id="kospiChart"></canvas></div>
                     {% else %}
@@ -71,16 +282,21 @@
                 </div>
             </div>
         </div>
-        <div class="col-12 col-md-6 col-xl-3">
+        <div class="col-12 col-md-6 col-xl-3 market-index-card">
             <div class="card">
                 <div class="card-body">
                     {% if kosdaq_data and kosdaq_info.value != 'N/A' %}
-                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                    <div class="d-flex justify-content-between align-items-baseline">
                         <h5 class="card-title mb-0">KOSDAQ</h5>
-                        <div class="text-end">
-                            <span id="kosdaq-value" class="fw-bold fs-6">{{ kosdaq_info.value }}</span><br>
-                            <span id="kosdaq-change" class="change small {% if kosdaq_info.raw_change > 0 %}text-danger{% elif kosdaq_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">{{ kosdaq_info.change }} ({{ kosdaq_info.change_pct }})</span>
+                        <span id="kosdaq-value" class="fw-bold fs-5 font-monospace">{{ kosdaq_info.value }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="btn-group btn-group-sm chart-interval-selector" role="group">
+                            <button type="button" class="btn btn-outline-secondary active" data-ticker="KQ11" data-chart-id="kosdaqChart" data-interval="daily">일</button>
+                            <button type="button" class="btn btn-outline-secondary" data-ticker="KQ11" data-chart-id="kosdaqChart" data-interval="weekly">주</button>
+                            <button type="button" class="btn btn-outline-secondary" data-ticker="KQ11" data-chart-id="kosdaqChart" data-interval="monthly">월</button>
                         </div>
+                        <span id="kosdaq-change" class="change small {% if kosdaq_info.raw_change > 0 %}text-danger{% elif kosdaq_info.raw_change < 0 %}text-primary{% endif %}">{{ kosdaq_info.change }} ({{ kosdaq_info.change_pct }})</span>
                     </div>
                     <div class="chart-canvas-container"><canvas id="kosdaqChart"></canvas></div>
                     {% else %}
@@ -89,34 +305,44 @@
                 </div>
             </div>
         </div>
-        <div class="col-12 col-md-6 col-xl-3">
+        <div class="col-12 col-md-6 col-xl-3 market-index-card">
             <div class="card">
                 <div class="card-body">
                     {% if usdkrw_data and usdkrw_info.value != 'N/A' %}
-                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                    <div class="d-flex justify-content-between align-items-baseline">
                         <h5 class="card-title mb-0">USD/KRW</h5>
-                        <div class="text-end">
-                            <span id="usdkrw-value" class="fw-bold fs-6">{{ usdkrw_info.value }}</span><br>
-                            <span id="usdkrw-change" class="change small {% if usdkrw_info.raw_change > 0 %}text-danger{% elif usdkrw_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">{{ usdkrw_info.change }} ({{ usdkrw_info.change_pct }})</span>
+                        <span id="usdkrw-value" class="fw-bold fs-5 font-monospace">{{ usdkrw_info.value }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="btn-group btn-group-sm chart-interval-selector" role="group">
+                            <button type="button" class="btn btn-outline-secondary active" data-ticker="USD/KRW" data-chart-id="usdkrwChart" data-interval="daily">일</button>
+                            <button type="button" class="btn btn-outline-secondary" data-ticker="USD/KRW" data-chart-id="usdkrwChart" data-interval="weekly">주</button>
+                            <button type="button" class="btn btn-outline-secondary" data-ticker="USD/KRW" data-chart-id="usdkrwChart" data-interval="monthly">월</button>
                         </div>
+                        <span id="usdkrw-change" class="change small {% if usdkrw_info.raw_change > 0 %}text-danger{% elif usdkrw_info.raw_change < 0 %}text-primary{% endif %}">{{ usdkrw_info.change }} ({{ usdkrw_info.change_pct }})</span>
                     </div>
                     <div class="chart-canvas-container"><canvas id="usdkrwChart"></canvas></div>
                     {% else %}
-                     <p class="text-center text-muted">환율 데이터를 불러올 수 없습니다.</p>
+                    <p class="text-center text-muted">환율 데이터를 불러올 수 없습니다.</p>
                     {% endif %}
                 </div>
             </div>
         </div>
-        <div class="col-12 col-md-6 col-xl-3">
+        <div class="col-12 col-md-6 col-xl-3 market-index-card">
             <div class="card">
                 <div class="card-body">
-                     {% if wti_data and wti_info.value != 'N/A' %}
-                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                    {% if wti_data and wti_info.value != 'N/A' %}
+                    <div class="d-flex justify-content-between align-items-baseline">
                         <h5 class="card-title mb-0">WTI</h5>
-                        <div class="text-end">
-                            <span id="wti-value" class="fw-bold fs-6">{{ wti_info.value }}</span><br>
-                            <span id="wti-change" class="change small {% if wti_info.raw_change > 0 %}text-danger{% elif wti_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">{{ wti_info.change }} ({{ wti_info.change_pct }})</span>
+                        <span id="wti-value" class="fw-bold fs-5 font-monospace">{{ wti_info.value }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="btn-group btn-group-sm chart-interval-selector" role="group">
+                            <button type="button" class="btn btn-outline-secondary active" data-ticker="CL=F" data-chart-id="wtiChart" data-interval="daily">일</button>
+                            <button type="button" class="btn btn-outline-secondary" data-ticker="CL=F" data-chart-id="wtiChart" data-interval="weekly">주</button>
+                            <button type="button" class="btn btn-outline-secondary" data-ticker="CL=F" data-chart-id="wtiChart" data-interval="monthly">월</button>
                         </div>
+                        <span id="wti-change" class="change small {% if wti_info.raw_change > 0 %}text-danger{% elif wti_info.raw_change < 0 %}text-primary{% endif %}">{{ wti_info.change }} ({{ wti_info.change_pct }})</span>
                     </div>
                     <div class="chart-canvas-container"><canvas id="wtiChart"></canvas></div>
                     {% else %}
@@ -126,20 +352,16 @@
             </div>
         </div>
     </div>
-
+    
     <div class="row g-4 mb-4">
         <div class="col-lg-6">
              {% if kospi_top_volume %}
-                {{ render_rank_table('kospi', 'KOSPI', kospi_top_volume, kospi_top_value, today) }}
-            {% else %}
-                <div class="card"><div class="card-body text-center text-muted">KOSPI 순위 정보를 불러올 수 없습니다.</div></div>
+                {{ render_rank_table('kospi', 'KOSPI', kospi_top_volume, kospi_top_value, kospi_top_gainers, kospi_top_losers, today) }}
             {% endif %}
         </div>
         <div class="col-lg-6">
             {% if kosdaq_top_volume %}
-                {{ render_rank_table('kosdaq', 'KOSDAQ', kosdaq_top_volume, kosdaq_top_value, today) }}
-            {% else %}
-                <div class="card"><div class="card-body text-center text-muted">KOSDAQ 순위 정보를 불러올 수 없습니다.</div></div>
+                {{ render_rank_table('kosdaq', 'KOSDAQ', kosdaq_top_volume, kosdaq_top_value, kosdaq_top_gainers, kosdaq_top_losers, today) }}
             {% endif %}
         </div>
     </div>
@@ -149,24 +371,8 @@
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title mb-3">주요 경제 지표</h5>
-                    <div class="indicator-item mb-2">
-                        <strong>{{ cpi_info.name }}:</strong> 
-                        <span class="fw-bold">{{ cpi_info.value }}</span> 
-                        <span class="change small {% if cpi_info.raw_change > 0 %}text-danger{% elif cpi_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">
-                            ({{ cpi_info.change_pct }})
-                        </span>
-                        <small class="text-muted">({{ cpi_info.date }})</small>
-                        {% if cpi_info.error %}<p class="text-danger small mt-1">{{ cpi_info.error }}</p>{% endif %}
-                    </div>
-                    <div class="indicator-item">
-                        <strong>{{ interest_rate_info.name }}:</strong> 
-                        <span class="fw-bold">{{ interest_rate_info.value }}</span> 
-                        <span class="change small {% if interest_rate_info.raw_change > 0 %}text-danger{% elif interest_rate_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">
-                            ({{ interest_rate_info.change_pct }})
-                        </span>
-                        <small class="text-muted">({{ interest_rate_info.date }})</small>
-                        {% if interest_rate_info.error %}<p class="text-danger small mt-1">{{ interest_rate_info.error }}</p>{% endif %}
-                    </div>
+                    <div class="indicator-item mb-2"><strong>{{ cpi_info.name }}:</strong> <span class="fw-bold font-monospace">{{ cpi_info.value }}</span> <span class="change small {% if cpi_info.raw_change > 0 %}text-danger{% elif cpi_info.raw_change < 0 %}text-primary{% endif %}">({{ cpi_info.change_pct }})</span> <small>({{ cpi_info.date }})</small>{% if cpi_info.error %}<p class="text-danger small mt-1">{{ cpi_info.error }}</p>{% endif %}</div>
+                    <div class="indicator-item"><strong>{{ interest_rate_info.name }}:</strong> <span class="fw-bold font-monospace">{{ interest_rate_info.value }}</span> <span class="change small {% if interest_rate_info.raw_change > 0 %}text-danger{% elif interest_rate_info.raw_change < 0 %}text-primary{% endif %}">({{ interest_rate_info.change_pct }})</span> <small>({{ interest_rate_info.date }})</small>{% if interest_rate_info.error %}<p class="text-danger small mt-1">{{ interest_rate_info.error }}</p>{% endif %}</div>
                 </div>
             </div>
         </div>
@@ -174,20 +380,7 @@
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title mb-3">시장 주요 뉴스</h5>
-                    <ul class="news-list">
-                        {% if market_news %}
-                            {% for news_item in market_news %}
-                                <li class="news-list-item">
-                                    <a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer" class="link-dark">{{ news_item.title }}</a>
-                                    <div class="d-block mt-1">
-                                        <small>{{ news_item.press }} - {{ news_item.date }}</small>
-                                    </div>
-                                </li>
-                            {% endfor %}
-                        {% else %}
-                            <li><p class="text-muted text-center">뉴스를 불러올 수 없습니다.</p></li>
-                        {% endif %}
-                    </ul>
+                    <ul class="news-list">{% for news_item in market_news %}<li class="news-list-item"><a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer">{{ news_item.title }}</a><div class="d-block mt-1"><small>{{ news_item.press }} - {{ news_item.date }}</small></div></li>{% else %}<li><p class="text-muted">뉴스를 불러올 수 없습니다.</p></li>{% endfor %}</ul>
                 </div>
             </div>
         </div>
@@ -202,7 +395,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <ul class="nav nav-tabs" id="myTab" role="tablist">
+                <ul class="nav nav-tabs" id="stockDetailTab" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" id="news-tab" data-bs-toggle="tab" data-bs-target="#news-content" type="button">관련 뉴스</button>
                     </li>
@@ -235,65 +428,102 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Chart instances to store references for resize
     let chartInstances = {};
-
-    const chartDefaultOptions = { 
-        responsive: true, maintainAspectRatio: false, 
+    const chartDefaultOptions = {
+        responsive: true, maintainAspectRatio: false,
         scales: { 
-            y: { beginAtZero: false, ticks: { font: { size: 10 } } },
-            x: { ticks: { font: { size: 10 }, maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 6 } }
-        }, 
-        plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } }, 
-        elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } } 
+            y: { 
+                beginAtZero: false, 
+                ticks: { 
+                    font: { size: 10 }, 
+                    color: '#FFFFFF' /* Y축 틱 색상을 흰색으로 명시적으로 설정 */
+                },
+                grid: {
+                    color: 'rgba(255, 255, 255, 0.1)' /* Light grid lines on dark background */
+                }
+            }, 
+            x: { 
+                ticks: { 
+                    font: { size: 10 }, 
+                    maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 6, 
+                    color: '#FFFFFF' /* X축 틱 색상을 흰색으로 명시적으로 설정 */
+                },
+                grid: {
+                    color: 'rgba(255, 255, 255, 0.1)' /* Light grid lines on dark background */
+                }
+            } 
+        },
+        plugins: { 
+            legend: { display: false }, 
+            tooltip: { 
+                enabled: true, 
+                mode: 'index', 
+                intersect: false,
+                titleColor: '#FFFFFF', /* 툴팁 제목 글씨 색상 흰색 */
+                bodyColor: '#FFFFFF', /* 툴팁 본문 글씨 색상 흰색 */
+                backgroundColor: 'rgba(44, 49, 58, 0.9)', /* 툴팁 배경색을 card-bg와 유사하게, 투명도 추가 */
+                borderColor: 'var(--primary-color)', 
+                borderWidth: 1,
+                titleFont: { size: 12, weight: 'bold' }, /* 툴팁 제목 폰트 크기 및 두께 */
+                bodyFont: { size: 11 } /* 툴팁 본문 폰트 크기 */
+            } 
+        },
+        elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } }
     };
-    
-    function parseChartJsData(data) {
+    // Chart.js 전역 텍스트 색상도 흰색으로 설정
+    Chart.defaults.color = '#FFFFFF'; 
+    Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)'; 
+
+
+    function parseChartJsData(data, interval = 'daily') {
         if (!data || !Array.isArray(data)) return { labels: [], closes: [] };
-        return { 
-            labels: data.map(item => item.Date ? `${item.Date.split('-')[1]}/${item.Date.split('-')[2]}`: ''), 
-            closes: data.map(item => item.Close) 
-        }; 
+        return {
+            labels: data.map(item => {
+                if (!item.Date) return '';
+                const parts = item.Date.split('-');
+                if (interval === 'daily') return `${parts[1]}/${parts[2]}`;
+                return `${parts[0].slice(-2)}/${parts[1]}`;
+            }),
+            closes: data.map(item => item.Close)
+        };
     }
 
-    function createChart(canvasId, chartData, color) {
+    function createChart(canvasId, chartData, color, interval = 'daily') {
         const canvas = document.getElementById(canvasId);
-        if (canvas && chartData) {
-            const parsedData = parseChartJsData(chartData);
-            if (chartInstances[canvasId]) {
-                chartInstances[canvasId].destroy();
-            }
-            const newChart = new Chart(canvas, { 
-                type: 'line', 
-                data: { labels: parsedData.labels, datasets: [{ data: parsedData.closes, borderColor: color, fill: false }] }, 
-                options: chartDefaultOptions 
+        if (canvas && chartData && chartData.length > 0) {
+            if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+            chartInstances[canvasId] = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: parseChartJsData(chartData, interval).labels,
+                    datasets: [{ data: parseChartJsData(chartData, interval).closes, borderColor: color, fill: false }]
+                },
+                options: chartDefaultOptions
             });
-            chartInstances[canvasId] = newChart;
         }
     }
 
-    createChart('kospiChart', {{ kospi_data | tojson }}, 'rgba(54, 162, 235, 1)');
-    createChart('kosdaqChart', {{ kosdaq_data | tojson }}, 'rgba(255, 99, 132, 1)');
-    createChart('usdkrwChart', {{ usdkrw_data | tojson }}, 'rgba(75, 192, 192, 1)');
-    createChart('wtiChart', {{ wti_data | tojson }}, 'rgba(255, 159, 64, 1)');
+    createChart('kospiChart', {{ kospi_data | tojson }}, 'rgba(54, 162, 235, 1)'); /* Blue */
+    createChart('kosdaqChart', {{ kosdaq_data | tojson }}, 'rgba(255, 99, 132, 1)'); /* Red */
+    createChart('usdkrwChart', {{ usdkrw_data | tojson }}, 'rgba(75, 192, 192, 1)'); /* Green */
+    createChart('wtiChart', {{ wti_data | tojson }}, 'rgba(255, 159, 64, 1)'); /* Orange */
     
     function updateLatestData() {
         fetch('/api/latest-data').then(response => response.ok ? response.json() : Promise.reject('Network error'))
-            .then(data => {
-                if (data.error) { console.error("Update Error:", data.error); return; }
-                ['kospi', 'kosdaq', 'usdkrw', 'wti'].forEach(name => {
-                    const info = data[name];
-                    const valEl = document.getElementById(`${name}-value`);
-                    const chgEl = document.getElementById(`${name}-change`);
-                    if (!valEl || !chgEl || !info) return;
-                    valEl.textContent = info.value;
-                    chgEl.textContent = `${info.change} (${info.change_pct})`;
-                    chgEl.className = 'change small';
-                    if (info.raw_change > 0) chgEl.classList.add('text-danger');
-                    else if (info.raw_change < 0) chgEl.classList.add('text-primary');
-                    else chgEl.classList.add('text-secondary');
-                });
-            }).catch(error => console.error("Update fetch error:", error));
+        .then(data => {
+            if (data.error) { console.error("Update Error:", data.error); return; }
+            ['kospi', 'kosdaq', 'usdkrw', 'wti'].forEach(name => {
+                const info = data[name];
+                const valEl = document.getElementById(`${name}-value`);
+                const chgEl = document.getElementById(`${name}-change`);
+                if (!valEl || !chgEl || !info || !info.value) return;
+                valEl.textContent = info.value;
+                chgEl.textContent = `${info.change} (${info.change_pct})`;
+                chgEl.className = 'change small';
+                if (info.raw_change > 0) chgEl.classList.add('text-danger');
+                else if (info.raw_change < 0) chgEl.classList.add('text-primary');
+            });
+        }).catch(error => console.error("Update fetch error:", error));
     }
     if(document.getElementById('kospi-value')) { setInterval(updateLatestData, 30000); }
 
@@ -302,38 +532,42 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!rankSelector) return;
 
         rankSelector.addEventListener('click', function(event) {
-            const clickedButton = event.target;
-            if (clickedButton.tagName !== 'BUTTON') return;
+            const clickedButton = event.target.closest('button');
+            if (!clickedButton) return;
 
             const container = clickedButton.closest('.card');
-            if (!container) return; 
+            if (!container) return;
 
             const targetType = clickedButton.getAttribute('data-target');
             const titleElement = container.querySelector(`#${marketPrefix}-rank-title`);
-            const volumeTable = container.querySelector(`#${marketPrefix}-volume-table`);
-            const valueTable = container.querySelector(`#${marketPrefix}-value-table`);
+            const marketName = marketPrefix.toUpperCase();
+            const today = "{{ today }}";
 
-            if (!titleElement || !volumeTable || !valueTable) return;
-
-            titleElement.textContent = `{{ today }} ${marketPrefix.toUpperCase()} ${targetType === 'volume' ? '거래량' : '거래대금'} 상위`;
-            container.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
-            clickedButton.classList.add('active');
-
-            if (targetType === 'volume') {
-                volumeTable.style.display = 'table';
-                valueTable.style.display = 'none';
-            } else {
-                volumeTable.style.display = 'none';
-                valueTable.style.display = 'table';
+            container.querySelectorAll('.table-responsive').forEach(table => {
+                table.style.display = 'none';
+            });
+            
+            const targetTable = container.querySelector(`#${marketPrefix}-${targetType}-table`);
+            if (targetTable) {
+                targetTable.style.display = '';
             }
+            const titleMap = {
+                'volume': '거래량 상위',
+                'value': '거래대금 상위',
+                'gainer': '상승률 상위',
+                'loser': '하락률 상위'
+            };
+            titleElement.textContent = `${today} ${marketName} ${titleMap[targetType] || ''}`;
+            
+            rankSelector.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+            clickedButton.classList.add('active');
         });
     }
 
     setupRankSwitcher('kospi');
     setupRankSwitcher('kosdaq');
-
     document.querySelectorAll('button[data-target="value"]').forEach(btn => btn.click());
- 
+
     function renderFinancialTable(statementJson, targetElementId, notFoundMessage = '정보 없음') {
         const targetElement = document.getElementById(targetElementId);
         if (!statementJson) {
@@ -358,20 +592,44 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const stockDetailModal = new bootstrap.Modal(document.getElementById('stockDetailModal'));
+    
     document.body.addEventListener('click', function(event) {
-        if (event.target.classList.contains('stock-name')) {
+        const chartButton = event.target.closest('.chart-interval-selector button');
+        const stockNameLink = event.target.closest('.stock-name');
+
+        if (chartButton) {
+            const btnGroup = chartButton.parentElement;
+            btnGroup.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+            chartButton.classList.add('active');
+            const { ticker, interval, chartId } = chartButton.dataset;
+            const chartInstance = chartInstances[chartId];
+            if (!ticker || !interval || !chartInstance) return;
+            
+            fetch(`/api/chart_data/${encodeURIComponent(ticker)}/${interval}`)
+                .then(response => response.ok ? response.json() : Promise.reject('Error'))
+                .then(data => {
+                    if (data.error) {
+                        console.error('Chart data error:', data.error);
+                        return;
+                    }
+                    const newChartData = parseChartJsData(data, interval);
+                    chartInstance.data.labels = newChartData.labels;
+                    chartInstance.data.datasets[0].data = newChartData.closes;
+                    chartInstance.update();
+                })
+                .catch(error => console.error('Error fetching chart data:', error));
+        }
+
+        if (stockNameLink) {
             event.preventDefault();
-            const stockCode = event.target.getAttribute('data-code');
-            const stockName = event.target.textContent.trim();
-            
+            const stockCode = stockNameLink.getAttribute('data-code');
+            const stockName = stockNameLink.textContent.trim();
             document.getElementById('stockDetailModalLabel').textContent = `${stockName} (${stockCode})`;
-            const spinnerHtml = '<div class="d-flex justify-content-center my-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
-            
+            const spinnerHtml = '<div class="d-flex justify-content-center my-5"><div class="spinner-border" role="status" style="color: var(--primary-color);"><span class="visually-hidden">Loading...</span></div></div>'; // Spinner color adjusted for dark theme
             ['news-content', 'profile-content', 'financials-content', 'reports-content'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) el.innerHTML = spinnerHtml;
             });
-            
             stockDetailModal.show();
 
             fetch(`/askfin/stock/${stockCode}/profile`)
@@ -384,35 +642,25 @@ document.addEventListener('DOMContentLoaded', function() {
                              content += `<dt class="col-sm-3">${key}</dt><dd class="col-sm-9">${value || 'N/A'}</dd>`;
                         }
                         profileContent.innerHTML = content + '</dl>';
-                    } else {
-                        profileContent.innerHTML = `<p class="text-danger">${data.profile_error || '기업 개요를 불러올 수 없습니다.'}</p>`;
-                    }
+                    } else { profileContent.innerHTML = `<p class="text-danger">${data.profile_error || '기업 개요를 불러올 수 없습니다.'}</p>`; }
 
                     const financialsContent = document.getElementById('financials-content');
                     if (data.financials_error) {
                         financialsContent.innerHTML = `<p class="text-danger text-center p-4">${data.financials_error}</p>`;
-                    } else {
-                        renderFinancialTable(data.key_financial_info, 'financials-content', '주요 재무정보를 불러올 수 없습니다.');
-                    }
+                    } else { renderFinancialTable(data.key_financial_info, 'financials-content', '주요 재무정보를 불러올 수 없습니다.'); }
 
                     const reportsContent = document.getElementById('reports-content');
                     if (data.reports_error) {
                         reportsContent.innerHTML = `<p class="text-danger">${data.reports_error}</p>`;
                     } else if (data.report_list && data.report_list.length > 0) {
                         let html = '<ul class="list-group list-group-flush">';
-                        data.report_list.forEach(r => {
-                            html += `<li class="list-group-item"><a href="${r.url}" target="_blank" rel="noopener noreferrer">${r.report_nm}</a><small class="d-block text-muted mt-1">${r.flr_nm} - ${r.rcept_dt}</small></li>`;
-                        });
+                        data.report_list.forEach(r => { html += `<li class="list-group-item"><a href="${r.url}" target="_blank" rel="noopener noreferrer">${r.report_nm}</a><small class="d-block text-muted mt-1">${r.flr_nm} - ${r.rcept_dt}</small></li>`; });
                         reportsContent.innerHTML = html + '</ul>';
-                    } else {
-                        reportsContent.innerHTML = '<p class="text-muted text-center p-4">최근 1년간 주요 공시가 없습니다.</p>';
-                    }
+                    } else { reportsContent.innerHTML = '<p class="text-muted text-center p-4">최근 1년간 주요 공시가 없습니다.</p>'; }
                 })
                 .catch(err => {
                     const errorHtml = `<p class="text-danger">데이터를 불러오는 데 실패했습니다: ${err}</p>`;
-                    document.getElementById('profile-content').innerHTML = errorHtml;
-                    document.getElementById('financials-content').innerHTML = errorHtml;
-                    document.getElementById('reports-content').innerHTML = errorHtml;
+                    ['profile-content', 'financials-content', 'reports-content'].forEach(id => document.getElementById(id).innerHTML = errorHtml);
                 });
 
             fetch(`/news/${stockCode}`)
@@ -420,16 +668,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(data => {
                     const newsContent = document.getElementById('news-content');
                     if (data.error || data.length === 0) {
-                        newsContent.innerHTML = `<p class="p-3 text-muted text-center">${data.error || '관련 뉴스가 없습니다.'}</p>`;
-                    } else {
-                        let newsHtml = '<ul class="list-group list-group-flush">';
-                        data.forEach(item => {
-                            newsHtml += `<li class="list-group-item"><a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.title}</a><small class="d-block text-muted mt-1">${item.press} - ${item.date}</small></li>`;
-                        });
-                        newsContent.innerHTML = newsHtml + '</ul>';
+                        newsContent.innerHTML = `<p class="p-3 text-muted text-center">${data.error || '관련 뉴스가 없습니다.'}</p>`; return;
                     }
+                    let newsHtml = '<ul class="list-group list-group-flush">';
+                    data.forEach(item => {
+                        newsHtml += `<li class="list-group-item"><a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.title}</a><small class="d-block text-muted mt-1">${item.press} - ${item.date}</small></li>`;
+                    });
+                    newsContent.innerHTML = newsHtml + '</ul>';
                 }).catch(err => {
                     document.getElementById('news-content').innerHTML = `<p class="p-3 text-danger">뉴스 로딩 오류: ${err}</p>`;
+                    console.error('Modal Fetch Error (news):', err);
                 });
         }
     });
