@@ -77,9 +77,9 @@
 
 
     /* Chart specific styles */
-    .chart-canvas-container { 
+    .chart-canvas-container {
         height: 180px;
-        padding: 10px 0; 
+        padding: 10px 0;
         background-color: var(--card-bg); /* Chart background matches card */
         border-radius: 8px;
         margin-top: 15px;
@@ -116,9 +116,9 @@
         background-color: var(--card-bg); /* Table background is dark */
     }
 
-    .rank-table th, .rank-table td { 
-        font-size: 0.9rem; 
-        vertical-align: middle; 
+    .rank-table th, .rank-table td {
+        font-size: 0.9rem;
+        vertical-align: middle;
         padding: 12px 15px;
         border-top: 1px solid var(--border-color);
     }
@@ -164,25 +164,26 @@
     .indicator-item strong {
         color: var(--heading-color);
     }
-    .news-list { 
-        list-style: none; 
-        padding: 0; 
-        margin: 0; 
-        max-height: 400px; 
-        overflow-y: auto; 
+    .news-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        overflow-y: auto; /* 내용이 넘칠 때 스크롤바 생성 */
         border-radius: 8px;
         border: 1px solid var(--border-color);
+        flex-grow: 1; /* flex 컨테이너에서 남은 공간을 채우도록 함 */
+        height: 105
     }
-    .news-list-item { 
-        border-bottom: 1px solid var(--border-color); 
+    .news-list-item {
+        border-bottom: 1px solid var(--border-color);
         padding: 12px 15px;
         background-color: var(--card-bg);
     }
-    .news-list-item:last-child { 
-        border-bottom: none; 
+    .news-list-item:last-child {
+        border-bottom: none;
     }
-    .news-list a { 
-        font-weight: 500; 
+    .news-list a {
+        font-weight: 500;
         color: var(--text-color);
         text-decoration: none;
         transition: color 0.2s ease-in-out;
@@ -191,9 +192,13 @@
         color: var(--primary-color);
         text-decoration: underline;
     }
-    .news-list small { 
-        color: var(--muted-text-color); 
+    .news-list small {
+        color: var(--muted-text-color);
         font-size: 0.8rem;
+    }
+    .table-responsive {
+        max-height: 400px; /* 주요 경제 지표 테이블의 최대 높이 */
+        overflow-y: auto; /* 내용이 넘칠 때 스크롤바 생성 */
     }
 
     /* Modal Enhancements (Dark Theme) */
@@ -233,20 +238,18 @@
     .nav-tabs .nav-link:hover:not(.active) {
         color: var(--primary-color);
     }
-    .financial-table th, .financial-table td { 
+    .financial-table th, .financial-table td {
         font-size: 13px;
         padding: 8px 12px;
         color: var(--text-color); /* Ensure text is light in modal tables */
     }
-    .financial-table th:first-child, .financial-table td:first-child { 
+    .financial-table th:first-child, .financial-table td:first-child {
         background-color: var(--light-bg); /* Lighter dark background for first column */
         font-weight: 500;
         color: var(--heading-color); /* White for heading text in first col */
     }
 
-    /* General Bootstrap overrides/enhancements */
     .container-fluid {
-        padding-top: 30px;
         padding-bottom: 30px;
     }
     .g-4 {
@@ -370,17 +373,78 @@
         <div class="col-lg-6">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title mb-3">주요 경제 지표</h5>
-                    <div class="indicator-item mb-2"><strong>{{ cpi_info.name }}:</strong> <span class="fw-bold font-monospace">{{ cpi_info.value }}</span> <span class="change small {% if cpi_info.raw_change > 0 %}text-danger{% elif cpi_info.raw_change < 0 %}text-primary{% endif %}">({{ cpi_info.change_pct }})</span> <small>({{ cpi_info.date }})</small>{% if cpi_info.error %}<p class="text-danger small mt-1">{{ cpi_info.error }}</p>{% endif %}</div>
-                    <div class="indicator-item"><strong>{{ interest_rate_info.name }}:</strong> <span class="fw-bold font-monospace">{{ interest_rate_info.value }}</span> <span class="change small {% if interest_rate_info.raw_change > 0 %}text-danger{% elif interest_rate_info.raw_change < 0 %}text-primary{% endif %}">({{ interest_rate_info.change_pct }})</span> <small>({{ interest_rate_info.date }})</small>{% if interest_rate_info.error %}<p class="text-danger small mt-1">{{ interest_rate_info.error }}</p>{% endif %}</div>
+                    <h5 class="card-title mb-3">
+                        주요 경제 지표 현황 <span class="text-muted" style="font-size: 0.8em;">({{ formatted_today_date }})</span>
+                    </h5>
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-bordered table-sm" style="color: var(--text-color);">
+                            <thead>
+                                <tr>
+                                    <th style="background-color: var(--primary-color); color: #fff; width: 15%;">구분</th>
+                                    <th style="background-color: var(--primary-color); color: #fff; width: 30%;">지표명</th>
+                                    <th style="background-color: var(--primary-color); color: #fff; width: 15%;">값</th>
+                                    <th style="background-color: var(--primary-color); color: #fff; width: 20%;">단위</th> <th style="background-color: var(--primary-color); color: #fff; width: 20%;">갱신일</th> </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in key_statistic_current_data %}
+                                <tr>
+                                    <td style="background-color: var(--light-bg); font-weight: 500;">{{ item.CLASS_NAME }}</td>
+                                    <td>{{ item.KEYSTAT_NAME }}</td>
+                                    <td class="font-monospace">{{ item.DATA_VALUE }}</td>
+                                    <td class="font-monospace">{{ item.UNIT_NAME }}</td>
+                                    <td class="font-monospace">
+                                        {# 시점 데이터 (item.CYCLE)를 YYYYMMDD 또는 YYYYMM 형식으로 가정하고 포맷팅 #}
+                                        {% if item.CYCLE | length == 8 %} {# YYYYMMDD 형식인 경우 #}
+                                            {{ item.CYCLE[0:4] }}년 {{ item.CYCLE[4:6] }}월 {{ item.CYCLE[6:8] }}일
+                                        {% elif item.CYCLE | length == 6 %} {# YYYYMM 형식인 경우 #}
+                                            {{ item.CYCLE[0:4] }}년 {{ item.CYCLE[4:6] }}월
+                                        {% else %} {# 그 외 형식인 경우 원본 그대로 표시 #}
+                                            {{ item.CYCLE }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-muted text-center p-3" style="background-color: var(--card-bg);">주요 경제 지표 현황을 불러올 수 없습니다.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
+
         <div class="col-lg-6">
-            <div class="card">
-                <div class="card-body">
+            <div class="card" style="height: 100%;">
+                <div class="card-body d-flex flex-column">
                     <h5 class="card-title mb-3">시장 주요 뉴스</h5>
-                    <ul class="news-list">{% for news_item in market_news %}<li class="news-list-item"><a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer">{{ news_item.title }}</a><div class="d-block mt-1"><small>{{ news_item.press }} - {{ news_item.date }}</small></div></li>{% else %}<li><p class="text-muted">뉴스를 불러올 수 없습니다.</p></li>{% endfor %}</ul>
+                    <div class="row flex-grow-1 g-3">
+                        <div class="col-md-6 d-flex flex-column">
+                            <h6 class="text-white mb-2" style="font-size: 0.95rem;">한국 주요 뉴스</h6>
+                            <ul class="news-list flex-grow-1" style="max-height: 350px;"> {% for news_item in korean_market_news %}
+                                <li class="news-list-item">
+                                    <a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer">{{ news_item.title }}</a>
+                                    <div class="d-block mt-1"><small>{{ news_item.press }} - {{ news_item.date }}</small></div>
+                                </li>
+                                {% else %}
+                                <li><p class="text-muted">한국 주요 뉴스를 불러올 수 없습니다.</p></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="col-md-6 d-flex flex-column">
+                            <h6 class="text-white mb-2" style="font-size: 0.95rem;">해외 주요 뉴스</h6>
+                            <ul class="news-list flex-grow-1" style="max-height: 350px;"> {% for news_item in international_market_news %}
+                                <li class="news-list-item">
+                                    <a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer">{{ news_item.title }}</a>
+                                    <div class="d-block mt-1"><small>{{ news_item.press }} - {{ news_item.date }}</small></div>
+                                </li>
+                                {% else %}
+                                <li><p class="text-muted">해외 주요 뉴스를 불러올 수 없습니다.</p></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -431,48 +495,48 @@ document.addEventListener('DOMContentLoaded', function() {
     let chartInstances = {};
     const chartDefaultOptions = {
         responsive: true, maintainAspectRatio: false,
-        scales: { 
-            y: { 
-                beginAtZero: false, 
-                ticks: { 
-                    font: { size: 10 }, 
+        scales: {
+            y: {
+                beginAtZero: false,
+                ticks: {
+                    font: { size: 10 },
                     color: '#FFFFFF' /* Y축 틱 색상을 흰색으로 명시적으로 설정 */
                 },
                 grid: {
                     color: 'rgba(255, 255, 255, 0.1)' /* Light grid lines on dark background */
                 }
-            }, 
-            x: { 
-                ticks: { 
-                    font: { size: 10 }, 
-                    maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 6, 
+            },
+            x: {
+                ticks: {
+                    font: { size: 10 },
+                    maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 6,
                     color: '#FFFFFF' /* X축 틱 색상을 흰색으로 명시적으로 설정 */
                 },
                 grid: {
                     color: 'rgba(255, 255, 255, 0.1)' /* Light grid lines on dark background */
                 }
-            } 
+            }
         },
-        plugins: { 
-            legend: { display: false }, 
-            tooltip: { 
-                enabled: true, 
-                mode: 'index', 
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                enabled: true,
+                mode: 'index',
                 intersect: false,
                 titleColor: '#FFFFFF', /* 툴팁 제목 글씨 색상 흰색 */
                 bodyColor: '#FFFFFF', /* 툴팁 본문 글씨 색상 흰색 */
                 backgroundColor: 'rgba(44, 49, 58, 0.9)', /* 툴팁 배경색을 card-bg와 유사하게, 투명도 추가 */
-                borderColor: 'var(--primary-color)', 
+                borderColor: 'var(--primary-color)',
                 borderWidth: 1,
                 titleFont: { size: 12, weight: 'bold' }, /* 툴팁 제목 폰트 크기 및 두께 */
                 bodyFont: { size: 11 } /* 툴팁 본문 폰트 크기 */
-            } 
+            }
         },
         elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } }
     };
     // Chart.js 전역 텍스트 색상도 흰색으로 설정
-    Chart.defaults.color = '#FFFFFF'; 
-    Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)'; 
+    Chart.defaults.color = '#FFFFFF';
+    Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
 
 
     function parseChartJsData(data, interval = 'daily') {
@@ -507,7 +571,7 @@ document.addEventListener('DOMContentLoaded', function() {
     createChart('kosdaqChart', {{ kosdaq_data | tojson }}, 'rgba(255, 99, 132, 1)'); /* Red */
     createChart('usdkrwChart', {{ usdkrw_data | tojson }}, 'rgba(75, 192, 192, 1)'); /* Green */
     createChart('wtiChart', {{ wti_data | tojson }}, 'rgba(255, 159, 64, 1)'); /* Orange */
-    
+
     function updateLatestData() {
         fetch('/api/latest-data').then(response => response.ok ? response.json() : Promise.reject('Network error'))
         .then(data => {
@@ -546,7 +610,7 @@ document.addEventListener('DOMContentLoaded', function() {
             container.querySelectorAll('.table-responsive').forEach(table => {
                 table.style.display = 'none';
             });
-            
+
             const targetTable = container.querySelector(`#${marketPrefix}-${targetType}-table`);
             if (targetTable) {
                 targetTable.style.display = '';
@@ -558,7 +622,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 'loser': '하락률 상위'
             };
             titleElement.textContent = `${today} ${marketName} ${titleMap[targetType] || ''}`;
-            
+
             rankSelector.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
             clickedButton.classList.add('active');
         });
@@ -581,7 +645,7 @@ document.addEventListener('DOMContentLoaded', function() {
             table += '</tr></thead><tbody>';
             stmt.data.forEach((rowData, rowIndex) => {
                 table += `<tr><td><strong>${stmt.index[rowIndex]}</strong></td>`;
-                rowData.forEach(cellData => { table += `<td>${(typeof cellData === 'number') ? cellData.toLocaleString() : (cellData || ' ')}</td>`; });
+                rowData.forEach(cellData => { cellData = (typeof cellData === 'number') ? cellData.toLocaleString() : (cellData || ' '); table += `<td>${cellData}</td>`; });
                 table += '</tr>';
             });
             table += '</tbody></table></div>';
@@ -592,7 +656,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const stockDetailModal = new bootstrap.Modal(document.getElementById('stockDetailModal'));
-    
+
     document.body.addEventListener('click', function(event) {
         const chartButton = event.target.closest('.chart-interval-selector button');
         const stockNameLink = event.target.closest('.stock-name');
@@ -604,7 +668,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const { ticker, interval, chartId } = chartButton.dataset;
             const chartInstance = chartInstances[chartId];
             if (!ticker || !interval || !chartInstance) return;
-            
+
             fetch(`/api/chart_data/${encodeURIComponent(ticker)}/${interval}`)
                 .then(response => response.ok ? response.json() : Promise.reject('Error'))
                 .then(data => {
