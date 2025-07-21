@@ -554,8 +554,42 @@
             });
         }
     
-        // ... (renderFinancialTable 등 다른 함수들은 이전과 동일) ...
-    
+        function renderFinancialTable(jsonData) {
+            const data = JSON.parse(jsonData); // JSON 문자열을 객체로 파싱
+            const columns = data.columns;
+            const index = data.index;
+            const tableData = data.data;
+
+            let html = '<table class="financial-table"><thead><tr><th>항목명</th>';
+            columns.forEach(col => {
+                html += `<th>${col}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            index.forEach((rowName, i) => {
+                html += `<tr><td>${rowName}</td>`;
+                tableData[i].forEach(value => {
+                    // 숫자에 쉼표 추가 및 보기 좋게 포맷 (예: 억원 단위)
+                    let formattedValue = '';
+                    if (typeof value === 'number') {
+                        // 보통 재무제표 단위가 원이므로, 억 또는 조 단위로 표시
+                        if (Math.abs(value) >= 1_0000_0000_0000) { // 조
+                            formattedValue = `${(value / 1_0000_0000_0000).toFixed(2)} 조원`;
+                        } else if (Math.abs(value) >= 1_0000_0000) { // 억
+                            formattedValue = `${(value / 1_0000_0000).toFixed(2)} 억원`;
+                        } else { // 원
+                            formattedValue = `${value.toLocaleString()} 원`;
+                        }
+                    } else {
+                        formattedValue = value;
+                    }
+                    html += `<td>${formattedValue}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            return html;
+        }    
         // --- Event Listeners ---
         submitBtn.addEventListener('click', () => fetchAnalysis(queryInput.value.trim(), 1));
         queryInput.addEventListener('keypress', (event) => {
