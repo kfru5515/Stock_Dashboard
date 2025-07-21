@@ -385,8 +385,25 @@ with app.app_context():
     print("--- 모든 초기 데이터 로딩 완료 ---")
 
 @app.context_processor
-def inject_current_year():
-    return {'current_year': datetime.utcnow().year}
+def inject_common_data():
+    def get_recent_stocks():
+        recent_codes = session.get('recent_stocks', [])
+        recent_stocks = []
+        for code in recent_codes:
+            try:
+                ticker = yf.Ticker(code)
+                info = ticker.info
+                name = info.get('shortName', code)
+                price = info.get('currentPrice', 'N/A')
+                recent_stocks.append({'code': code, 'name': name, 'price': price})
+            except Exception:
+                recent_stocks.append({'code': code, 'name': code, 'price': 'N/A'})
+        return recent_stocks
+
+    return {
+        'current_year': datetime.utcnow().year,
+        'recent_stocks': get_recent_stocks()
+    }
 
 @app.route('/api/chart_data/<string:ticker>/<string:interval>')
 def get_chart_data(ticker, interval):
@@ -449,6 +466,9 @@ def get_chart_data(ticker, interval):
         print(f"Error in get_chart_data for {ticker}/{interval}: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+    
+    
+    
             
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
