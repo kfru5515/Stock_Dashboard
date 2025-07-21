@@ -1,0 +1,438 @@
+{% extends "base.html" %}
+{% from "macros.html" import render_rank_table with context %}
+
+{% block title %}AskFin{% endblock %}
+
+{% block head %}
+<style>
+    .card {
+        border: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        height: 100%;
+        transition: transform 0.2s ease-in-out;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+    }
+    .chart-canvas-container {
+        height: 150px;
+        padding: 10px 0;
+    }
+    .rank-table th, .rank-table td {
+        font-size: 0.9rem;
+        vertical-align: middle;
+    }
+    .news-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .news-list-item {
+        border-bottom: 1px solid #eee;
+        padding: 10px 0;
+    }
+    .news-list-item:last-child {
+        border-bottom: none;
+    }
+    .news-list a {
+        text-decoration: none;
+        font-weight: 500;
+    }
+    .news-list small {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+    .indicator-item {
+        font-size: 0.95rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="row g-4 mb-4">
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card">
+                <div class="card-body">
+                    {% if kospi_data and kospi_info.value != 'N/A' %}
+                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                        <h5 class="card-title mb-0">KOSPI</h5>
+                        <div class="text-end">
+                            <span id="kospi-value" class="fw-bold fs-6">{{ kospi_info.value }}</span><br>
+                            <span id="kospi-change" class="change small {% if kospi_info.raw_change > 0 %}text-danger{% elif kospi_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">{{ kospi_info.change }} ({{ kospi_info.change_pct }})</span>
+                        </div>
+                    </div>
+                    <div class="chart-canvas-container"><canvas id="kospiChart"></canvas></div>
+                    {% else %}
+                    <p class="text-center text-muted">KOSPI 데이터를 불러올 수 없습니다.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card">
+                <div class="card-body">
+                    {% if kosdaq_data and kosdaq_info.value != 'N/A' %}
+                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                        <h5 class="card-title mb-0">KOSDAQ</h5>
+                        <div class="text-end">
+                            <span id="kosdaq-value" class="fw-bold fs-6">{{ kosdaq_info.value }}</span><br>
+                            <span id="kosdaq-change" class="change small {% if kosdaq_info.raw_change > 0 %}text-danger{% elif kosdaq_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">{{ kosdaq_info.change }} ({{ kosdaq_info.change_pct }})</span>
+                        </div>
+                    </div>
+                    <div class="chart-canvas-container"><canvas id="kosdaqChart"></canvas></div>
+                    {% else %}
+                    <p class="text-center text-muted">KOSDAQ 데이터를 불러올 수 없습니다.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card">
+                <div class="card-body">
+                    {% if usdkrw_data and usdkrw_info.value != 'N/A' %}
+                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                        <h5 class="card-title mb-0">USD/KRW</h5>
+                        <div class="text-end">
+                            <span id="usdkrw-value" class="fw-bold fs-6">{{ usdkrw_info.value }}</span><br>
+                            <span id="usdkrw-change" class="change small {% if usdkrw_info.raw_change > 0 %}text-danger{% elif usdkrw_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">{{ usdkrw_info.change }} ({{ usdkrw_info.change_pct }})</span>
+                        </div>
+                    </div>
+                    <div class="chart-canvas-container"><canvas id="usdkrwChart"></canvas></div>
+                    {% else %}
+                     <p class="text-center text-muted">환율 데이터를 불러올 수 없습니다.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card">
+                <div class="card-body">
+                     {% if wti_data and wti_info.value != 'N/A' %}
+                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                        <h5 class="card-title mb-0">WTI</h5>
+                        <div class="text-end">
+                            <span id="wti-value" class="fw-bold fs-6">{{ wti_info.value }}</span><br>
+                            <span id="wti-change" class="change small {% if wti_info.raw_change > 0 %}text-danger{% elif wti_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">{{ wti_info.change }} ({{ wti_info.change_pct }})</span>
+                        </div>
+                    </div>
+                    <div class="chart-canvas-container"><canvas id="wtiChart"></canvas></div>
+                    {% else %}
+                    <p class="text-center text-muted">WTI 데이터를 불러올 수 없습니다.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+             {% if kospi_top_volume %}
+                {{ render_rank_table('kospi', 'KOSPI', kospi_top_volume, kospi_top_value, today) }}
+            {% else %}
+                <div class="card"><div class="card-body text-center text-muted">KOSPI 순위 정보를 불러올 수 없습니다.</div></div>
+            {% endif %}
+        </div>
+        <div class="col-lg-6">
+            {% if kosdaq_top_volume %}
+                {{ render_rank_table('kosdaq', 'KOSDAQ', kosdaq_top_volume, kosdaq_top_value, today) }}
+            {% else %}
+                <div class="card"><div class="card-body text-center text-muted">KOSDAQ 순위 정보를 불러올 수 없습니다.</div></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">주요 경제 지표</h5>
+                    <div class="indicator-item mb-2">
+                        <strong>{{ cpi_info.name }}:</strong> 
+                        <span class="fw-bold">{{ cpi_info.value }}</span> 
+                        <span class="change small {% if cpi_info.raw_change > 0 %}text-danger{% elif cpi_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">
+                            ({{ cpi_info.change_pct }})
+                        </span>
+                        <small class="text-muted">({{ cpi_info.date }})</small>
+                        {% if cpi_info.error %}<p class="text-danger small mt-1">{{ cpi_info.error }}</p>{% endif %}
+                    </div>
+                    <div class="indicator-item">
+                        <strong>{{ interest_rate_info.name }}:</strong> 
+                        <span class="fw-bold">{{ interest_rate_info.value }}</span> 
+                        <span class="change small {% if interest_rate_info.raw_change > 0 %}text-danger{% elif interest_rate_info.raw_change < 0 %}text-primary{% else %}text-secondary{% endif %}">
+                            ({{ interest_rate_info.change_pct }})
+                        </span>
+                        <small class="text-muted">({{ interest_rate_info.date }})</small>
+                        {% if interest_rate_info.error %}<p class="text-danger small mt-1">{{ interest_rate_info.error }}</p>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">시장 주요 뉴스</h5>
+                    <ul class="news-list">
+                        {% if market_news %}
+                            {% for news_item in market_news %}
+                                <li class="news-list-item">
+                                    <a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer" class="link-dark">{{ news_item.title }}</a>
+                                    <div class="d-block mt-1">
+                                        <small>{{ news_item.press }} - {{ news_item.date }}</small>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        {% else %}
+                            <li><p class="text-muted text-center">뉴스를 불러올 수 없습니다.</p></li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="stockDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="stockDetailModalLabel">기업 정보</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="myTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="news-tab" data-bs-toggle="tab" data-bs-target="#news-content" type="button">관련 뉴스</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile-content" type="button">기업 개요</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="financials-tab" data-bs-toggle="tab" data-bs-target="#financials-content" type="button">주요 재무정보</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports-content" type="button">주요 공시</button>
+                    </li>
+                </ul>
+                <div class="tab-content pt-3">
+                    <div class="tab-pane fade show active" id="news-content"></div>
+                    <div class="tab-pane fade" id="profile-content"></div>
+                    <div class="tab-pane fade" id="financials-content"></div>
+                    <div class="tab-pane fade" id="reports-content"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Chart instances to store references for resize
+    let chartInstances = {};
+
+    const chartDefaultOptions = { 
+        responsive: true, maintainAspectRatio: false, 
+        scales: { 
+            y: { beginAtZero: false, ticks: { font: { size: 10 } } },
+            x: { ticks: { font: { size: 10 }, maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 6 } }
+        }, 
+        plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } }, 
+        elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } } 
+    };
+    
+    function parseChartJsData(data) {
+        if (!data || !Array.isArray(data)) return { labels: [], closes: [] };
+        return { 
+            labels: data.map(item => item.Date ? `${item.Date.split('-')[1]}/${item.Date.split('-')[2]}`: ''), 
+            closes: data.map(item => item.Close) 
+        }; 
+    }
+
+    function createChart(canvasId, chartData, color) {
+        const canvas = document.getElementById(canvasId);
+        if (canvas && chartData) {
+            const parsedData = parseChartJsData(chartData);
+            if (chartInstances[canvasId]) {
+                chartInstances[canvasId].destroy();
+            }
+            const newChart = new Chart(canvas, { 
+                type: 'line', 
+                data: { labels: parsedData.labels, datasets: [{ data: parsedData.closes, borderColor: color, fill: false }] }, 
+                options: chartDefaultOptions 
+            });
+            chartInstances[canvasId] = newChart;
+        }
+    }
+
+    createChart('kospiChart', {{ kospi_data | tojson }}, 'rgba(54, 162, 235, 1)');
+    createChart('kosdaqChart', {{ kosdaq_data | tojson }}, 'rgba(255, 99, 132, 1)');
+    createChart('usdkrwChart', {{ usdkrw_data | tojson }}, 'rgba(75, 192, 192, 1)');
+    createChart('wtiChart', {{ wti_data | tojson }}, 'rgba(255, 159, 64, 1)');
+    
+    function updateLatestData() {
+        fetch('/api/latest-data').then(response => response.ok ? response.json() : Promise.reject('Network error'))
+            .then(data => {
+                if (data.error) { console.error("Update Error:", data.error); return; }
+                ['kospi', 'kosdaq', 'usdkrw', 'wti'].forEach(name => {
+                    const info = data[name];
+                    const valEl = document.getElementById(`${name}-value`);
+                    const chgEl = document.getElementById(`${name}-change`);
+                    if (!valEl || !chgEl || !info) return;
+                    valEl.textContent = info.value;
+                    chgEl.textContent = `${info.change} (${info.change_pct})`;
+                    chgEl.className = 'change small';
+                    if (info.raw_change > 0) chgEl.classList.add('text-danger');
+                    else if (info.raw_change < 0) chgEl.classList.add('text-primary');
+                    else chgEl.classList.add('text-secondary');
+                });
+            }).catch(error => console.error("Update fetch error:", error));
+    }
+    if(document.getElementById('kospi-value')) { setInterval(updateLatestData, 30000); }
+
+    function setupRankSwitcher(marketPrefix) {
+        const rankSelector = document.getElementById(`${marketPrefix}-rank-selector`);
+        if (!rankSelector) return;
+
+        rankSelector.addEventListener('click', function(event) {
+            const clickedButton = event.target;
+            if (clickedButton.tagName !== 'BUTTON') return;
+
+            const container = clickedButton.closest('.card');
+            if (!container) return; 
+
+            const targetType = clickedButton.getAttribute('data-target');
+            const titleElement = container.querySelector(`#${marketPrefix}-rank-title`);
+            const volumeTable = container.querySelector(`#${marketPrefix}-volume-table`);
+            const valueTable = container.querySelector(`#${marketPrefix}-value-table`);
+
+            if (!titleElement || !volumeTable || !valueTable) return;
+
+            titleElement.textContent = `{{ today }} ${marketPrefix.toUpperCase()} ${targetType === 'volume' ? '거래량' : '거래대금'} 상위`;
+            container.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+            clickedButton.classList.add('active');
+
+            if (targetType === 'volume') {
+                volumeTable.style.display = 'table';
+                valueTable.style.display = 'none';
+            } else {
+                volumeTable.style.display = 'none';
+                valueTable.style.display = 'table';
+            }
+        });
+    }
+
+    setupRankSwitcher('kospi');
+    setupRankSwitcher('kosdaq');
+
+    document.querySelectorAll('button[data-target="value"]').forEach(btn => btn.click());
+ 
+    function renderFinancialTable(statementJson, targetElementId, notFoundMessage = '정보 없음') {
+        const targetElement = document.getElementById(targetElementId);
+        if (!statementJson) {
+            targetElement.innerHTML = `<p class="text-muted text-center p-4">${notFoundMessage}</p>`; return;
+        }
+        try {
+            const stmt = JSON.parse(statementJson);
+            let table = '<div class="table-responsive"><table class="table table-bordered table-hover financial-table">';
+            table += '<thead><tr><th>항목</th>';
+            stmt.columns.forEach(col => { table += `<th>${col}</th>`; });
+            table += '</tr></thead><tbody>';
+            stmt.data.forEach((rowData, rowIndex) => {
+                table += `<tr><td><strong>${stmt.index[rowIndex]}</strong></td>`;
+                rowData.forEach(cellData => { table += `<td>${(typeof cellData === 'number') ? cellData.toLocaleString() : (cellData || ' ')}</td>`; });
+                table += '</tr>';
+            });
+            table += '</tbody></table></div>';
+            targetElement.innerHTML = table;
+        } catch (e) {
+            targetElement.innerHTML = '<p class="text-danger">정보를 표시할 수 없습니다.</p>';
+        }
+    }
+
+    const stockDetailModal = new bootstrap.Modal(document.getElementById('stockDetailModal'));
+    document.body.addEventListener('click', function(event) {
+        if (event.target.classList.contains('stock-name')) {
+            event.preventDefault();
+            const stockCode = event.target.getAttribute('data-code');
+            const stockName = event.target.textContent.trim();
+            
+            document.getElementById('stockDetailModalLabel').textContent = `${stockName} (${stockCode})`;
+            const spinnerHtml = '<div class="d-flex justify-content-center my-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+            
+            ['news-content', 'profile-content', 'financials-content', 'reports-content'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.innerHTML = spinnerHtml;
+            });
+            
+            stockDetailModal.show();
+
+            fetch(`/askfin/stock/${stockCode}/profile`)
+                .then(res => res.ok ? res.json() : Promise.reject('Server error'))
+                .then(data => {
+                    const profileContent = document.getElementById('profile-content');
+                    if (data.company_profile) {
+                        let content = '<dl class="row">';
+                        for (const [key, value] of Object.entries(data.company_profile)) {
+                             content += `<dt class="col-sm-3">${key}</dt><dd class="col-sm-9">${value || 'N/A'}</dd>`;
+                        }
+                        profileContent.innerHTML = content + '</dl>';
+                    } else {
+                        profileContent.innerHTML = `<p class="text-danger">${data.profile_error || '기업 개요를 불러올 수 없습니다.'}</p>`;
+                    }
+
+                    const financialsContent = document.getElementById('financials-content');
+                    if (data.financials_error) {
+                        financialsContent.innerHTML = `<p class="text-danger text-center p-4">${data.financials_error}</p>`;
+                    } else {
+                        renderFinancialTable(data.key_financial_info, 'financials-content', '주요 재무정보를 불러올 수 없습니다.');
+                    }
+
+                    const reportsContent = document.getElementById('reports-content');
+                    if (data.reports_error) {
+                        reportsContent.innerHTML = `<p class="text-danger">${data.reports_error}</p>`;
+                    } else if (data.report_list && data.report_list.length > 0) {
+                        let html = '<ul class="list-group list-group-flush">';
+                        data.report_list.forEach(r => {
+                            html += `<li class="list-group-item"><a href="${r.url}" target="_blank" rel="noopener noreferrer">${r.report_nm}</a><small class="d-block text-muted mt-1">${r.flr_nm} - ${r.rcept_dt}</small></li>`;
+                        });
+                        reportsContent.innerHTML = html + '</ul>';
+                    } else {
+                        reportsContent.innerHTML = '<p class="text-muted text-center p-4">최근 1년간 주요 공시가 없습니다.</p>';
+                    }
+                })
+                .catch(err => {
+                    const errorHtml = `<p class="text-danger">데이터를 불러오는 데 실패했습니다: ${err}</p>`;
+                    document.getElementById('profile-content').innerHTML = errorHtml;
+                    document.getElementById('financials-content').innerHTML = errorHtml;
+                    document.getElementById('reports-content').innerHTML = errorHtml;
+                });
+
+            fetch(`/news/${stockCode}`)
+                .then(res => res.ok ? res.json() : Promise.reject('Server error'))
+                .then(data => {
+                    const newsContent = document.getElementById('news-content');
+                    if (data.error || data.length === 0) {
+                        newsContent.innerHTML = `<p class="p-3 text-muted text-center">${data.error || '관련 뉴스가 없습니다.'}</p>`;
+                    } else {
+                        let newsHtml = '<ul class="list-group list-group-flush">';
+                        data.forEach(item => {
+                            newsHtml += `<li class="list-group-item"><a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.title}</a><small class="d-block text-muted mt-1">${item.press} - ${item.date}</small></li>`;
+                        });
+                        newsContent.innerHTML = newsHtml + '</ul>';
+                    }
+                }).catch(err => {
+                    document.getElementById('news-content').innerHTML = `<p class="p-3 text-danger">뉴스 로딩 오류: ${err}</p>`;
+                });
+        }
+    });
+});
+</script>
+{% endblock %}
