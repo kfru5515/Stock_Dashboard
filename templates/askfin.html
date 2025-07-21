@@ -431,42 +431,46 @@
     
         function fetchAnalysis(query, page = 1) {
             if (!query) return;
-    
-            // 새로운 쿼리이거나, 캐시 키가 없거나, 1페이지로 돌아가는 새 분석일 경우
+
+            // 1. 사용자 메시지 추가 로직 (새로운 쿼리일 때만)
+            // 현재 쿼리가 이전 쿼리와 다르거나, 페이지가 1이고 캐시 키가 없을 때 (즉, 완전히 새로운 질문일 때)
             if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
-                currentQuery = query;
-                currentCacheKey = null;
-                
-                // 기존 AI 분석 버블이 있다면 제거 (새로운 분석 시작 시)
-                if (currentAnalysisBubble) {
-                    currentAnalysisBubble.remove();
-                    currentAnalysisBubble = null;
-                }
-                addMessageToChat('user', query);
-                queryInput.value = '';
-                // 새로운 분석 시작 시 스피너 버블 생성 및 currentAnalysisBubble에 저장
+                addMessageToChat('user', query); // 새로운 사용자 질문만 추가
+                queryInput.value = ''; // 입력창 비우기
+            }
+            // else: 페이지네이션 클릭 시에는 사용자 메시지를 추가하지 않습니다.
+
+            // 2. AI 답변 버블 처리 로직
+            // 새로운 쿼리이거나, 첫 페이지의 새로운 분석을 시작할 때, 새 AI 버블 생성
+            if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
+                currentQuery = query; // 현재 쿼리 업데이트 (새로운 쿼리가 들어왔을 때만)
+                currentCacheKey = null; // 새로운 분석 시작 시 캐시 키 초기화
                 currentAnalysisBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
-    
-            } else {
-                // 페이지네이션 클릭 시: 기존 분석 버블 내부에 스피너 표시
+            } else { // 페이지네이션 클릭 시 (기존 AI 버블의 내용을 스피너로 교체)
                 if (currentAnalysisBubble) {
                     currentAnalysisBubble.querySelector('.message').innerHTML = '<div class="spinner d-block mx-auto"></div>';
-                } else {
-                    // 예외 상황: currentAnalysisBubble이 없는데 페이지네이션 클릭 시
+                } else { // 예외 상황: currentAnalysisBubble이 없는데 페이지네이션 클릭 시 (새로 생성)
                     currentAnalysisBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
                 }
             }
             
+            // 3. fetch 호출 시 cache_key 결정 로직
+            let fetchCacheKey = currentCacheKey;
+            if (query !== currentQuery && page === 1) { 
+                fetchCacheKey = null;
+            }
+
+            
             fetch("{{ url_for('askfin.analyze_query') }}", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: currentQuery, page: page, cache_key: currentCacheKey })
+                body: JSON.stringify({ query: currentQuery, page: page, cache_key: fetchCacheKey }) // currentQuery 사용
             })
             .then(response => response.ok ? response.json() : Promise.reject(response))
             .then(data => {
                 // spinnerBubble 대신 currentAnalysisBubble 사용
                 // currentAnalysisBubble.remove(); // 이 줄을 제거
-    
+
                 if (data.cache_key) { currentCacheKey = data.cache_key; }
     
                 if (data.error) {
