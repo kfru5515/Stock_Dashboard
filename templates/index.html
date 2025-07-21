@@ -27,6 +27,10 @@
     body {
         background: var(--dark-bg); /* Solid dark background */
         color: var(--text-color);
+        /* 폰트 렌더링 최적화 추가 */
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
     }
 
     .card {
@@ -172,7 +176,6 @@
         border-radius: 8px;
         border: 1px solid var(--border-color);
         flex-grow: 1; /* flex 컨테이너에서 남은 공간을 채우도록 함 */
-        height: 105
     }
     .news-list-item {
         border-bottom: 1px solid var(--border-color);
@@ -255,6 +258,16 @@
     .g-4 {
         --bs-gutter-x: 1.5rem;
         --bs-gutter-y: 1.5rem;
+    }
+
+    /* 폰트 렌더링 최적화 (base.html에서 옮겨옴) */
+    .form-control, .btn, .nav-link, .navbar-brand,
+    h1, h2, h3, h4, h5, h6, .card-title,
+    .table th, .table td,
+    .dropdown-item, .toast-message {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
     }
 </style>
 {% endblock %}
@@ -381,18 +394,16 @@
                             <thead>
                                 <tr>
                                     <th style="background-color: var(--primary-color); color: #fff; width: 15%;">구분</th>
-                                    <th style="background-color: var(--primary-color); color: #fff; width: 30%;">지표명</th>
-                                    <th style="background-color: var(--primary-color); color: #fff; width: 15%;">값</th>
-                                    <th style="background-color: var(--primary-color); color: #fff; width: 20%;">단위</th> <th style="background-color: var(--primary-color); color: #fff; width: 20%;">갱신일</th> </tr>
+                                    <th style="background-color: var(--primary-color); color: #fff; width: 35%;">지표명</th>
+                                    <th style="background-color: var(--primary-color); color: #fff; width: 25%;">값</th>
+                                    <th style="background-color: var(--primary-color); color: #fff; width: 25%;">시점</th> </tr>
                             </thead>
                             <tbody>
                                 {% for item in key_statistic_current_data %}
                                 <tr>
                                     <td style="background-color: var(--light-bg); font-weight: 500;">{{ item.CLASS_NAME }}</td>
                                     <td>{{ item.KEYSTAT_NAME }}</td>
-                                    <td class="font-monospace">{{ item.DATA_VALUE }}</td>
-                                    <td class="font-monospace">{{ item.UNIT_NAME }}</td>
-                                    <td class="font-monospace">
+                                    <td class="font-monospace">{{ item.DATA_VALUE }} {{ item.UNIT_NAME }}</td> <td class="font-monospace">
                                         {# 시점 데이터 (item.CYCLE)를 YYYYMMDD 또는 YYYYMM 형식으로 가정하고 포맷팅 #}
                                         {% if item.CYCLE | length == 8 %} {# YYYYMMDD 형식인 경우 #}
                                             {{ item.CYCLE[0:4] }}년 {{ item.CYCLE[4:6] }}월 {{ item.CYCLE[6:8] }}일
@@ -405,7 +416,7 @@
                                 </tr>
                                 {% else %}
                                 <tr>
-                                    <td colspan="5" class="text-muted text-center p-3" style="background-color: var(--card-bg);">주요 경제 지표 현황을 불러올 수 없습니다.</td>
+                                    <td colspan="4" class="text-muted text-center p-3" style="background-color: var(--card-bg);">주요 경제 지표 현황을 불러올 수 없습니다.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

@@ -19,6 +19,8 @@ from pykrx import stock
 import re
 from bs4 import BeautifulSoup
 
+from fuzzywuzzy import fuzz
+
 # --- Global Caches for Initial Loading ---
 GLOBAL_KRX_LISTING = None
 GLOBAL_TICKER_NAME_MAP = None 
@@ -330,37 +332,68 @@ def execute_comparison_analysis(intent_json):
     
 def execute_indicator_lookup(intent_json):
     """
-    [최종 수정] 여러 소스의 경제 지표를 조회하는 메인 함수
+    [최종 수정] 여러 소스의 경제 지표를 조회하고 챗봇 답변을 생성하는 메인 함수
     """
-    target = intent_json.get("target", "")
+    target_query = intent_json.get("target", "").lower() # 사용자 쿼리의 대상 지표 (소문자로 변환하여 비교 용이)
 
     FDR_INDICATOR_MAP = {
         "환율": {"code": "USD/KRW", "name": "원/달러 환율"},
-        "유가": {"code": "WTI", "name": "WTI 국제 유가"},
-        "금값": {"code": "GC", "name": "금 선물"},
-        "미국채10년": {"code": "US10YT", "name": "미 10년물 국채 금리"},
+        "원달러환율": {"code": "USD/KRW", "name": "원/달러 환율"},
+        "유가": {"code": "CL=F", "name": "WTI 국제 유가"},
+        "wti": {"code": "CL=F", "name": "WTI 국제 유가"},
+        "금값": {"code": "GC=F", "name": "금 선물"},
+        "금가격": {"code": "GC=F", "name": "금 선물"},
+        "미국채10년": {"code": "US10YT=X", "name": "미 10년물 국채 금리"},
+        "미국10년국채": {"code": "US10YT=X", "name": "미 10년물 국채 금리"},
         "코스피": {"code": "KS11", "name": "코스피 지수"},
         "코스닥": {"code": "KQ11", "name": "코스닥 지수"},
     }
     
-    for key, value in FDR_INDICATOR_MAP.items():
-        if key in target or value['name'] in target:
-            return _get_fdr_indicator(value, intent_json)
-            
     BOK_INDICATOR_MAP = {
-        "CPI": {"stats_code": "901Y001", "item_code": "0", "name": "소비자물가지수"},
+        "cpi": {"stats_code": "901Y001", "item_code": "0", "name": "소비자물가지수"},
+        "소비자물가지수": {"stats_code": "901Y001", "item_code": "0", "name": "소비자물가지수"},
+        "소비자물가": {"stats_code": "901Y001", "item_code": "0", "name": "소비자물가지수"}, # 추가
+        "물가지수": {"stats_code": "901Y001", "item_code": "0", "name": "소비자물가지수"}, # 추가
+        "물가": {"stats_code": "901Y001", "item_code": "0", "name": "소비자물가지수"}, # 추가
+
         "기준금리": {"stats_code": "722Y001", "item_code": "0001000", "name": "한국 기준금리"},
+        "한국기준금리": {"stats_code": "722Y001", "item_code": "0001000", "name": "한국 기준금리"},
+        "금리": {"stats_code": "722Y001", "item_code": "0001000", "name": "한국 기준금리"}, # 추가
     }
-    
-    for key, value in BOK_INDICATOR_MAP.items():
-        if key in target or value['name'] in target:
-            return _get_bok_indicator(value, intent_json)
+
+    for key, indicator_info in FDR_INDICATOR_MAP.items():
+        if key in target_query or indicator_info['name'].lower() in target_query:
+            result = _get_fdr_indicator(indicator_info, intent_json)
+            if result and "error" not in result:
+                return result
+            return {
+                "query_intent": intent_json,
+                "analysis_subject": "지표 조회 실패",
+                "result": [f"'{indicator_info['name']}' 지표 데이터를 가져오는 데 문제가 발생했습니다. 잠시 후 다시 시도해주세요."]
+            }
+    # 임의로 유사도 추가
+    for key, indicator_info in BOK_INDICATOR_MAP.items():
+        similarity_score = fuzz.ratio(target_query, key.lower())
+        if similarity_score > 70: 
+            similarity_score_name = fuzz.ratio(target_query, indicator_info['name'].lower())
+            if similarity_score_name > 70 or similarity_score > 70:
+                result = _get_bok_indicator(indicator_info, intent_json)
+                if result and "error" not in result:
+                    return result
+            return {
+                "query_intent": intent_json,
+                "analysis_subject": "지표 조회 실패",
+                "result": [f"'{indicator_info['name']}' 지표 데이터를 가져오는 데 문제가 발생했습니다. 잠시 후 다시 시도해주세요."]
+            }
 
     return {
         "query_intent": intent_json,
-        "analysis_subject": "알 수 없는 지표",
-        "result": [f"'{target}' 지표는 아직 지원하지 않습니다."]
+        "analysis_subject": "지표 조회 실패",
+        "result": [f"요청하신 '{intent_json.get('target', '지표')}'는 지원하지 않는 지표이거나 데이터를 찾을 수 없습니다. (지원 지표: 환율, 유가, 금값, 미국채10년, 코스피, 코스닥, CPI, 기준금리)"]
     }
+
+
+
 
 @askfin_bp.route('/stock/<code>/profile')
 def get_stock_profile(code):
@@ -1131,12 +1164,13 @@ def askfin_page():
 @askfin_bp.route('/analyze', methods=['POST'])
 def analyze_query():
     """
-    [수정됨] JSON 분석 실패 시, 일반 대화형 AI 답변으로 폴백하는 기능이 추가된 API.
+    [수정됨] JSON 분석 실패, 지표 조회 실패, 그리고 일반 문의 유형에 대해
+    더욱 상세한 AI 답변 또는 적절한 폴백을 제공하는 API.
     """
     if not model:
         return jsonify({"error": "모델이 초기화되지 않았습니다. API 키를 확인하세요."}), 500
     
-    final_result = None # final_result 초기화
+    final_result = None
     data = request.get_json()
     user_query = data.get('query')
     page = data.get('page', 1)
@@ -1199,35 +1233,71 @@ def analyze_query():
         
         if query_type == "stock_analysis":
             final_result = execute_stock_analysis(intent_json, page, user_query, cache_key)
-            if not final_result.get('result') or (isinstance(final_result.get('result'), list) and len(final_result['result']) == 0):
-                print(f"디버그: 주식 분석 결과가 0개입니다. 일반 대화형 모델로 폴백합니다.")
+            if not final_result.get('result') or \
+               (isinstance(final_result.get('result'), list) and len(final_result['result']) == 0) or \
+               final_result.get("error"):
+                
+                print(f"디버그: 주식 분석 결과가 0개이거나 오류입니다. 일반 대화형 모델로 폴백합니다.")
                 general_prompt = f"요청하신 '{user_query}'에 대한 주식 데이터를 충분히 찾거나 분석할 수 없었습니다. 다른 질문을 해주시겠어요?"
                 fallback_response = model.generate_content(general_prompt)
                 final_result = {
                     "analysis_subject": "일반 답변",
                     "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
                 }
-        elif query_type == "comparison_analysis": # <-- 새로운 비교분석 유형 처리
+        elif query_type == "comparison_analysis":
             final_result = execute_comparison_analysis(intent_json)
-            
-        elif query_type == "indicator_lookup":
-            lookup_result = execute_indicator_lookup(intent_json)
-            
-            if lookup_result.get("analysis_subject") == "알 수 없는 지표" or \
-               not lookup_result.get('result') or \
-               (isinstance(lookup_result.get('result'), list) and len(lookup_result['result']) == 0):
+            if not final_result.get('result') or \
+               (isinstance(final_result.get('result'), list) and len(final_result['result']) == 0) or \
+               final_result.get("error"):
                 
-                print(f"디버그: 지표 조회 실패 또는 결과가 0개입니다. 일반 대화형 모델로 폴백합니다.")
-                general_prompt = f"요청하신 '{user_query}'에 대한 지표 데이터를 찾을 수 없거나 분석에 문제가 있었습니다. 다른 질문을 해주시겠어요?"
+                print(f"디버그: 비교 분석 결과가 0개이거나 오류입니다. 일반 대화형 모델로 폴백합니다.")
+                general_prompt = f"요청하신 '{user_query}'에 대한 비교 분석 데이터를 찾을 수 없었습니다. 다른 질문을 해주시겠어요?"
                 fallback_response = model.generate_content(general_prompt)
                 final_result = {
                     "analysis_subject": "일반 답변",
                     "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
                 }
-            else:
-                final_result = lookup_result 
+            
+        elif query_type == "indicator_lookup":
+            final_result = execute_indicator_lookup(intent_json)
+            if final_result.get("analysis_subject") == "지표 조회 실패":
+                print(f"디버그: 지표 조회 실패: {final_result.get('result', [''])[0]}. 일반 대화형 모델로 폴백합니다.")
+                general_prompt = f"요청하신 '{user_query}'에 대한 지표 데이터를 찾을 수 없거나 분석에 문제가 있었습니다. 다른 질문을 해주시겠어요? (오류: {final_result.get('result', [''])[0]})"
+                fallback_response = model.generate_content(general_prompt)
+                final_result = {
+                    "analysis_subject": "일반 답변",
+                    "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
+                }
+        # NEW BLOCK FOR general_inquiry
+        elif query_type == "general_inquiry":
+            print(f"디버그: 일반 문의 유형 '{query_type}' 감지. 상세 답변 생성 시도.")
+            recommendation_type = intent_json.get("recommendation_type")
+            target = intent_json.get("target")
 
-        else: 
+            specific_general_prompt = f"'{user_query}'에 대해 상세하게 답변해줘." # 기본 상세 프롬프트
+            if recommendation_type == "유행":
+                specific_general_prompt = f"최근 시장에서 유행하는 테마주에 대해 친절하게 설명해줘."
+            elif recommendation_type == "초보":
+                specific_general_prompt = f"주식 초보자를 위한 종목 추천이나 투자 가이드라인에 대해 친절하고 자세하게 설명해줘."
+            elif target:
+                 specific_general_prompt = f"'{target}'에 대해 친절하고 자세하게 설명해줘."
+
+            try:
+                general_response_content = model.generate_content(specific_general_prompt)
+                final_result = {
+                    "analysis_subject": "일반 답변",
+                    "result": [general_response_content.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
+                }
+            except Exception as general_e:
+                print(f" 일반 문의 상세 답변 생성 실패: {general_e}. 기본 폴백.")
+                traceback.print_exc()
+                general_prompt = f"다음 질문에 대해 친절하게 답변해줘: {user_query}" # 궁극적인 폴백
+                fallback_response = model.generate_content(general_prompt)
+                final_result = {
+                    "analysis_subject": "일반 답변",
+                    "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
+                }
+        else: # Fallback for unhandled query_types or general cases
             print(f"디버그: 알 수 없는 query_type '{query_type}'. 일반 대화형 모델로 폴백합니다.")
             general_prompt = f"다음 질문에 대해 친절하게 답변해줘: {user_query}"
             fallback_response = model.generate_content(general_prompt)
@@ -1241,7 +1311,7 @@ def analyze_query():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": f"분석 중 오류 발생: {str(e)}"}), 500
-
+    
 @askfin_bp.route('/new_chat', methods=['POST'])
 def new_chat():
     """대화 기록(세션)을 초기화합니다."""

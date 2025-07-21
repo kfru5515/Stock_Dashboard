@@ -206,7 +206,7 @@ def _get_news_from_naver_scraping():
 
         # 디버깅용 응답 내용 출력
         print("\n--- 네이버 스크래핑 응답 내용 시작 ---")
-        print(response.text[:1000]) # 처음 1000자만 출력하여 너무 길어지는 것을 방지
+        print(response.text[:1000])
         print("--- 네이버 스크래핑 응답 내용 끝 ---\n")
 
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -325,25 +325,17 @@ def get_international_market_news():
     """해외 시장 뉴스를 가져옵니다 (NewsAPI.org - 미국 비즈니스 헤드라인)."""
     news_api_key = os.getenv("NEWS_API_KEY")
     if not news_api_key:
-        print("DEBUG: NEWS_API_KEY 없음. 해외 뉴스 가져오기 건너뜝니다.")
+        print("DEBUG: NEWS_API_KEY 없음. 해외 뉴스 가져오기 건너뜁니다.")
         return [] # API 키 없으면 해외 뉴스는 가져오지 않음
     try:
-        # 제공된 라이브 예제 URL을 바탕으로 수정
-        # country=us, category=business를 사용하여 미국 비즈니스 헤드라인 가져옴
-        api_url = f"https://newsapi.org/v2/top-headlines?country=us&category=business&apiKey={news_api_key}&pageSize=10" # pageSize는 필요에 따라 조정
+        api_url = f"https://newsapi.org/v2/top-headlines?country=us&category=business&apiKey={news_api_key}&pageSize=10"
         print("DEBUG: NewsAPI.org로 해외 시장 뉴스 (미국 비즈니스) 검색 시도...")
         response = requests.get(api_url, timeout=7)
-        response.raise_for_status() # HTTP 오류가 발생하면 예외 발생
-
-        # 디버깅용 응답 내용 출력 (필요 없으면 주석 처리)
-        # print("\n--- 해외 뉴스 API 응답 내용 시작 ---")
-        # print(response.text)
-        # print("--- 해외 뉴스 API 응답 내용 끝 ---\n")
+        response.raise_for_status()
 
         data = response.json()
         if data.get('status') == 'ok' and data.get('articles'):
             print(f"DEBUG: NewsAPI.org에서 해외 시장 뉴스 {len(data['articles'])}개 성공적으로 가져옴.")
-            # JSON 응답 구조에 맞게 파싱
             return [{'title': a.get('title', '제목 없음'), 'press': a.get('source', {}).get('name', 'N/A'), 'date': a.get('publishedAt', '')[:10], 'url': a.get('url', '#')} for a in data['articles']]
         else:
             print("DEBUG: NewsAPI.org 응답 상태 'ok' 아님 또는 기사 없음. 해외 뉴스 가져오기 실패.")
@@ -352,6 +344,7 @@ def get_international_market_news():
         print(f"DEBUG: NewsAPI.org 오류 (해외 뉴스): {e}. 해외 뉴스 가져오기 실패.")
         traceback.print_exc()
         return []
+
 
 @app.route('/api/latest-data')
 def get_latest_data():
@@ -396,38 +389,32 @@ def index():
         print(f"DEBUG: 캐시 업데이트 필요. 현재 영업일: {latest_bday}, 캐시된 날짜: {cache.get('date')}")
         new_cache = {'date': latest_bday}
         
-        # kospi_all_data와 kosdaq_all_data를 try 블록 밖에서 기본값으로 초기화
-        # 이렇게 하면 try 블록 내에서 오류가 발생해도 이 변수들이 항상 존재합니다.
-        kospi_all_data = []
-        kosdaq_all_data = []
+        kospi_all_data = [] # 초기화
+        kosdaq_all_data = [] # 초기화
 
         try:
-            # 먼저 시장 랭크 데이터를 가져옵니다.
-            kospi_all_data, kosdaq_all_data = get_market_rank_data(latest_bday) # 올바른 변수명 사용
+            kospi_all_data, kosdaq_all_data = get_market_rank_data(latest_bday)
             
-            # 주요 통계 현황 데이터 업데이트
             current_key_stats_full = get_key_statistic_current_data()
             filtered_key_stats = [item for item in current_key_stats_full if item.get('DATA_VALUE') not in ['N/A', '', None]]
             important_key_stats = filtered_key_stats[:20]
 
-            # 한국 주요 뉴스
-            korean_news = get_general_market_news()
-            # 해외 주요 뉴스
+            korean_news = get_general_market_news() # 한국 뉴스 담당 함수
             international_news = get_international_market_news()
 
             new_cache.update({
                 'kospi_all_data': kospi_all_data,
-                'kosdaq_all_data': kosdaq_all_data, # 이 부분이 오류의 원인일 수 있었으므로 명확하게 확인
+                'kosdaq_all_data': kosdaq_all_data,
                 'korean_market_news': korean_news,
                 'international_market_news': international_news,
                 'key_statistic_current_data': important_key_stats
             })
         except Exception as e:
             print(f"Error creating cache: {e}")
-            traceback.print_exc() # 어떤 예외가 발생하는지 더 자세히 출력
+            traceback.print_exc()
             new_cache.update({
-                'kospi_all_data': [], # 오류 시 빈 리스트로 초기화
-                'kosdaq_all_data': [], # 오류 시 빈 리스트로 초기화
+                'kospi_all_data': [],
+                'kosdaq_all_data': [],
                 'korean_market_news': [],
                 'international_market_news': [],
                 'key_statistic_current_data': []
@@ -439,14 +426,13 @@ def index():
         print(f"DEBUG: 캐시 최신 상태 유지. 날짜: {latest_bday}")
 
 
-
     context = {
         'today': datetime.strptime(latest_bday, '%Y%m%d').strftime('%Y-%m-%d'),
-        'formatted_today_date': formatted_today_date, # MM월 DD일 형식 날짜 추가
+        'formatted_today_date': formatted_today_date,
         **cache,
         'key_statistic_current_data': cache.get('key_statistic_current_data', []),
-        'korean_market_news': cache.get('korean_market_news', []), # 컨텍스트에 한국 뉴스 추가
-        'international_market_news': cache.get('international_market_news', []) # 컨텍스트에 해외 뉴스 추가
+        'korean_market_news': cache.get('korean_market_news', []),
+        'international_market_news': cache.get('international_market_news', [])
     }
     days_to_fetch = 60
     start_date, end_date = datetime.now() - timedelta(days=days_to_fetch), datetime.now()
@@ -478,7 +464,7 @@ def index():
             wti_df_for_chart['Date'] = pd.to_datetime(wti_df_for_chart['Date']).dt.strftime('%Y-%m-%d')
             context['wti_data'] = wti_df_for_chart.tail(30).to_dict('records')
         else:
-            context['wti_data'], context[f'{name}_info'] = [], {'value': 'N/A'} # 오타 수정: wti_info
+            context['wti_data'], context['wti_info'] = [], {'value': 'N/A'}
     except Exception as e:
         print(f"Error processing WTI data: {e}")
         context['wti_data'], context['wti_info'] = [], {'value': 'N/A'}
@@ -488,7 +474,7 @@ def index():
     context['kospi_top_volume'] = sorted(kospi_all_data, key=lambda x: x.get('Volume', 0), reverse=True)[:10]
     context['kospi_top_value'] = sorted(kospi_all_data, key=lambda x: x.get('TradingValue', 0), reverse=True)[:10]
     context['kospi_top_gainers'] = sorted(kospi_all_data, key=lambda x: x.get('ChangeRatio', -1000), reverse=True)[:10]
-    context['kospi_top_losers'] = sorted(kosdaq_all_data, key=lambda x: x.get('ChangeRatio', 1000))[:10] # 오타 수정: kospi_top_losers가 kosdaq_all_data를 참조
+    context['kospi_top_losers'] = sorted(kospi_all_data, key=lambda x: x.get('ChangeRatio', 1000))[:10]
     context['kosdaq_top_volume'] = sorted(kosdaq_all_data, key=lambda x: x.get('Volume', 0), reverse=True)[:10]
     context['kosdaq_top_value'] = sorted(kosdaq_all_data, key=lambda x: x.get('TradingValue', 0), reverse=True)[:10]
     context['kosdaq_top_gainers'] = sorted(kosdaq_all_data, key=lambda x: x.get('ChangeRatio', -1000), reverse=True)[:10]
@@ -515,25 +501,8 @@ with app.app_context():
     print("--- 모든 초기 데이터 로딩 완료 ---")
 
 @app.context_processor
-def inject_common_data():
-    def get_recent_stocks():
-        recent_codes = session.get('recent_stocks', [])
-        recent_stocks = []
-        for code in recent_codes:
-            try:
-                ticker = yf.Ticker(code)
-                info = ticker.info
-                name = info.get('shortName', code)
-                price = info.get('currentPrice', 'N/A')
-                recent_stocks.append({'code': code, 'name': name, 'price': price})
-            except Exception:
-                recent_stocks.append({'code': code, 'name': code, 'price': 'N/A'})
-        return recent_stocks
-
-    return {
-        'current_year': datetime.utcnow().year,
-        'recent_stocks': get_recent_stocks()
-    }
+def inject_current_year():
+    return {'current_year': datetime.utcnow().year}
 
 @app.route('/api/chart_data/<string:ticker>/<string:interval>')
 def get_chart_data(ticker, interval):
@@ -551,7 +520,7 @@ def get_chart_data(ticker, interval):
         else:
             return jsonify({"error": "Invalid interval"}), 400
 
-        raw_df = get_fdr_or_yf_data(ticker, start_date, end_date, interval=yf_interval)
+        raw_df = get_fdr_or_yf_data(ticker, start=start_date, end=end_date, interval=yf_interval) # start, end 인자 이름 명시
         if raw_df.empty:
             return jsonify({"error": "No data found for ticker"}), 404
 

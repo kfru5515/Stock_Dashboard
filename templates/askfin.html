@@ -41,63 +41,33 @@
         background-color: var(--dark-bg); /* Chat window area is slightly darker */
     }
 
-    /* Message row basic style (for avatar space and alignment) */
     .message-row { 
-        display: flex; 
+        display: flex; /* Flexbox 컨테이너로 만듦 (확실히) */
         margin-bottom: 20px;
-        width: 100%; 
-        align-items: flex-start; /* Align messages to top of row if they have different heights */
-    }
-
-    /* Message bubble common style */
-    .message { 
-        max-width: 75%; 
-        padding: 14px 20px; /* Increased padding */
-        border-radius: 22px; /* More rounded corners */
-        line-height: 1.7; /* Increased line height for readability */
-        font-size: 1rem; /* Base font size for messages */
-        box-shadow: var(--box-shadow-light);
-        word-break: break-word;
+        width: 100%; /* 너비를 100%로 설정하여 justify-content가 작동하도록 함 */
+        align-items: flex-start; /* 메시지들이 행의 상단에 정렬되도록 함 */
     }
 
     /* User message style (Right-aligned, primary blue) */
     .user-message-row {
-        display: flex; 
-        justify-content: flex-end; 
+        justify-content: flex-end !important; /* 오른쪽 끝으로 강제 정렬 */
     }
     .user-message { 
         background-color: var(--primary-color); 
-        color: var(--dark-bg); /* Dark text for contrast on primary button */
-        border-bottom-right-radius: 8px; /* Slightly less rounded on one corner */
+        color: var(--dark-bg); 
+        border-bottom-right-radius: 8px; 
+        max-width: 75%; /* 메시지 버블의 최대 너비 */
+        padding: 14px 20px; 
+        border-radius: 22px; 
+        line-height: 1.7; 
+        font-size: 1rem; 
+        box-shadow: var(--box-shadow-light);
+        word-break: break-word; 
+        
+        /* **** 이 부분이 가장 중요합니다: 오른쪽 정렬을 위한 마진 **** */
+        margin-left: auto; /* AI 메시지와 구분하여 오른쪽으로 밀어냄 */
     }
     
-    /* AI message style (Left-aligned, card background) */
-    .ai-message-row { justify-content: flex-start; }
-    .ai-message { 
-        background-color: var(--card-bg); 
-        color: var(--text-color); 
-        border: 1px solid var(--border-color); 
-        border-bottom-left-radius: 8px; /* Slightly less rounded on one corner */
-    }
-
-    /* AI Avatar (using ::before) */
-    .ai-message-row::before {
-        content: 'AI';
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background-color: var(--secondary-color); /* Lighter grey for AI avatar */
-        color: var(--dark-bg); /* Dark text on AI avatar */
-        font-weight: bold;
-        font-size: 14px;
-        flex-shrink: 0;
-        margin-right: 10px;
-        box-shadow: var(--box-shadow-light);
-    }
-
     /* User Avatar (using ::after) */
     .user-message-row::after {
         content: 'ME';
@@ -107,16 +77,53 @@
         width: 40px;
         height: 40px;
         border-radius: 50%;
-        background-color: var(--primary-color); /* Primary blue for user avatar */
-        color: var(--dark-bg); /* Dark text on user avatar */
+        background-color: var(--primary-color);
+        color: var(--dark-bg);
         font-weight: bold;
         font-size: 14px;
         flex-shrink: 0;
-        margin-left: 10px;
+        margin-left: 10px; /* 메시지 버블과 아바타 사이 간격 */
         box-shadow: var(--box-shadow-light);
     }
 
-    /* Bottom input form style */
+    .ai-message-row { 
+        justify-content: flex-start !important; 
+    }
+    .ai-message { 
+        background-color: var(--card-bg); 
+        color: var(--text-color); 
+        border: 1px solid var(--border-color); 
+        border-bottom-left-radius: 8px; 
+        max-width: 75%; 
+        padding: 14px 20px; 
+        border-radius: 22px; 
+        line-height: 1.7; 
+        font-size: 1rem; 
+        box-shadow: var(--box-shadow-light);
+        word-break: break-word; 
+
+        margin-right: auto; 
+    }
+
+    .ai-message-row::before {
+        content: 'AI';
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: var(--secondary-color);
+        color: var(--dark-bg);
+        font-weight: bold;
+        font-size: 14px;
+        flex-shrink: 0;
+        margin-right: 10px; 
+        box-shadow: var(--box-shadow-light);
+    }
+
+
+
     #askfin-form-container { 
         padding: 15px 20px;
         border-top: 1px solid var(--border-color);
@@ -384,187 +391,200 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const queryInput = document.getElementById('query-input');
-    const submitBtn = document.getElementById('submit-btn');
-    const chatWindow = document.getElementById('chat-window');
-    const newChatBtn = document.getElementById('new-chat-btn');
-    const stockDetailModal = new bootstrap.Modal(document.getElementById('stockDetailModal'));
-
-    // --- State Variables ---
-    let currentQuery = '';
-    let currentCacheKey = null;
-
-    function addMessageToChat(type, contentHtml) {
-        const rowDiv = document.createElement('div');
-        rowDiv.className = `message-row ${type}-row`;
-
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}-message`; 
-        messageDiv.innerHTML = contentHtml;
-
-        rowDiv.appendChild(messageDiv);
-        chatWindow.appendChild(rowDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-        
-        return rowDiv;
-    }
+    document.addEventListener('DOMContentLoaded', function() {
+        const queryInput = document.getElementById('query-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const chatWindow = document.getElementById('chat-window');
+        const newChatBtn = document.getElementById('new-chat-btn');
+        const stockDetailModal = new bootstrap.Modal(document.getElementById('stockDetailModal'));
     
-    function renderPagination(pagination) {
-        if (!pagination || pagination.total_pages <= 1) return '';
-        
-        let paginationHtml = '<div id="pagination-container">';
-        for (let i = 1; i <= pagination.total_pages; i++) {
-            const activeClass = (i === pagination.current_page) ? 'active' : '';
-            paginationHtml += `<button class="page-btn ${activeClass}" data-page="${i}">${i}</button>`;
-        }
-        paginationHtml += '</div>';
-        return paginationHtml;
-    }
-
-    function fetchAnalysis(query, page = 1) {
-        if (!query) return;
-
-        if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
-            currentQuery = query;
-            currentCacheKey = null;
-            addMessageToChat('user', query);
-            queryInput.value = '';
+        let currentQuery = '';
+        let currentCacheKey = null;
+        let currentAnalysisBubble = null; 
+    
+        function addMessageToChat(type, contentHtml) {
+            const rowDiv = document.createElement('div');
+            rowDiv.className = `message-row ${type}-row`;
+    
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`; 
+            messageDiv.innerHTML = contentHtml;
+    
+            rowDiv.appendChild(messageDiv);
+            chatWindow.appendChild(rowDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            
+            return rowDiv; // 생성된 rowDiv를 반환
         }
         
-        const spinnerBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
-
-        fetch("{{ url_for('askfin.analyze_query') }}", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: currentQuery, page: page, cache_key: currentCacheKey })
-        })
-        .then(response => response.ok ? response.json() : Promise.reject(response))
-        .then(data => {
-            spinnerBubble.remove();
-
-            if (data.cache_key) { currentCacheKey = data.cache_key; }
-
-            if (data.error) {
-                addMessageToChat('ai', `<p class="text-danger">오류: ${data.error}</p>`);
-                return;
+        function renderPagination(pagination) {
+            if (!pagination || pagination.total_pages <= 1) return '';
+            
+            let paginationHtml = '<div id="pagination-container">';
+            for (let i = 1; i <= pagination.total_pages; i++) {
+                const activeClass = (i === pagination.current_page) ? 'active' : '';
+                paginationHtml += `<button class="page-btn ${activeClass}" data-page="${i}">${i}</button>`;
             }
-
-            const result = data.result;
-            let responseHtml = `<h5 class="mb-2" style="color: var(--heading-color);">분석 결과: ${data.analysis_subject}</h5>`;
-            if (data.description) { responseHtml += `<p class="text-muted small mb-3">${data.description}</p>`; }
-
-            if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'object') {
-                const valueLabel = result[0].label || '결과값';
-                let table = `<div class="table-responsive"><table class="table table-sm table-hover financial-table">
-                                <thead>
-                                    <tr>
-                                        <th>순위</th><th>종목명</th><th>과거 가격</th><th>현재 가격</th><th>${valueLabel}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>`;
+            paginationHtml += '</div>';
+            return paginationHtml;
+        }
+    
+        function fetchAnalysis(query, page = 1) {
+            if (!query) return;
+    
+            // 새로운 쿼리이거나, 캐시 키가 없거나, 1페이지로 돌아가는 새 분석일 경우
+            if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
+                currentQuery = query;
+                currentCacheKey = null;
                 
-                result.forEach((item, index) => {
-                    const rank = ((data.pagination.current_page - 1) * (data.pagination.per_page || 20)) + index + 1;
-                    const itemName = item?.name || 'N/A';
-                    const itemCode = item?.code || 'N/A';
-                    const startPrice = item?.start_price ? `${parseInt(item.start_price).toLocaleString()} 원` : 'N/A';
-                    const endPrice = item?.end_price ? `${parseInt(item.end_price).toLocaleString()} 원` : 'N/A';
-                    const displayValue = (item?.value !== null && item?.value !== undefined) ? item.value.toFixed(2) : 'N/A';
-                    
-                    let valueColorClass = '';
-                    if (item?.value > 0) {
-                        valueColorClass = 'text-danger'; 
-                    } else if (item?.value < 0) {
-                        valueColorClass = 'text-primary'; 
-                    }
-
-                    table += `<tr>
-                                <td>${rank}</td>
-                                <td><a href="#" class="stock-name" data-code="${itemCode}" data-name="${itemName}">${itemName}</a></td>
-                                <td>${startPrice}</td>
-                                <td>${endPrice}</td>
-                                <td style="font-weight: bold;" class="${valueColorClass}">${displayValue}</td>
-                              </tr>`;
-                });
-                table += `</tbody></table></div>`;
-                responseHtml += table;
-                responseHtml += renderPagination(data.pagination);
-            
-            } else if (Array.isArray(result) && result.length > 0) {
-                responseHtml += `<p>${result.join('<br>')}</p>`;
-            } else if (typeof result === 'string') {
-                 responseHtml += `<p>${result}</p>`;
+                // 기존 AI 분석 버블이 있다면 제거 (새로운 분석 시작 시)
+                if (currentAnalysisBubble) {
+                    currentAnalysisBubble.remove();
+                    currentAnalysisBubble = null;
+                }
+                addMessageToChat('user', query);
+                queryInput.value = '';
+                // 새로운 분석 시작 시 스피너 버블 생성 및 currentAnalysisBubble에 저장
+                currentAnalysisBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
+    
             } else {
-                 responseHtml += `<p class="text-muted">분석 결과가 없습니다.</p>`;
+                // 페이지네이션 클릭 시: 기존 분석 버블 내부에 스피너 표시
+                if (currentAnalysisBubble) {
+                    currentAnalysisBubble.querySelector('.message').innerHTML = '<div class="spinner d-block mx-auto"></div>';
+                } else {
+                    // 예외 상황: currentAnalysisBubble이 없는데 페이지네이션 클릭 시
+                    currentAnalysisBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
+                }
             }
             
-            addMessageToChat('ai', responseHtml);
-        })
-        .catch(error => {
-            spinnerBubble.remove();
-            addMessageToChat('ai', '<p class="text-danger">분석 중 심각한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</p>');
-            console.error('Fetch error:', error);
-        });
-    }
-
-    function renderFinancialTable(statementJson, targetElementId, notFoundMessage = '정보 없음') {
-        const targetElement = document.getElementById(targetElementId);
-        if (!statementJson) {
-            targetElement.innerHTML = `<p class="text-muted text-center p-4">${notFoundMessage}</p>`; return;
-        }
-        try {
-            const stmt = JSON.parse(statementJson);
-            let table = '<div class="table-responsive"><table class="table table-bordered table-hover financial-table">';
-            table += '<thead><tr><th>항목</th>';
-            stmt.columns.forEach(col => { table += `<th>${col}</th>`; });
-            table += '</tr></thead><tbody>';
-            stmt.data.forEach((rowData, rowIndex) => {
-                table += `<tr><td><strong>${stmt.index[rowIndex]}</strong></td>`;
-                rowData.forEach(cellData => { table += `<td>${(typeof cellData === 'number') ? cellData.toLocaleString() : (cellData || ' ')}</td>`; });
-                table += '</tr>';
+            fetch("{{ url_for('askfin.analyze_query') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: currentQuery, page: page, cache_key: currentCacheKey })
+            })
+            .then(response => response.ok ? response.json() : Promise.reject(response))
+            .then(data => {
+                // spinnerBubble 대신 currentAnalysisBubble 사용
+                // currentAnalysisBubble.remove(); // 이 줄을 제거
+    
+                if (data.cache_key) { currentCacheKey = data.cache_key; }
+    
+                if (data.error) {
+                    if (currentAnalysisBubble) {
+                        currentAnalysisBubble.querySelector('.message').innerHTML = `<p class="text-danger">오류: ${data.error}</p>`;
+                    } else {
+                        addMessageToChat('ai', `<p class="text-danger">오류: ${data.error}</p>`);
+                    }
+                    return;
+                }
+    
+                const result = data.result;
+                let responseHtml = `<h5 class="mb-2" style="color: var(--heading-color);">분석 결과: ${data.analysis_subject}</h5>`;
+                if (data.description) { responseHtml += `<p class="text-muted small mb-3">${data.description}</p>`; }
+    
+                if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'object') {
+                    const valueLabel = result[0].label || '결과값';
+                    let table = `<div class="table-responsive"><table class="table table-sm table-hover financial-table">
+                                    <thead>
+                                        <tr>
+                                            <th>순위</th><th>종목명</th><th>과거 가격</th><th>현재 가격</th><th>${valueLabel}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>`;
+                    
+                    result.forEach((item, index) => {
+                        // 한 페이지에 표시되는 항목 수 (기본값 20)
+                        const itemsPerPage = data.pagination.per_page || 20; 
+                        const rank = ((data.pagination.current_page - 1) * itemsPerPage) + index + 1;
+                        
+                        const itemName = item?.name || 'N/A';
+                        const itemCode = item?.code || 'N/A';
+                        const startPrice = item?.start_price ? `${parseInt(item.start_price).toLocaleString()} 원` : 'N/A';
+                        const endPrice = item?.end_price ? `${parseInt(item.end_price).toLocaleString()} 원` : 'N/A';
+                        const displayValue = (item?.value !== null && item?.value !== undefined) ? item.value.toFixed(2) : 'N/A';
+                        
+                        let valueColorClass = '';
+                        if (item?.value > 0) {
+                            valueColorClass = 'text-danger'; 
+                        } else if (item?.value < 0) {
+                            valueColorClass = 'text-primary'; 
+                        }
+    
+                        table += `<tr>
+                                    <td>${rank}</td>
+                                    <td><a href="#" class="stock-name" data-code="${itemCode}" data-name="${itemName}">${itemName}</a></td>
+                                    <td>${startPrice}</td>
+                                    <td>${endPrice}</td>
+                                    <td style="font-weight: bold;" class="${valueColorClass}">${displayValue}</td>
+                                  </tr>`;
+                    });
+                    table += `</tbody></table></div>`;
+                    responseHtml += table;
+                    responseHtml += renderPagination(data.pagination);
+                
+                } else if (Array.isArray(result) && result.length > 0) {
+                    responseHtml += `<p>${result.join('<br>')}</p>`;
+                } else if (typeof result === 'string') {
+                     responseHtml += `<p>${result}</p>`;
+                } else {
+                     responseHtml += `<p class="text-muted">분석 결과가 없습니다.</p>`;
+                }
+                
+                // currentAnalysisBubble이 존재하면 그 내용을 업데이트
+                if (currentAnalysisBubble) {
+                    currentAnalysisBubble.querySelector('.message').innerHTML = responseHtml;
+                } else {
+                    // currentAnalysisBubble이 없는 경우 (오류 처리 후 등), 새로 추가
+                    addMessageToChat('ai', responseHtml);
+                }
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+            })
+            .catch(error => {
+                // 오류 발생 시 스피너 버블의 내용을 오류 메시지로 교체
+                if (currentAnalysisBubble) {
+                    currentAnalysisBubble.querySelector('.message').innerHTML = '<p class="text-danger">분석 중 심각한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</p>';
+                } else {
+                    addMessageToChat('ai', '<p class="text-danger">분석 중 심각한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</p>');
+                }
+                console.error('Fetch error:', error);
             });
-            table += '</tbody></table></div>';
-            targetElement.innerHTML = table;
-        } catch (e) {
-            targetElement.innerHTML = '<p class="text-danger">정보를 표시할 수 없습니다.</p>';
         }
-    }
-
-
-    // --- Event Listeners ---
-    submitBtn.addEventListener('click', () => fetchAnalysis(queryInput.value.trim(), 1));
-    queryInput.addEventListener('keypress', (event) => {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            submitBtn.click();
-        }
-    });
-
-    newChatBtn.addEventListener('click', () => {
-        currentCacheKey = null;
-        currentQuery = '';
-        fetch("{{ url_for('askfin.new_chat') }}", { method: 'POST' })
-        .then(() => {
-            chatWindow.innerHTML = '';
-            addMessageToChat('ai', '새로운 대화를 시작합니다. 무엇이 궁금하신가요?');
-        }).catch(error => console.error("New chat error:", error));
-    });
-
-    chatWindow.addEventListener('click', (event) => {
-        const target = event.target;
-
-        if (target.classList.contains('page-btn') && !target.classList.contains('active')) {
-            event.preventDefault();
-            const page = parseInt(target.dataset.page, 10);
-            
-            const resultBubble = target.closest('.ai-message-row');
-            if(resultBubble) {
-                resultBubble.remove();
+    
+        // ... (renderFinancialTable 등 다른 함수들은 이전과 동일) ...
+    
+        // --- Event Listeners ---
+        submitBtn.addEventListener('click', () => fetchAnalysis(queryInput.value.trim(), 1));
+        queryInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                submitBtn.click();
             }
-            
-            fetchAnalysis(currentQuery, page);
-        }
+        });
+    
+        newChatBtn.addEventListener('click', () => {
+            currentCacheKey = null;
+            currentQuery = '';
+            currentAnalysisBubble = null; // 새 대화 시작 시 분석 버블 초기화
+            fetch("{{ url_for('askfin.new_chat') }}", { method: 'POST' })
+            .then(() => {
+                chatWindow.innerHTML = '';
+                addMessageToChat('ai', '새로운 대화를 시작합니다. 무엇이 궁금하신가요?');
+            }).catch(error => console.error("New chat error:", error));
+        });
+    
+        chatWindow.addEventListener('click', (event) => {
+            const target = event.target;
+    
+            if (target.classList.contains('page-btn') && !target.classList.contains('active')) {
+                event.preventDefault();
+                const page = parseInt(target.dataset.page, 10);
+                
+                // 페이지네이션 클릭 시, 기존 분석 버블은 제거하지 않고 내용만 업데이트하므로,
+                // 여기서 remove() 호출은 필요 없습니다.
+                // resultBubble.remove(); // 이 줄을 제거하거나 주석 처리합니다.
+                
+                fetchAnalysis(currentQuery, page);
+            }
 
         if (target.classList.contains('stock-name')) { 
             event.preventDefault();
