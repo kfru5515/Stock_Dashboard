@@ -329,7 +329,7 @@
 
 {% block content %}
 <div class="container py-4">
-    <h1 class="mb-3 text-center">AskFin_Bot</h1>
+    <h1 class="mb-3 text-center">AskFin_AI</h1>
     <p class="lead text-center mb-4">금융/투자에 대한 질문을 AI와 대화하듯 물어보세요 (예: 최근 3년동안 가장 많이 오른 제약주는?).</p>
     <hr class="mb-4">
 
@@ -554,42 +554,77 @@
             });
         }
     
-        function renderFinancialTable(jsonData) {
-            const data = JSON.parse(jsonData); // JSON 문자열을 객체로 파싱
+        // ***************************************************************
+        // MODIFIED renderFinancialTable FUNCTION FOR askfin.html
+        // 이 함수 정의를 통째로 이 위치(askfin.html의 <script> 태그 내부)에 넣으세요.
+        // ***************************************************************
+        function renderFinancialTable(jsonData, targetElementId, notFoundMessage = '정보 없음') {
+            const targetElement = document.getElementById(targetElementId);
+            if (!targetElement) {
+                console.error(`Target element with ID '${targetElementId}' not found.`);
+                return; // 대상 요소가 없으면 함수 종료
+            }
+
+            console.log("renderFinancialTable 호출됨. jsonData:", jsonData);
+            let data;
+            try {
+                // `data.key_financial_info`가 이미 JSON 객체일 수도 있고,
+                // `app.py`에서 `json.dumps()`로 문자열화된 상태로 넘어올 수도 있습니다.
+                // 따라서 JSON.parse를 시도하되, 실패하면 원본 데이터를 사용합니다.
+                data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+            } catch (e) {
+                console.error("renderFinancialTable: JSON 파싱 오류!", e);
+                targetElement.innerHTML = `<p class="text-danger text-center p-4">재무정보 표시 중 오류가 발생했습니다: 데이터 형식이 잘못되었습니다.</p>`;
+                return;
+            }
+
+            // 데이터의 필수 속성 확인 및 데이터가 비어있는지 확인
+            if (!data || !data.columns || !data.index || !data.data || data.data.length === 0) {
+                console.warn("renderFinancialTable: 필요한 데이터가 누락되었거나 데이터가 비어있음.", data);
+                targetElement.innerHTML = `<p class="text-muted text-center p-4">${notFoundMessage}</p>`;
+                return;
+            }
+
             const columns = data.columns;
             const index = data.index;
             const tableData = data.data;
 
-            let html = '<table class="financial-table"><thead><tr><th>항목명</th>';
+            let html = '<div class="table-responsive"><table class="table table-bordered table-hover financial-table">';
+            html += '<thead><tr><th>항목명</th>';
             columns.forEach(col => {
                 html += `<th>${col}</th>`;
             });
             html += '</tr></thead><tbody>';
 
             index.forEach((rowName, i) => {
-                html += `<tr><td>${rowName}</td>`;
-                tableData[i].forEach(value => {
-                    // 숫자에 쉼표 추가 및 보기 좋게 포맷 (예: 억원 단위)
-                    let formattedValue = '';
-                    if (typeof value === 'number') {
-                        // 보통 재무제표 단위가 원이므로, 억 또는 조 단위로 표시
-                        if (Math.abs(value) >= 1_0000_0000_0000) { // 조
-                            formattedValue = `${(value / 1_0000_0000_0000).toFixed(2)} 조원`;
-                        } else if (Math.abs(value) >= 1_0000_0000) { // 억
-                            formattedValue = `${(value / 1_0000_0000).toFixed(2)} 억원`;
-                        } else { // 원
-                            formattedValue = `${value.toLocaleString()} 원`;
+                html += `<tr><td><strong>${rowName}</strong></td>`;
+                if (tableData[i]) {
+                    tableData[i].forEach(value => {
+                        let formattedValue = '';
+                        if (typeof value === 'number') {
+                            // 금액 단위를 조원, 억원, 원으로 포맷팅
+                            if (Math.abs(value) >= 1_0000_0000_0000) { // 조
+                                formattedValue = `${(value / 1_0000_0000_0000).toFixed(2)} 조원`;
+                            } else if (Math.abs(value) >= 1_0000_0000) { // 억
+                                formattedValue = `${(value / 1_0000_0000).toFixed(2)} 억원`;
+                            } else { // 원
+                                formattedValue = `${value.toLocaleString()} 원`;
+                            }
+                        } else {
+                            formattedValue = value; // 숫자가 아닌 값은 그대로 사용
                         }
-                    } else {
-                        formattedValue = value;
-                    }
-                    html += `<td>${formattedValue}</td>`;
-                });
+                        html += `<td>${formattedValue}</td>`;
+                    });
+                } else {
+                    html += `<td>데이터 없음</td>`.repeat(columns.length); // 해당 행 데이터가 없으면 '데이터 없음'으로 채움
+                }
                 html += '</tr>';
             });
-            html += '</tbody></table>';
-            return html;
-        }    
+            html += '</tbody></table></div>';
+            
+            targetElement.innerHTML = html; // **가장 중요: 생성된 HTML을 대상 요소에 직접 삽입**
+        }
+
         // --- Event Listeners ---
         submitBtn.addEventListener('click', () => fetchAnalysis(queryInput.value.trim(), 1));
         queryInput.addEventListener('keypress', (event) => {
@@ -616,10 +651,6 @@
             if (target.classList.contains('page-btn') && !target.classList.contains('active')) {
                 event.preventDefault();
                 const page = parseInt(target.dataset.page, 10);
-                
-                // 페이지네이션 클릭 시, 기존 분석 버블은 제거하지 않고 내용만 업데이트하므로,
-                // 여기서 remove() 호출은 필요 없습니다.
-                // resultBubble.remove(); // 이 줄을 제거하거나 주석 처리합니다.
                 
                 fetchAnalysis(currentQuery, page);
             }
@@ -655,6 +686,8 @@
                     if (data.financials_error) {
                         financialsContent.innerHTML = `<p class="text-danger text-center p-4">${data.financials_error}</p>`;
                     } else {
+                        // **이 부분이 수정되어야 합니다.**
+                        // renderFinancialTable 함수가 이제 세 인자를 받으므로, 정확히 전달해야 합니다.
                         renderFinancialTable(data.key_financial_info, 'financials-content', '주요 재무정보를 불러올 수 없습니다.');
                     }
 
@@ -696,6 +729,5 @@
                 });
         }
     });
-});
 </script>
 {% endblock %}

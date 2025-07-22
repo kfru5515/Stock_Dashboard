@@ -18,6 +18,10 @@ selenium
 google-generativeai
 xgboost # 현재 미사용
 
+# ----- 자연어 처리 helper -- 
+fuzzywuzzy
+python-Levenshtein
+
 # ----- Frontend & Utilities -----
 libsass
 python-dotenv
