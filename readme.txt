@@ -87,4 +87,4 @@ flask run
 
 
 작성자
-전현준
+전현준 kfru5514@gmail.com
