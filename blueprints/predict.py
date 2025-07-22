@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, render_template
 import pandas as pd
 import joblib
 import os
@@ -28,3 +28,9 @@ def predict_trend():
         return jsonify({'predictions': decoded_preds.tolist()})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+predict = Blueprint('predict', __name__)
+
+@predict.route('/predict/info')
+def predict_info():
+    return render_template('predict_info.html')
