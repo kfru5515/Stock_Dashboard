@@ -6,7 +6,7 @@ import pickle
 from flashtext import KeywordProcessor
 
 # 1) 기업명 리스트 로드
-corp_df = pd.read_csv('data-files/corp_names.csv', encoding='utf-8-sig')
+corp_df = pd.read_csv('data_files/corp_names.csv', encoding='utf-8-sig')
 names   = corp_df['corp_name'].astype(str).tolist()
 
 # 2) KeywordProcessor에 등록
@@ -16,8 +16,8 @@ for name in names:
         kp.add_keyword(name)
 
 # 3) pickle로 저장
-os.makedirs('data-files', exist_ok=True)
-with open('data-files/keyword_processor.pkl', 'wb') as f:
+os.makedirs('data_files', exist_ok=True)
+with open('data_files/keyword_processor.pkl', 'wb') as f:
     pickle.dump(kp, f)
 
 print(f"✅ keyword_processor.pkl 생성 완료: 총 {len(names)}개 키워드 등록")
