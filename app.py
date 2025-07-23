@@ -34,7 +34,7 @@ app.secret_key = os.urandom(24)
 
 # ── 금융 키워드 세트 (data‑files/finance.csv) ─────────────────────────
 finance_df = pd.read_csv(
-    os.path.join(os.path.dirname(__file__), "data-files", "finance.csv"),
+    os.path.join(os.path.dirname(__file__), "data_files", "finance.csv"),
     encoding="utf-8-sig"
 )
 # CSV에 'keyword' 컬럼이 있다고 가정
@@ -47,7 +47,7 @@ FINANCE_KEYWORDS = set(
 )
 
 # ── Sentiment model & pipelines 로딩 ─────────────────────────
-SAVED_MODEL_DIR = os.path.join(os.path.dirname(__file__), "data-files", "saved_model")
+SAVED_MODEL_DIR = os.path.join(os.path.dirname(__file__), "data_files", "saved_model")
 tokenizer = AutoTokenizer.from_pretrained(
     SAVED_MODEL_DIR, use_fast=True, trust_remote_code=True
 )
@@ -69,10 +69,10 @@ def clean_for_sentiment(text: str) -> str:
     return text
 
 # ── 기업명 추출기 로딩 ────────────────────────────────────
-with open(os.path.join(os.path.dirname(__file__), 'data-files', 'keyword_processor.pkl'), 'rb') as f:
+with open(os.path.join(os.path.dirname(__file__), 'data_files', 'keyword_processor.pkl'), 'rb') as f:
     keyword_processor = pickle.load(f)
 corp_df = pd.read_csv(
-    os.path.join(os.path.dirname(__file__), 'data-files', 'corp_names.csv'),
+    os.path.join(os.path.dirname(__file__), 'data_files', 'corp_names.csv'),
     encoding='utf-8-sig'
 )
 COMPANY_SET = set(corp_df['corp_name'].astype(str))
