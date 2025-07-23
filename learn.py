@@ -16,8 +16,8 @@ from transformers import (
 # ── 프로젝트 루트 및 data‑files 경로 설정 ───────────────────────────
 SCRIPT_DIR      = os.path.dirname(os.path.abspath(__file__))   # …/crawl/scripts
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))                  # …/crawl
-DATA_DIR        = os.path.join(PROJECT_ROOT, "data-files")     # …/crawl/data‑files
-# 모델이 data-files 폴더에 저장되도록 경로 변경
+DATA_DIR        = os.path.join(PROJECT_ROOT, "data_files")     # …/crawl/data‑files
+# 모델이 data_files 폴더에 저장되도록 경로 변경
 SAVED_MODEL_DIR = os.path.join(DATA_DIR, "saved_model")
 
 # 1. 레이블 달린 데이터 로드
