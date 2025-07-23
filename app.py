@@ -417,7 +417,7 @@ def get_general_market_news():
         # API 키 없으면 네이버 스크래핑으로
         raw_list = _get_news_from_naver_scraping()
 
-    # 2) 본문(fetch) → 금융 키워드 필터 → 감성분석 & 기업명추출
+    # 2) 본문(fetch) → 금융 키워드 필터 → 감성분석(제목만) & 기업명추출
     processed = []
     for item in raw_list:
         body = fetch_body(item["url"])
@@ -428,11 +428,17 @@ def get_general_market_news():
             continue
         # → 여기까지 필터링 구간
 
-        # —— 감성분석 & 기업명추출만 수행 —— 
-        body_clean = clean_for_sentiment(body)
-        sentiment = sentiment_pipeline(body_clean[:512])[0]["label"]
+        # —— 감성분석(제목만) & 기업명추출 —— 
+        title_clean = clean_for_sentiment(item["title"])
+        # 제목이 너무 짧거나 비어있을 경우 대비: 본문 일부로 백업
+        if not title_clean.strip():
+            backup_text = clean_for_sentiment(body)[:256]
+            target_text = backup_text if backup_text else "내용없음"
+        else:
+            target_text = title_clean
+
+        sentiment = sentiment_pipeline(target_text[:256])[0]["label"]
         companies = extract_companies(body)
-        # ——————————————————————————————
 
         processed.append({
             "title":     item["title"],
