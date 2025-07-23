@@ -433,10 +433,29 @@
                     <div class="row flex-grow-1 g-3">
                         <div class="col-md-6 d-flex flex-column">
                             <h6 class="text-white mb-2" style="font-size: 0.95rem;">한국 주요 뉴스</h6>
-                            <ul class="news-list flex-grow-1" style="max-height: 350px;"> {% for news_item in korean_market_news %}
+                            <ul class="news-list flex-grow-1" style="max-height: 350px;">
+                                {% for news_item in korean_market_news %}
                                 <li class="news-list-item">
-                                    <a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer">{{ news_item.title }}</a>
-                                    <div class="d-block mt-1"><small>{{ news_item.press }} - {{ news_item.date }}</small></div>
+                                    <a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer">
+                                    {{ news_item.title }}
+                                    </a>
+                                    <div class="d-block mt-1">
+                                        <small>{{ news_item.press }} - {{ news_item.date }}</small>
+                                    </div>
+                                    <!-- 감성분석 결과 -->
+                                    <div class="mt-1">
+                                        <small><strong>{{ news_item.sentiment or '없음' }}</strong></small>
+                                    </div>
+                                    <!-- 기업명 추출 결과 -->
+                                    <div class="mt-1">
+                                        <small>기업: 
+                                            {% if news_item.companies %}
+                                            {{ news_item.companies | join(', ') }}
+                                            {% else %}
+                                            <span class="text-muted">없음</span>
+                                            {% endif %}
+                                        </small>
+                                    </div>
                                 </li>
                                 {% else %}
                                 <li><p class="text-muted">한국 주요 뉴스를 불러올 수 없습니다.</p></li>
