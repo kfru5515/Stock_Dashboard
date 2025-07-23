@@ -1,0 +1,65 @@
+{% macro render_rank_table(market_prefix, market_name, volume_data, value_data, date) %}
+<div class="card h-100">
+    <div class="card-body d-flex flex-column">
+        
+        {# 카드 제목과 버튼 그룹 #}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="card-title mb-0" id="{{ market_prefix }}-rank-title">
+                {{ date }} {{ market_name }} 거래대금 상위
+            </h5>
+            <div class="btn-group btn-group-sm" id="{{ market_prefix }}-rank-selector">
+                <button type="button" class="btn btn-outline-secondary" data-target="volume">거래량</button>
+                <button type="button" class="btn btn-outline-secondary active" data-target="value">거래대금</button>
+            </div>
+        </div>
+
+        {# 테이블 컨테이너 #}
+        <div class="table-responsive flex-grow-1">
+            {# 거래량 상위 테이블 (기본적으로 숨김) #}
+            <table class="table table-hover rank-table" id="{{ market_prefix }}-volume-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>종목명</th>
+                        <th class="text-end">등락률</th>
+                        <th class="text-end">종가</th>
+                        <th class="text-end">거래량</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in volume_data %}
+                    <tr>
+                        <td><a href="#" class="stock-name link-dark" data-code="{{ item.Code }}">{{ item.Name }}</a></td>
+                        <td class="text-end fw-bold {% if item.ChangeRatio > 0 %}text-danger{% elif item.ChangeRatio < 0 %}text-primary{% endif %}">{{ "%.2f"|format(item.ChangeRatio) }}%</td>
+                        <td class="text-end">{{ item.Close | format_price }}</td>
+                        <td class="text-end">{{ item.Volume | format_kr }}주</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {# 거래대금 상위 테이블 (기본적으로 표시) #}
+            <table class="table table-hover rank-table" id="{{ market_prefix }}-value-table">
+                <thead>
+                    <tr>
+                        <th>종목명</th>
+                        <th class="text-end">등락률</th>
+                        <th class="text-end">종가</th>
+                        <th class="text-end">거래대금</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in value_data %}
+                    <tr>
+                        <td><a href="#" class="stock-name link-dark" data-code="{{ item.Code }}">{{ item.Name }}</a></td>
+                        <td class="text-end fw-bold {% if item.ChangeRatio > 0 %}text-danger{% elif item.ChangeRatio < 0 %}text-primary{% endif %}">{{ "%.2f"|format(item.ChangeRatio) }}%</td>
+                        <td class="text-end">{{ item.Close | format_price }}</td>
+                        <td class="text-end">{{ item.TradingValue | format_kr }}원</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</div>
+{% endmacro %}

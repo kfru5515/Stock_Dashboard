@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>주식 예측 모델 설명</title>
+    <style>
+        body {
+            background-color: #1e1e2f;
+            color: #f5f5f5;
+            font-family: 'Noto Sans KR', sans-serif;
+            padding: 30px;
+        }
+        h1, h2 {
+            color: #00bcd4;
+        }
+        p, li {
+            font-size: 16px;
+        }
+        ul {
+            line-height: 1.8;
+        }
+        hr {
+            margin-top: 30px;
+            border: 1px solid #444;
+        }
+    </style>
+</head>
+<body>
+    <h1>📘 주가 예측 모델 설명</h1>
+
+    <h2>1. 사용 데이터</h2>
+    <p>
+        <strong>출처:</strong> Yahoo Finance (yfinance)<br>
+        <strong>대상:</strong> 애플(AAPL) 주식 데이터<br>
+        <strong>범위:</strong> 최근 5일간의 5분봉 데이터
+    </p>
+
+    <h2>2. 라벨링 방식</h2>
+    <p>시가(Open)와 종가(Close)의 차이를 기준으로 다음과 같이 라벨링합니다:</p>
+    <ul>
+        <li><strong>상승:</strong> 종가 - 시가 > 0.07</li>
+        <li><strong>하락:</strong> 종가 - 시가 < -0.07</li>
+        <li><strong>횡보:</strong> 나머지 구간</li>
+    </ul>
+
+    <h2>3. 특징(feature) 목록</h2>
+    <ul>
+        <li>Open, High, Low, Close, Volume</li>
+        <li>Range (고가 - 저가)</li>
+        <li>Body (시가-종가의 절댓값)</li>
+        <li>Direction (Close - Open)</li>
+        <li>Volatility ((High - Low) / Open)</li>
+    </ul>
+
+    <h2>4. 사용 모델</h2>
+    <p>
+        <strong>모델:</strong> XGBoost Classifier<br>
+        <strong>주요 하이퍼파라미터:</strong> max_depth=4, learning_rate=0.1, n_estimators=100
+    </p>
+
+    <h2>5. 저장 결과</h2>
+    <ul>
+        <li><code>models/trend_model.pkl</code> - 학습된 모델</li>
+        <li><code>models/label_encoder.pkl</code> - 라벨 인코더</li>
+        <li><code>models/feature_list.pkl</code> - 피처 목록</li>
+    </ul>
+
+    <hr>
+    <p><small>이 페이지는 train_trend_model.py 파일을 기반으로 작성되었습니다.</small></p>
+</body>
+</html>

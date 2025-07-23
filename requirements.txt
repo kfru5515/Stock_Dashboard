@@ -1,0 +1,28 @@
+# ----- Core Web & App -----
+flask
+Flask-SQLAlchemy
+pymysql
+
+# ----- Data Fetching & Analysis -----
+pandas
+pandas
+numpy
+pytz
+requests
+finance-datareader
+pykrx
+dart-fss
+yfinance
+selenium
+# ----- AI & Machine Learning -----
+google-generativeai
+xgboost # 현재 미사용
+
+# ----- 자연어 처리 helper -- 
+fuzzywuzzy
+python-Levenshtein
+
+# ----- Frontend & Utilities -----
+libsass
+python-dotenv
+beautifulsoup4

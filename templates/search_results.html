@@ -13,6 +13,13 @@
         📈 <strong>예측된 단기 추세:</strong>
         <span style="color:green;">{{ stock.prediction }}</span>
       </li>
+      <!-- 예측 모델 설명 링크 -->
+      <div style="margin-top: 8px;">
+        <a href="{{ url_for('stock_model') }}"
+          style="padding: 6px 10px; background-color: #17a2b8; color: white; border-radius: 4px; text-decoration: none;">
+          📘 단기 추세 예측 모델 설명 보기
+        </a>
+      </div>
     {% endfor %}
 </ul>
 {% else %}
