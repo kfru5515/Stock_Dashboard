@@ -2,134 +2,15 @@ from flask import Blueprint, render_template, request, session
 import FinanceDataReader as fdr
 import yfinance as yf
 import pandas as pd
-import joblib  # ✅ 모델 로딩용
+import joblib
 
-# 학습된 모델, 인코더, 피처 목록 로딩
+# 모델, 인코더, 피처 목록 로드
 model = joblib.load('models/trend_model.pkl')
 le = joblib.load('models/label_encoder.pkl')
 features = joblib.load('models/feature_list.pkl')
 
-
+# Blueprint 설정
 search_bp = Blueprint('search', __name__, url_prefix='/search')
-
-# KRX 종목 목록 로딩
-try:
-    krx_list = fdr.StockListing('KRX')
-    name_to_code = pd.Series(krx_list.Code.values, index=krx_list.Name).to_dict()
-except Exception as e:
-    print("KRX 종목 리스트 로딩 실패:", e)
-    krx_list = pd.DataFrame()
-    name_to_code = {}
-
-@search_bp.route('/search')
-def search():
-    query = request.args.get('q', '').strip()
-    results = []
-
-    if not query:
-        # 최근 조회 종목도 넘겨야 하므로 추가
-        recent_codes = session.get('recent_stocks', [])
-        recent_stocks = []
-        for c in recent_codes:
-            try:
-                t = yf.Ticker(c)
-                info = t.info
-                name = info.get('shortName', c)
-                price = info.get('currentPrice', 'N/A')
-                recent_stocks.append({'code': c, 'name': name, 'price': price})
-            except Exception:
-                recent_stocks.append({'code': c, 'name': c, 'price': 'N/A'})
-
-        return render_template('search_results.html', results=[], query=query, recent_stocks=recent_stocks)
-
-    # 기존 로직...
-    ticker_code = ''
-    ticker_suffix = ''
-
-    if query in name_to_code:
-        ticker_code = name_to_code[query]
-        market = krx_list.loc[krx_list['Code'] == ticker_code, 'Market'].values[0]
-        ticker_suffix = '.KQ' if market == 'KOSDAQ' else '.KS'
-        ticker_code += ticker_suffix
-    else:
-        ticker_code = query.upper()
-
-    try:
-        ticker = yf.Ticker(ticker_code)
-        info = ticker.info
-        if info and 'shortName' in info and info.get('currentPrice'):
-            # 예측 로직 추가
-            try:
-                hist = ticker.history(period='1d', interval='5m')
-                if not hist.empty:
-                    latest = hist.iloc[-1]
-                    open_ = latest['Open']
-                    high = latest['High']
-                    low = latest['Low']
-                    close = latest['Close']
-                    volume = latest['Volume']
-
-                    # 피처 생성
-                    range_ = high - low
-                    body = abs(close - open_)
-                    direction = close - open_
-                    volatility = (high - low) / open_ if open_ else 0
-
-                    input_df = pd.DataFrame([[
-                        open_, high, low, close, volume, range_, body, direction, volatility
-                    ]], columns=features)
-
-                    prediction = model.predict(input_df)
-                    label = le.inverse_transform(prediction)[0]
-                else:
-                    label = "예측 불가"
-            except Exception as e:
-                print("예측 오류:", e)
-                label = "예측 실패"
-
-            results.append({
-                'code': ticker_code,
-                'name': info['shortName'],
-                'currentPrice': info.get('currentPrice', 'N/A'),
-                'prediction': label  # ✅ 예측 결과 추가
-    })
-        else:
-            hist = ticker.history(period='1d')
-            if not hist.empty:
-                close_price = hist['Close'].iloc[-1]
-                results.append({
-                    'code': ticker_code,
-                    'name': query,
-                    'currentPrice': f"{close_price:,.2f}"
-                })
-    except Exception as e:
-        print("yfinance 오류:", e)
-
-    # 최근 조회 종목 세션 저장
-    recent = session.get('recent_stocks', [])
-    if ticker_code not in recent:
-        recent.insert(0, ticker_code)
-        if len(recent) > 5:
-            recent = recent[:5]
-        session['recent_stocks'] = recent
-        session.modified = True
-
-    # 최근 조회 종목 리스트 생성
-    recent_codes = session.get('recent_stocks', [])
-    recent_stocks = []
-    for c in recent_codes:
-        try:
-            t = yf.Ticker(c)
-            info = t.info
-            name = info.get('shortName', c)
-            price = info.get('currentPrice', 'N/A')
-            recent_stocks.append({'code': c, 'name': name, 'price': price})
-        except Exception:
-            recent_stocks.append({'code': c, 'name': c, 'price': 'N/A'})
-
-    return render_template('search_results.html', results=results, query=query, recent_stocks=recent_stocks)
-
-
 
 @search_bp.route('/stock/<code>')
 def stock_detail(code):
@@ -142,19 +23,120 @@ def stock_detail(code):
     if not info:
         return "종목 정보를 찾을 수 없습니다.", 404
 
-    # 🔥 최근 종목 리스트 표시
+    # ✅ 여기에서만 최근 종목 추가
     recent_codes = session.get('recent_stocks', [])
-    recent_stocks = []
+    if code not in recent_codes:
+        recent_codes.insert(0, code)
+        if len(recent_codes) > 5:
+            recent_codes = recent_codes[:5]
+        session['recent_stocks'] = recent_codes
+        session.modified = True
 
+    # 최근 종목 목록 렌더링용
+    recent_stocks = []
     for c in recent_codes:
         try:
-            t = yf.Ticker(c)
-            stock_info = t.info
-            name = stock_info.get('shortName', c)
-            price = stock_info.get('currentPrice', 'N/A')
-            recent_stocks.append({'code': c, 'name': name, 'price': price})
+            t_info = yf.Ticker(c).info
+            recent_stocks.append({
+                'code': c,
+                'name': t_info.get('shortName', c),
+                'price': t_info.get('currentPrice', 'N/A')
+            })
         except Exception:
             recent_stocks.append({'code': c, 'name': c, 'price': 'N/A'})
 
     return render_template('stock_detail.html', stock=info, recent_stocks=recent_stocks)
 
+
+
+# KRX 종목 목록 로딩
+try:
+    GLOBAL_KRX_LISTING = fdr.StockListing('KRX')
+    name_to_code = pd.Series(GLOBAL_KRX_LISTING.Code.values, index=GLOBAL_KRX_LISTING.Name).to_dict()
+except Exception as e:
+    print("KRX 리스트 로딩 실패:", e)
+    GLOBAL_KRX_LISTING = pd.DataFrame()
+    name_to_code = {}
+
+@search_bp.route('/search')
+def search():
+    query = request.args.get('q', '').strip()
+    results = []
+
+    # 최근 검색 종목 처리
+    recent_codes = session.get('recent_stocks', [])
+    recent_stocks = []
+    for c in recent_codes:
+        try:
+            info = yf.Ticker(c).info
+            recent_stocks.append({
+                'code': c,
+                'name': info.get('shortName', c),
+                'price': info.get('currentPrice', 'N/A')
+            })
+        except Exception:
+            recent_stocks.append({'code': c, 'name': c, 'price': 'N/A'})
+
+    if not query:
+        return render_template('search_results.html', results=[], query=query, recent_stocks=recent_stocks)
+
+    df = GLOBAL_KRX_LISTING.copy()
+    matched = df[df['Name'].str.contains(query, case=False, na=False)]
+
+    for _, row in matched.iterrows():
+        code = row['Code']
+        name = row['Name']
+        market = row['Market']
+        suffix = '.KQ' if market == 'KOSDAQ' else '.KS'
+        full_code = f"{code}{suffix}"
+        price = row['Close']
+        volume = row['Volume']
+        marketcap = row['Marcap']
+
+        # 최근 5일 종가 차트용 데이터
+        try:
+            ticker = yf.Ticker(full_code)
+            hist = ticker.history(period='5d')
+            price_chart = hist['Close'].fillna(0).round(2).tolist()
+        except Exception:
+            price_chart = [0, 0, 0, 0, 0]
+
+        # 예측
+        try:
+            intraday = ticker.history(period='1d', interval='5m')
+            if not intraday.empty:
+                latest = intraday.iloc[-1]
+                open_, high, low, close, vol = latest['Open'], latest['High'], latest['Low'], latest['Close'], latest['Volume']
+                range_ = high - low
+                body = abs(close - open_)
+                direction = close - open_
+                volatility = (high - low) / open_ if open_ else 0
+
+                input_df = pd.DataFrame([[open_, high, low, close, vol, range_, body, direction, volatility]],
+                                        columns=features)
+                pred = model.predict(input_df)
+                label = le.inverse_transform(pred)[0]
+            else:
+                label = "예측 불가"
+        except Exception as e:
+            print("예측 오류:", e)
+            label = "예측 실패"
+
+        # 결과 추가
+        results.append({
+            'code': full_code,
+            'name': name,
+            'currentPrice': price,
+            'volume': volume,
+            'marketcap': marketcap,
+            'prediction': label,
+            'price_chart': price_chart,
+            'financial': {
+                '매출액': ['1000억', '950억', '900억'],
+                '영업이익': ['150억', '140억', '130억'],
+                '순이익': ['100억', '95억', '90억']
+            }
+        })
+
+
+    return render_template('search_results.html', results=results, query=query, recent_stocks=recent_stocks)

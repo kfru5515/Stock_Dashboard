@@ -10,7 +10,12 @@ from pykrx import stock
 import requests
 from bs4 import BeautifulSoup
 import traceback
+from urllib.parse import urljoin
+from readability import Document
+import pickle
+import re
 
+from transformers import AutoTokenizer, pipeline
 from blueprints.analysis import analysis_bp
 from blueprints.tables import tables_bp
 from blueprints.join import join_bp
@@ -26,6 +31,101 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+
+# ── 금융 키워드 세트 (data‑files/finance.csv) ─────────────────────────
+finance_df = pd.read_csv(
+    os.path.join(os.path.dirname(__file__), "data_files", "finance.csv"),
+    encoding="utf-8-sig"
+)
+# CSV에 'keyword' 컬럼이 있다고 가정
+FINANCE_KEYWORDS = set(
+    finance_df['keyword']
+    .dropna()
+    .astype(str)
+    .str.lower()
+    .str.strip()
+)
+
+# ── Sentiment model & pipelines 로딩 ─────────────────────────
+SAVED_MODEL_DIR = os.path.join(os.path.dirname(__file__), "data_files", "saved_model")
+tokenizer = AutoTokenizer.from_pretrained(
+    SAVED_MODEL_DIR, use_fast=True, trust_remote_code=True
+)
+sentiment_pipeline = pipeline(
+    'sentiment-analysis',
+    model=SAVED_MODEL_DIR,
+    tokenizer=SAVED_MODEL_DIR,
+    return_all_scores=False,
+    device=-1
+)
+
+# 불용 문자/토큰 제거용 (필요시 더 추가)
+STOP_CHARS_PATTERN = re.compile(r"[.,·()\[\]{}!?;:“”\"'`…]")
+
+def clean_for_sentiment(text: str) -> str:
+    text = STOP_CHARS_PATTERN.sub(" ", text)
+    text = text.replace("[UNK]", " ")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+# ── 기업명 추출기 로딩 ────────────────────────────────────
+with open(os.path.join(os.path.dirname(__file__), 'data_files', 'keyword_processor.pkl'), 'rb') as f:
+    keyword_processor = pickle.load(f)
+corp_df = pd.read_csv(
+    os.path.join(os.path.dirname(__file__), 'data_files', 'corp_names.csv'),
+    encoding='utf-8-sig'
+)
+COMPANY_SET = set(corp_df['corp_name'].astype(str))
+STOPWORDS = {"ETF", "ETN", "신탁", "SPAC", "펀드", "리츠"}
+
+BOUNDARY = r"[가-힣A-Za-z0-9]"   # 단어로 취급할 문자들
+
+def is_standalone(word: str, text: str) -> bool:
+    """
+    text 안에서 word가 양옆이 문자/숫자에 붙어있지 않은 '독립된' 형태로 존재하는지 검사
+    """
+    pattern = rf"(?<!{BOUNDARY}){re.escape(word)}(?!{BOUNDARY})"
+    return re.search(pattern, text) is not None
+
+def extract_companies(text: str) -> list[str]:
+    cleaned = re.sub(r'ⓒ.*', '', text)
+    candidates = keyword_processor.extract_keywords(cleaned)
+
+    uniq = dict.fromkeys(candidates)  # 순서 유지한 중복 제거
+    filtered = []
+    for w in uniq:
+        # 1) 기본 필터
+        if w in STOPWORDS: 
+            continue
+        if w not in COMPANY_SET:
+            continue
+        # 2) 단독 단어인지 확인 (부분 문자열 방지)
+        if not is_standalone(w, cleaned):
+            continue
+        filtered.append(w)
+    return filtered
+
+# ── 본문(fetch) 헬퍼 ─────────────────────────────────────────
+def fetch_body(url: str) -> str:
+    try:
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+        resp.raise_for_status()
+        html = resp.text
+        doc = Document(html)
+        content_html = doc.summary()
+        soup = BeautifulSoup(content_html, "html.parser")
+        for tag in soup(["script", "style"]):
+            tag.decompose()
+        paragraphs = [
+            p.get_text(strip=True)
+            for p in soup.find_all("p")
+            if len(p.get_text(strip=True)) > 20
+        ]
+        return "\n".join(paragraphs)
+    except Exception:
+        return ""
+
+# ── Jinja2 필터 정의 ────────────────────────────────────────
 
 @app.template_filter('format_kr')
 def format_kr(value):
@@ -296,30 +396,82 @@ def get_key_statistic_current_data():
     return []
 
 
-def get_general_market_news(): # 한국 주요 뉴스를 담당하는 함수로 사용
-    """한국 시장 뉴스를 가져옵니다 (NewsAPI.org 또는 네이버 스크래핑)."""
+def get_general_market_news():
+    """
+    한국 시장 주요 뉴스를 가져와
+    본문(fetch) → 감성분석 → 기업명추출 후 반환합니다.
+    """
     news_api_key = os.getenv("NEWS_API_KEY")
-    if not news_api_key:
-        print("DEBUG: NEWS_API_KEY 없음. 네이버 한국 시장 뉴스 스크래핑으로 폴백합니다.")
-        return _get_news_from_naver_scraping()
-    try:
-        # 한국 관련 키워드 및 한국어 필터 유지
-        query = "한국 경제 OR 국내 증시 OR 한국은행 OR 코스피 OR 코스닥 OR 국내 기업 OR 거시경제 OR 금리 OR 환율 OR CPI OR 인플레이션 OR GDP OR 통화정책 OR 재정정책"
-        api_url = f"https://newsapi.org/v2/everything?q={query}&language=ko&sortBy=publishedAt&apiKey={news_api_key}&pageSize=10"
-        print("DEBUG: NewsAPI.org로 한국 시장 뉴스 검색 시도...")
-        response = requests.get(api_url, timeout=7)
-        response.raise_for_status()
-        data = response.json()
-        if data.get('status') == 'ok' and data.get('articles'):
-            print(f"DEBUG: NewsAPI.org에서 한국 시장 뉴스 {len(data['articles'])}개 성공적으로 가져옴.")
-            return [{'title': a.get('title', '제목 없음'), 'press': a.get('source', {}).get('name', 'N/A'), 'date': a.get('publishedAt', '')[:10], 'url': a.get('url', '#')} for a in data['articles']]
+    raw_list = []
+
+    # 1) NewsAPI로 한국 시장 뉴스 시도
+    if news_api_key:
+        try:
+            query = (
+                "한국 경제 OR 국내 증시 OR 한국은행 OR 코스피 OR 코스닥 "
+                "OR 국내 기업 OR 거시경제 OR 금리 OR 환율 OR CPI "
+                "OR 인플레이션 OR GDP OR 통화정책 OR 재정정책"
+            )
+            api_url = (
+                f"https://newsapi.org/v2/everything?"
+                f"q={query}&language=ko&sortBy=publishedAt"
+                f"&apiKey={news_api_key}&pageSize=10"
+            )
+            resp = requests.get(api_url, timeout=7)
+            resp.raise_for_status()
+            data = resp.json()
+
+            if data.get("status") == "ok" and data.get("articles"):
+                for art in data["articles"]:
+                    raw_list.append({
+                        "title": art.get("title", "제목 없음"),
+                        "press": art.get("source", {}).get("name", "N/A"),
+                        "date": art.get("publishedAt", "")[:10],
+                        "url": art.get("url", "#"),
+                    })
+            else:
+                raw_list = _get_news_from_naver_scraping()
+
+        except Exception:
+            traceback.print_exc()
+            raw_list = _get_news_from_naver_scraping()
+    else:
+        # API 키 없으면 네이버 스크래핑으로
+        raw_list = _get_news_from_naver_scraping()
+
+    # 2) 본문(fetch) → 금융 키워드 필터 → 감성분석(제목만) & 기업명추출
+    processed = []
+    for item in raw_list:
+        body = fetch_body(item["url"])
+
+        # ← 이 부분 바로 아래에 금융 키워드 필터 삽입
+        combined = (item["title"] + " " + item["press"] + " " + body).lower()
+        if not any(kw in combined for kw in FINANCE_KEYWORDS):
+            continue
+        # → 여기까지 필터링 구간
+
+        # —— 감성분석(제목만) & 기업명추출 —— 
+        title_clean = clean_for_sentiment(item["title"])
+        # 제목이 너무 짧거나 비어있을 경우 대비: 본문 일부로 백업
+        if not title_clean.strip():
+            backup_text = clean_for_sentiment(body)[:256]
+            target_text = backup_text if backup_text else "내용없음"
         else:
-            print("DEBUG: NewsAPI.org 응답 상태 'ok' 아님 또는 기사 없음. 네이버 한국 시장 뉴스 스크래핑으로 폴백합니다.")
-            return _get_news_from_naver_scraping()
-    except Exception as e:
-        print(f"DEBUG: NewsAPI.org 오류 (한국 뉴스): {e}. 네이버 한국 시장 뉴스 스크래핑으로 폴백합니다.")
-        traceback.print_exc()
-        return _get_news_from_naver_scraping()
+            target_text = title_clean
+
+        sentiment = sentiment_pipeline(target_text[:256])[0]["label"]
+        companies = extract_companies(body)
+
+        processed.append({
+            "title":     item["title"],
+            "press":     item["press"],
+            "date":      item["date"],
+            "url":       item["url"],
+            "sentiment": sentiment,
+            "companies": companies
+        })
+
+    return processed
 
 def get_international_market_news():
     """해외 시장 뉴스를 가져옵니다 (NewsAPI.org - 미국 비즈니스 헤드라인)."""
