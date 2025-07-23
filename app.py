@@ -78,10 +78,32 @@ corp_df = pd.read_csv(
 COMPANY_SET = set(corp_df['corp_name'].astype(str))
 STOPWORDS = {"ETF", "ETN", "신탁", "SPAC", "펀드", "리츠"}
 
+BOUNDARY = r"[가-힣A-Za-z0-9]"   # 단어로 취급할 문자들
+
+def is_standalone(word: str, text: str) -> bool:
+    """
+    text 안에서 word가 양옆이 문자/숫자에 붙어있지 않은 '독립된' 형태로 존재하는지 검사
+    """
+    pattern = rf"(?<!{BOUNDARY}){re.escape(word)}(?!{BOUNDARY})"
+    return re.search(pattern, text) is not None
+
 def extract_companies(text: str) -> list[str]:
     cleaned = re.sub(r'ⓒ.*', '', text)
     candidates = keyword_processor.extract_keywords(cleaned)
-    return [w for w in dict.fromkeys(candidates) if w not in STOPWORDS and w in COMPANY_SET]
+
+    uniq = dict.fromkeys(candidates)  # 순서 유지한 중복 제거
+    filtered = []
+    for w in uniq:
+        # 1) 기본 필터
+        if w in STOPWORDS: 
+            continue
+        if w not in COMPANY_SET:
+            continue
+        # 2) 단독 단어인지 확인 (부분 문자열 방지)
+        if not is_standalone(w, cleaned):
+            continue
+        filtered.append(w)
+    return filtered
 
 # ── 본문(fetch) 헬퍼 ─────────────────────────────────────────
 def fetch_body(url: str) -> str:
