@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}AskFin{% endblock %}
+
+{% block head %}
+<style>
+    .hero-section {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-height: 70vh;
+        color: var(--text-color); /* Use text-color from base */
+    }
+    .hero-section h1 {
+        font-size: 3.8rem; /* Slightly larger heading for impact */
+        font-weight: 700;
+        color: var(--heading-color) !important; /* Ensure white heading */
+        line-height: 1.2;
+        margin-bottom: 1rem;
+    }
+    /* Style for '금융' in heading */
+    .hero-section h1 .fin-text-color {
+        color: var(--primary-color) !important; /* Use the primary color defined in base.html */
+    }
+    .hero-section p {
+        font-size: 1.35rem; /* Slightly larger lead text */
+        color: var(--muted-text-color); /* Muted color for lead text */
+        max-width: 700px; /* Wider text for better readability */
+        margin: 1.5rem auto;
+    }
+    .hero-section .btn-lg {
+        padding: 0.9rem 2.2rem; /* Larger button padding */
+        font-size: 1.2rem; /* Larger button font */
+        border-radius: 50px; /* Pill-shaped button */
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+        color: var(--dark-bg); /* Dark text on button for contrast */
+        font-weight: 700;
+        transition: all 0.3s ease;
+    }
+    .hero-section .btn-lg:hover {
+        background-color: #0088cc; /* Darker primary on hover */
+        border-color: #0088cc;
+        color: white; /* White text on hover */
+        transform: translateY(-3px); /* Subtle lift on hover */
+        box-shadow: var(--box-shadow-medium);
+    }
+    /* New style for the 'Fin' part inside the button */
+    .hero-section .btn-lg .fin-color {
+        color: var(--dark-bg); /* Text color for 'Fin' inside the button in normal state */
+    }
+    .hero-section .btn-lg:hover .fin-color {
+        color: white; /* Text color for 'Fin' inside the button on hover */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="hero-section">
+        <div>
+            <h1>AI와 함께하는<br>새로운 <span class="fin-text-color">금융</span> 데이터 분석</h1>
+            <p class="lead">
+                복잡한 시장 데이터와 어려운 질문들. 이제 AskFin AI에게 물어보세요.<br>
+                데이터에 기반한 심층적인 인사이트를 얻을 수 있습니다.
+            </p>
+            <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg mt-4">
+              Ask<span class="fin-color">Fin</span> 시작하기 {# <-- Here's the change #}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

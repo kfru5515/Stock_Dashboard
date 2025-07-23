@@ -1,0 +1,319 @@
+﻿word,sentiment
+강세장,positive
+약세장,negative
+횡보장,neutral
+감소,negative
+하락,negative
+축소,negative
+손실,negative
+중단,negative
+관세,negative
+험난,negative
+피해,negative
+소실,negative
+수월,positive
+협력,positive
+위협,negative
+협력 강화, positive
+압수수색,negative
+주가 상승,positive
+주가 하락,negative
+주가 횡보,neutral
+상한가,positive
+하한가,negative
+가격 제한폭,neutral
+거래량 증가,positive
+거래량 감소,negative
+거래량 유지,neutral
+시가총액 증가,positive
+시가총액 감소,negative
+시가총액 안정,neutral
+배당 확대,positive
+배당 축소,negative
+배당 유지,neutral
+실적 호조,positive
+실적 부진,negative
+예상 실적 부합,neutral
+호재 발표,positive
+악재 공시,negative
+공시 미발표,neutral
+기술적 반등,positive
+기술적 조정,negative
+기술적 횡보,neutral
+신규 상장,positive
+상장폐지,negative
+상장 유지,neutral
+기관 매수,positive
+기관 매도,negative
+기관 매매 중립,neutral
+외국인 순매수,positive
+외국인 순매도,negative
+외국인 거래,neutral
+개인 순매수,positive
+개인 순매도,negative
+개인 거래,neutral
+공매도 증가,negative
+공매도 축소,positive
+공매도 잔고,neutral
+주식 분할,positive
+액면분할 무산,negative
+액면분할 예정,neutral
+무상증자,positive
+유상증자,negative
+증자 계획 없음,neutral
+자사주 매입,positive
+자사주 처분,negative
+M&A 추진,positive
+M&A 무산,negative
+M&A 검토,neutral
+신제품 출시,positive
+시장 진입 실패,negative
+신제품 개발 중,neutral
+부채 상환,positive
+부채 급증,negative
+부채 수준,neutral
+신용 등급 상향,positive
+신용 등급 하향,negative
+신용 등급 유지,neutral
+예상치 상회,positive
+예상치 하회,negative
+예상치 부합,neutral
+EPS 증가,positive
+EPS 감소,negative
+EPS 안정,neutral
+PER 저평가,positive
+PER 고평가,negative
+PER 보합,neutral
+ROE 개선,positive
+ROE 악화,negative
+ROE 유지,neutral
+배당 커버리지 개선,positive
+배당 커버리지 악화,negative
+배당 커버리지 안정,neutral
+현금흐름 개선,positive
+현금흐름 악화,negative
+현금흐름 안정,neutral
+순이익 증가,positive
+순이익 감소,negative
+순이익 유지,neutral
+영업이익 증가,positive
+영업이익 감소,negative
+영업이익 안정,neutral
+유동성 증가,positive
+유동성 감소,negative
+유동성 보통,neutral
+기술적 분석 호평,positive
+기술적 분석 경고,negative
+기술적 분석 중립,neutral
+배당 수익률 높음,positive
+배당 수익률 낮음,negative
+배당 수익률 평균,neutral
+목표주가 상향,positive
+목표주가 하향,negative
+목표주가 유지,neutral
+환율 상승,negative
+환율 하락,positive
+ETF 상장,positive
+ETF 해지,negative
+공매도 잔고 증가,negative
+공매도 잔고 감소,positive
+인플레이션 상승,negative
+금리 인상,negative
+금리 인하,positive
+정책금리 동결,neutral
+Fed 금리 인상,negative
+Fed 금리 인하,positive
+약세,negative
+달러 강세,negative
+달러 약세,positive
+원/달러 환율 상승,negative
+원/달러 환율 하락,positive
+외환 보유액 증가,positive
+외환 보유액 감소,negative
+외국인 채권 순매수,positive
+외국인 채권 순매도,negative
+직전 고점 돌파,positive
+주요 저점 이탈,negative
+이익 전망 상향,positive
+이익 전망 하향,negative
+목표주가 괴리 확대,negative
+목표주가 괴리 축소,positive
+애널리스트 매수 의견 증가,positive
+애널리스트 매도 의견 증가,negative
+애널리스트 의견 보합,neutral
+신용 평가사 상향,positive
+신용 평가사 하향,negative
+환율 변동성 확대,negative
+환율 변동성 축소,positive
+경기선행지수 상승,positive
+경기선행지수 하락,negative
+PMI 확장,positive
+PMI 수축,negative
+소비자물가지수 상승,negative
+소비자물가지수 하락,positive
+소비자물가지수 안정,neutral
+원유 가격 상승,negative
+원유 가격 하락,positive
+금 가격 상승,positive
+금 가격 하락,negative
+구리 가격 상승,positive
+구리 가격 하락,negative
+비트코인 가격 상승,positive
+비트코인 가격 하락,negative
+채권 수익률 상승,negative
+채권 수익률 하락,positive
+회사채 스프레드 축소,positive
+회사채 스프레드 확대,negative
+CDS 프리미엄 상승,negative
+CDS 프리미엄 하락,positive
+하이일드 채권 매입,positive
+하이일드 채권 매도,negative
+레버리지 ETF 매수,neutral
+레버리지 ETF 매도,neutral
+변동성 ETF 매입,neutral
+변동성 ETF 매도,neutral
+상업용 부동산 투자 증가,neutral
+주택담보대출 금리 상승,negative
+주택담보대출 금리 하락,positive
+은행 대출 증가,positive
+은행 대출 감소,negative
+부채비율 상승,negative
+부채비율 하락,positive
+자기자본비율 상승,positive
+자기자본비율 하락,negative
+ROIC 개선,positive
+ROIC 악화,negative
+이자보상배율 상승,positive
+이자보상배율 하락,negative
+가이던스 상향,positive
+가이던스 하향,negative
+파이프라인 확대,positive
+파이프라인 축소,negative
+연구개발비 증가,positive
+연구개발비 감소,negative
+경영권 분쟁 발생,negative
+경영권 분쟁 해결,positive
+소송 리스크 확대,negative
+소송 리스크 축소,positive
+ESG 점수 상승,positive
+ESG 점수 하락,negative
+탄소배출권 매입,positive
+탄소배출권 매도,negative
+그린본드 발행,positive
+그린본드 상환,neutral
+배당 일회성 지급,neutral
+특별배당 실시,positive
+우선주 발행,neutral
+후순위채 발행,negative
+전환사채 발행,neutral
+신주인수권부사채 발행,neutral
+리스크 관리 개선,positive
+리스크 관리 부실,negative
+내부자 거래 증가,negative
+내부자 거래 감소,positive
+사모펀드 투자 유치,positive
+사모펀드 투자 회수,negative
+주간 변동성 확대,neutral
+경기 부양책,positive
+긴축 정책,negative
+재정 적자 확대,negative
+무역 흑자,positive
+무역 적자,negative
+소비 회복,positive
+소비 위축,negative
+실업률 상승,negative
+실업률 하락,positive
+고용 개선,positive
+고용 악화,negative
+물가 안정,positive
+물가 급등,negative
+물가 급락,negative
+중앙은행 개입,neutral
+외국인 직접투자 증가,positive
+외국인 직접투자 감소,negative
+정부 부채 증가,negative
+정부 부채 감소,positive
+인프라 투자 확대,positive
+인프라 투자 축소,negative
+시장 개방,positive
+보호무역 강화,negative
+환율 안정,positive
+신용 경색,negative
+금융 규제 완화,positive
+금융 규제 강화,negative
+디폴트 위험,negative
+신흥시장 성장,positive
+신흥시장 불안,negative
+국채 금리 상승,negative
+국채 금리 하락,positive
+부동산 시장 과열,negative
+부동산 시장 침체,negative
+상업용 부동산 회복,positive
+가계부채 증가,negative
+가계부채 안정,positive
+투자 심리 개선,positive
+투자 심리 위축,negative
+기업 실사,neutral
+금리 인상 예고,negative
+금리 인하 예고,positive
+신용 등급 전망 개선,positive
+신용 등급 전망 악화,negative
+소비자 신뢰 지수 상승,positive
+소비자 신뢰 지수 하락,negative
+산업생산 증가,positive
+산업생산 감소,negative
+소매판매 증가,positive
+소매판매 감소,negative
+국제유가 상승,negative
+국제유가 하락,positive
+원자재 가격 상승,negative
+원자재 가격 하락,positive
+제조업 PMI 상승,positive
+제조업 PMI 하락,negative
+서비스업 PMI 상승,positive
+서비스업 PMI 하락,negative
+시장 변동성 상승,negative
+시장 변동성 하락,positive
+외환시장 불안,negative
+채권시장 안정,positive
+주식시장 과열,negative
+주식시장 침체,negative
+비즈니스 투자 증가,positive
+비즈니스 투자 감소,negative
+고정자산 투자 증가,positive
+고정자산 투자 감소,negative
+정부 예산 집행 지연,negative
+정부 예산 조기 집행,positive
+국채 발행 확대,negative
+국채 발행 축소,positive
+지방채 스프레드 확대,negative
+지방채 스프레드 축소,positive
+스타트업 투자 증가,positive
+스타트업 투자 감소,negative
+기술 혁신 확대,positive
+기술 혁신 부진,negative
+무역 장벽 완화,positive
+무역 장벽 강화,negative
+관세 인상,negative
+관세 인하,positive
+수출 호조,positive
+수출 부진,negative
+수입 증가,positive
+수입 감소,negative
+해외건설 수주 증가,positive
+해외건설 수주 감소,negative
+외국환거래법 개정,neutral
+금융소비자 보호 강화,positive
+금융소비자 보호 미흡,negative
+개인정보 유출,negative
+사이버 공격 증가,negative
+사이버 공격 감소,positive
+테이퍼링 시행,negative
+테이퍼링 연기,positive
+양적 완화 확대,positive
+양적 완화 축소,negative
+재정 긴축 논의,neutral
+구조조정 발표,negative
+구조조정 철회,positive
+글로벌,neutral
+진출,positive
