@@ -501,8 +501,22 @@ with app.app_context():
     print("--- 모든 초기 데이터 로딩 완료 ---")
 
 @app.context_processor
-def inject_current_year():
-    return {'current_year': datetime.utcnow().year}
+def inject_recent_stocks():
+    import yfinance as yf
+
+    recent_codes = session.get('recent_stocks', [])
+    recent_stocks = []
+    for c in recent_codes:
+        try:
+            info = yf.Ticker(c).info
+            recent_stocks.append({
+                'code': c,
+                'name': info.get('shortName', c),
+                'price': info.get('currentPrice', 'N/A')
+            })
+        except Exception:
+            recent_stocks.append({'code': c, 'name': c, 'price': 'N/A'})
+    return dict(recent_stocks=recent_stocks)
 
 @app.route('/api/chart_data/<string:ticker>/<string:interval>')
 def get_chart_data(ticker, interval):
