@@ -23,8 +23,16 @@ def stock_detail(code):
     if not info:
         return "종목 정보를 찾을 수 없습니다.", 404
 
-    # 최근 검색 종목 표시
+    # ✅ 여기에서만 최근 종목 추가
     recent_codes = session.get('recent_stocks', [])
+    if code not in recent_codes:
+        recent_codes.insert(0, code)
+        if len(recent_codes) > 5:
+            recent_codes = recent_codes[:5]
+        session['recent_stocks'] = recent_codes
+        session.modified = True
+
+    # 최근 종목 목록 렌더링용
     recent_stocks = []
     for c in recent_codes:
         try:
@@ -38,6 +46,7 @@ def stock_detail(code):
             recent_stocks.append({'code': c, 'name': c, 'price': 'N/A'})
 
     return render_template('stock_detail.html', stock=info, recent_stocks=recent_stocks)
+
 
 
 # KRX 종목 목록 로딩
@@ -129,12 +138,5 @@ def search():
             }
         })
 
-        # 세션 저장
-        if full_code not in recent_codes:
-            recent_codes.insert(0, full_code)
-            if len(recent_codes) > 5:
-                recent_codes = recent_codes[:5]
-            session['recent_stocks'] = recent_codes
-            session.modified = True
 
     return render_template('search_results.html', results=results, query=query, recent_stocks=recent_stocks)
