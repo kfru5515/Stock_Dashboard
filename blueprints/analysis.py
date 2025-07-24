@@ -1,6 +1,6 @@
 # blueprints/analysis.py
 
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, current_app
 import FinanceDataReader as fdr
 import pandas as pd
 from datetime import datetime, timedelta
@@ -8,6 +8,8 @@ import os
 from dotenv import load_dotenv
 import requests
 import json # JSON 출력을 위해 추가
+import traceback
+from run import EnhancedStockPredictor
 
 # .env 파일에서 환경 변수 로드
 load_dotenv()
@@ -30,6 +32,25 @@ def get_stock_data(codes, period_days=365):
             continue
     return all_data
 
+
+@analysis_bp.route('/quant-report')
+def quant_report():
+    """캐시된 퀀트 리포트 데이터를 사용하여 페이지를 렌더링합니다."""
+    try:
+        report_data = current_app.config.get('QUANT_REPORT_CACHE')
+
+        if not report_data:
+            return render_template('error.html', error_message="퀀트 리포트 데이터가 아직 준비되지 않았습니다. 서버 로그를 확인해주세요.")
+
+        return render_template('quant_report.html', report=report_data, now=datetime.now())
+
+    except Exception as e:
+        print(f"퀀트 리포트 페이지 렌더링 중 오류: {e}")
+        traceback.print_exc()
+        return render_template('error.html', error_message="퀀트 리포트 페이지를 표시하는 중 오류가 발생했습니다.")
+
+
+    
 @analysis_bp.route('/analysis')
 def analysis_page():
     # ... (한글 입력 처리 로직, 수정 없음) ...
@@ -62,7 +83,6 @@ def analysis_page():
     krx_list.set_index('Code', inplace=True)
     stock_names = {code: krx_list.loc[code, 'Name'] for code in price_data.columns}
 
-    # ▼▼▼▼▼ requests로 ECOS API 직접 호출 (디버깅 코드 추가) ▼▼▼▼▼
     cpi_available = False
     try:
         api_key = os.getenv("ECOS_API_KEY")

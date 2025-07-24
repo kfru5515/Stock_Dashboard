@@ -14,6 +14,7 @@ pykrx
 dart-fss
 yfinance
 selenium
+seaborn
 # ----- AI & Machine Learning -----
 google-generativeai
 xgboost # 현재 미사용

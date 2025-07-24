@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+
+{% block title %}퀀트 종합 리포트 - AskFin{% endblock %}
+
+{% block head %}
+<style>
+    :root {
+        --primary-color: #00aaff;
+        --secondary-color: #6c757d;
+        --success-color: #28a745;
+        --danger-color: #dc3545;
+        --warning-color: #ffc107;
+        --info-color: #17a2b8;
+        --dark-bg: #212529;
+        --card-bg: #2c313a;
+        --border-color: #444a50;
+        --text-color: #f8f9fa;
+        --muted-text-color: #adb5bd;
+        --heading-color: #ffffff;
+        --box-shadow-medium: 0 0.5rem 1rem rgba(0, 0, 0, 0.35);
+    }
+    body { background: var(--dark-bg); color: var(--text-color); }
+    .report-container {
+        padding: 1.5rem;
+    }
+    .card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: var(--box-shadow-medium);
+        background-color: var(--card-bg);
+        height: 100%;
+    }
+    .card-title { font-weight: 600; color: var(--heading-color); }
+    .summary-card {
+        background: linear-gradient(145deg, #343a40, #2c313a);
+        border-left: 5px solid var(--primary-color);
+        padding: 1.5rem;
+    }
+    .summary-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .risk-label { font-size: 0.9rem; font-weight: 500; }
+    .table { color: var(--text-color); }
+    .table th { background-color: var(--primary-color); color: #fff; text-align: center; }
+    .table-hover tbody tr:hover { background-color: #3a4049; }
+    .badge { font-size: 0.85em; padding: 0.5em 0.75em; }
+    .list-group-item {
+        background-color: transparent;
+        border-color: var(--border-color);
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+    }
+    .risk-detail-item .risk-name {
+        font-weight: 500;
+        min-width: 110px;
+    }
+    .icon-list .list-group-item {
+        background-color: var(--dark-bg);
+        border-color: var(--border-color);
+        display: flex;
+        align-items: center;
+        margin-bottom: 5px;
+        border-radius: 5px;
+    }
+    .icon-list .list-group-item i {
+        margin-right: 10px;
+        color: var(--primary-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid report-container">
+    <div class="d-flex justify-content-end align-items-center mb-4">
+        <span class="text-muted">분석 기준일: {{ now.strftime('%Y-%m-%d') }}</span>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">현재 상황 요약</h5>
+                    <div class="text-center mb-3">
+                        <div class="risk-label text-muted">종합 경제 위험도</div>
+                        <div class="summary-value {% if report.overall_risk > 70 %}text-danger{% elif report.overall_risk > 50 %}text-warning{% elif report.overall_risk > 30 %}text-info{% else %}text-success{% endif %}">
+                            {{ "%.1f"|format(report.overall_risk) }}<small>%</small>
+                        </div>
+                        <div class="risk-label mt-2">
+                             {% if report.overall_risk > 70 %}매우 위험{% elif report.overall_risk > 50 %}위험{% elif report.overall_risk > 30 %}주의{% else %}안전{% endif %}
+                        </div>
+                    </div>
+                    <hr style="border-color: var(--border-color);">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between"><span>KOSPI 현재가:</span> <strong>{{ "%.2f"|format(report.patterns.technical.current_price) }}</strong></li>
+                        <li class="list-group-item d-flex justify-content-between"><span>20일 이동평균선:</span> <strong>{{ "%.2f"|format(report.patterns.technical.ma20) }}</strong></li>
+                        <li class="list-group-item d-flex justify-content-between"><span>RSI (14일):</span> <strong>{{ "%.2f"|format(report.patterns.technical.rsi) }}</strong></li>
+                        <li class="list-group-item d-flex justify-content-between"><span>현재 변동성:</span> <strong>{{ "%.1f"|format(report.patterns.technical.volatility) }}%</strong></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">경제 위험도 상세</h5>
+                    {% for risk_type, risk_name in [('inflation', '인플레이션'), ('deflation', '디플레이션'), ('stagflation', '스태그플레이션')] %}
+                        {% set risk_data = report.current_risks[risk_type] %}
+                        {% set future_data = report.future_risks[risk_type] %}
+                        {% set risk_level = risk_data.risk %}
+                        <ul class="list-group list-group-flush risk-detail-item mb-3">
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span class="risk-name">{{ risk_name }}</span>
+                                <span class="badge 
+                                    {% if risk_level >= 80 %}bg-danger{% elif risk_level >= 60 %}bg-warning text-dark{% elif risk_level >= 40 %}bg-info text-dark{% else %}bg-success{% endif %}">
+                                    {{ "%.1f"|format(risk_level) }}%
+                                </span>
+                            </li>
+                            <li class="list-group-item"><small>주요 요인: {{ risk_data.factors | join(', ') if risk_data.factors else '없음' }}</small></li>
+                            <li class="list-group-item"><small>1주일 후 예측: {{ "%.1f"|format(future_data.predicted) }}% ({{ "%+.1f"|format(future_data.change) }}%)</small></li>
+                        </ul>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">1주일 시장 예측</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>날짜 (요일)</th>
+                                    <th>상태</th>
+                                    <th>KOSPI 예측 (변화)</th>
+                                    <th>KOSDAQ 예측 (변화)</th>
+                                    <th>주요 위험 요인</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for pred in report.predictions %}
+                                <tr>
+                                    <td>{{ pred.date }} ({{ pred.weekday }})</td>
+                                    <td>
+                                        <span class="badge {% if pred.status == '개장' %}bg-success{% else %}bg-secondary{% endif %}">{{ pred.status }}</span>
+                                    </td>
+                                    {% if pred.status == '개장' %}
+                                    <td>
+                                        {{ "%.0f"|format(pred.kospi) }}
+                                        <span class="small {% if pred.kospi_change > 0 %}text-danger{% else %}text-info{% endif %}">({{ "%+.2f"|format(pred.kospi_change) }}%)</span>
+                                    </td>
+                                    <td>
+                                        {{ "%.0f"|format(pred.kosdaq) }}
+                                        <span class="small {% if pred.kospi_change > 0 %}text-danger{% else %}text-info{% endif %}">({{ "%+.2f"|format(pred.kosdaq_change) }}%)</span>
+                                    </td>
+                                    <td>{{ pred.risk_factors | join(', ') if pred.risk_factors else '안정' }}</td>
+                                    {% else %}
+                                    <td colspan="3" class="text-center text-muted">휴장</td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row g-4 mb-4">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">종합 경제 위험도 변화 추이 (30일 + 1주일 예측)</h5>
+                    <div style="height: 300px;">
+                        <canvas id="riskTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">주요 모니터링 지표</h5>
+                    <p class="text-muted small">현재 경제 위험도에 따라 다음 지표들을 주의 깊게 살펴볼 필요가 있습니다.</p>
+                    <ul class="list-group list-group-flush icon-list">
+                        {% for item in report.monitoring_indicators %}
+                            <li class="list-group-item">
+                                <i class="fas fa-chart-line"></i>
+                                {{ item }}
+                            </li>
+                        {% else %}
+                            <li class="list-group-item text-muted">모니터링할 특정 지표가 없습니다.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card summary-card">
+                <h4 class="card-title text-primary mb-3">종합 투자 전략 권장사항</h4>
+                {% set risk = report.overall_risk %}
+                <p class="fs-5 mb-0">
+                    {% if risk > 70 %}
+                        🔴 <strong>고위험 상황:</strong> 시장의 불확실성이 매우 높습니다. 현금 비중을 50% 이상으로 확대하고, 변동성이 낮은 방어주 중심으로 포트폴리오를 재편하는 등 매우 보수적인 접근을 권장합니다.
+                    {% elif risk > 50 %}
+                        🟡 <strong>중위험 상황:</strong> 신중한 투자 전략이 필요한 시점입니다. 현금 비중을 30-40% 수준으로 유지하며, 변동성이 큰 자산의 비중을 줄이고 우량주 중심으로 포트폴리오를 다각화하는 것이 안정적입니다.
+                    {% elif risk > 30 %}
+                        🟠 <strong>보통 위험:</strong> 균형 잡힌 포트폴리오로 시장 변화에 대응해야 합니다. 20-30% 수준의 현금 비중을 확보하고, 성장주와 가치주의 비중을 조절하며 정기적인 리밸런싱을 통해 위험을 관리하는 전략을 추천합니다.
+                    {% else %}
+                        🟢 <strong>저위험 상황:</strong> 시장이 안정적인 상태로, 적극적인 투자를 고려해볼 수 있습니다. 성장주나 시장 주도 테마에 대한 비중을 점진적으로 확대하고, 위험 자산에 대한 투자를 검토해볼 수 있는 시기입니다.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-secondary" role="alert">
+              <h4 class="alert-heading">주의사항</h4>
+              <ul class="mb-0">
+                  <li>이 분석은 과거 데이터 기반의 통계 및 AI 모델 결과이며, 미래 수익을 보장하지 않습니다.</li>
+                  <li>예상치 못한 이벤트(지정학적 리스크, 정책 변화 등)는 예측에 반영되지 않을 수 있습니다.</li>
+                  <li>본 리포트는 투자 결정에 대한 참고 자료이며, 실제 투자 시에는 최신 뉴스와 추가적인 분석이 반드시 필요합니다.</li>
+              </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const reportData = {{ report | tojson }};
+    const ctx = document.getElementById('riskTrendChart');
+
+    if (ctx && reportData.risk_history && reportData.future_risks) {
+        const historyData = reportData.risk_history;
+        const futureData = reportData.future_risks;
+
+        const overallHistory = historyData.map(d => 
+            (d.inflation * 0.25 + d.deflation * 0.35 + d.stagflation * 0.40)
+        );
+        const futureOverallRisk = (futureData.inflation.predicted * 0.25 + 
+                                   futureData.deflation.predicted * 0.35 + 
+                                   futureData.stagflation.predicted * 0.40);
+
+        const labels = historyData.map(d => d.index.substring(5));
+        labels.push('1주일 후');
+
+        const overallData = overallHistory;
+        overallData.push(futureOverallRisk);
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '종합 경제 위험도',
+                        data: overallData,
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 100, ticks: { color: 'var(--muted-text-color)' }, grid: { color: 'var(--border-color)' } },
+                    x: { ticks: { color: 'var(--muted-text-color)', maxRotation: 0, autoSkip: true, maxTicksLimit: 7 }, grid: { color: 'var(--border-color)' } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        mode: 'index', intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) { label += ': '; }
+                                if (context.parsed.y !== null) { label += context.parsed.y.toFixed(1) + '%'; }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

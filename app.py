@@ -11,9 +11,11 @@ import requests
 from bs4 import BeautifulSoup
 import traceback
 from urllib.parse import urljoin
-from readability import Document #
+from readability import Document
 import pickle
 import re
+
+from run import EnhancedStockPredictor
 
 from transformers import AutoTokenizer, pipeline
 from blueprints.analysis import analysis_bp
@@ -546,6 +548,65 @@ def get_international_market_news():
         traceback.print_exc()
         return []
 
+def run_and_cache_quant_report():
+    """서버 시작 시 퀀트 분석을 실행하고 결과를 반환하는 함수"""
+    print("🚀 최초 퀀트 리포트 생성 및 캐싱 시작...")
+    try:
+        predictor = EnhancedStockPredictor(start_date='2015-01-01')
+        
+        predictor.collect_all_data()
+        patterns = predictor.analyze_patterns()
+        predictor.detect_anomalies()
+        
+        # calculate_economic_risks_detailed()가 내부적으로 risk_history를 계산함
+        current_risks = predictor.calculate_economic_risks_detailed() 
+        predictions = predictor.predict_weekly_enhanced()
+        
+        # --- 수정된 부분 시작 ---
+        # DataFrame을 JSON 친화적인 형태로 변환
+        if 'monthly' in patterns and isinstance(patterns.get('monthly'), pd.DataFrame):
+            patterns['monthly'] = patterns['monthly'].reset_index().to_dict('records')
+        if 'daily' in patterns and isinstance(patterns.get('daily'), pd.DataFrame):
+            patterns['daily'] = patterns['daily'].reset_index().to_dict('records')
+        
+        # risk_history도 JSON으로 변환
+        risk_history_data = None
+        if hasattr(predictor, 'risk_history') and not predictor.risk_history.empty:
+            df = predictor.risk_history.reset_index()
+            df['index'] = df['index'].dt.strftime('%Y-%m-%d')
+            risk_history_data = df.to_dict('records')
+
+        # 주요 모니터링 지표 생성 로직 추가
+        monitoring_indicators = []
+        if current_risks['inflation']['risk'] > 40:
+            monitoring_indicators.extend(["원자재 가격", "달러 인덱스", "장기 금리"])
+        if current_risks['deflation']['risk'] > 40:
+            monitoring_indicators.extend(["VIX 지수", "글로벌 주가", "경기선행지수"])
+        if current_risks['stagflation']['risk'] > 30:
+            monitoring_indicators.extend(["환율", "공급망 지표", "임금 상승률"])
+        if not monitoring_indicators:
+            monitoring_indicators.extend(["전반적 시장 동향", "기술적 지표", "거래량"])
+        # 중복 제거 및 정렬
+        monitoring_indicators = sorted(list(set(monitoring_indicators)))
+        # --- 수정된 부분 끝 ---
+
+        report_data = {
+            "current_risks": current_risks,
+            "future_risks": predictor.future_risks,
+            "predictions": predictions,
+            "patterns": patterns,
+            "anomalies": predictor.anomalies,
+            "overall_risk": current_risks.get('overall', 0),
+            "risk_history": risk_history_data,
+            "monitoring_indicators": monitoring_indicators # <-- 모니터링 지표 추가
+        }
+        print(" 최초 퀀트 리포트 캐싱 완료.")
+        return report_data
+    except Exception as e:
+        print(f" 최초 퀀트 리포트 생성 실패: {e}")
+        traceback.print_exc()
+        return None
+
 
 @app.route('/api/latest-data')
 def get_latest_data():
@@ -700,6 +761,7 @@ db.init_app(app)
 
 with app.app_context():
     initialize_global_data()
+    app.config['QUANT_REPORT_CACHE'] = run_and_cache_quant_report()
     print("--- 모든 초기 데이터 로딩 완료 ---")
 
 @app.context_processor
