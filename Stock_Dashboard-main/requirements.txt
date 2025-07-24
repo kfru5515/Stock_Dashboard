@@ -2,7 +2,7 @@
 flask
 Flask-SQLAlchemy
 pymysql
-
+readability
 # ----- Data Fetching & Analysis -----
 pandas
 pandas

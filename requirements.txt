@@ -2,7 +2,7 @@
 flask
 Flask-SQLAlchemy
 pymysql
-
+flashtext
 # ----- Data Fetching & Analysis -----
 pandas
 pandas
@@ -17,12 +17,19 @@ selenium
 # ----- AI & Machine Learning -----
 google-generativeai
 xgboost # 현재 미사용
-
+scikit-learn
 # ----- 자연어 처리 helper -- 
 fuzzywuzzy
 python-Levenshtein
+transformers
+sentencepiece
+torch
+transformers[torch]
 
 # ----- Frontend & Utilities -----
 libsass
 python-dotenv
 beautifulsoup4
+
+readability-lxml
+joblib

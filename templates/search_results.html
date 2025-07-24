@@ -1,61 +1,262 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h3>검색 결과: "{{ query }}"</h3>
-{% if results %}
-<ul>
-  {% for stock in results %}
-  <li>
-    <a href="{{ url_for('search.stock_detail', code=stock.code) }}">
-      {{ stock.name }} ({{ stock.code }}) - 현재가: {{ stock.currentPrice }}원
-    </a>
-    <br>
-    📈 <strong>예측된 단기 추세:</strong>
-    <span style="color:green;">{{ stock.prediction }}</span>
+<div class="container-fluid px-4">
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <h3 class="mb-3" style="color: var(--heading-color);">검색 결과: "{{ query }}"</h3>
+        </div>
+    </div>
 
-    <!-- 실제 차트 -->
-    <canvas id="chart-{{ loop.index }}" width="400" height="150"></canvas>    
-  </li>
-<!-- 예측 모델 설명 링크 -->
-  <div style="margin-top: 8px;">
-    <a href="{{ url_for('stock_model') }}"
-      style="padding: 6px 10px; background-color: #17a2b8; color: white; border-radius: 4px; text-decoration: none;">
-      📘 단기 추세 예측 모델 설명 보기
-    </a>
-  </div>
-  {% endfor %}
-</ul>
+    {% if results %}
+    <div class="row g-4 mb-4">
+        {% for stock in results %}
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                        <h5 class="card-title mb-0">
+                            {# stock.code는 yfinance용 full_code (005930.KS) #}
+                            {# stock.krx_code는 pykrx/DART용 6자리 코드 (005930) #}
+                            <a href="{{ url_for('search.stock_detail', code=stock.code) }}" class="stock-name" data-code="{{ stock.code }}" data-krx-code="{{ stock.krx_code }}">
+                                {{ stock.name }} ({{ stock.krx_code }})
+                            </a>
+                        </h5>
+                        <span class="fw-bold fs-5 font-monospace" style="color: var(--heading-color);">{{ stock.currentPrice }}원</span>
+                    </div>
+                    <p class="mb-2">
+                         <strong>예측된 단기 추세:</strong>
+                        <span style="color: {% if stock.prediction == 'Positive' %}var(--sentiment-positive-color){% elif stock.prediction == 'Negative' %}var(--sentiment-negative-color){% elif stock.prediction == 'Neutral' %}var(--sentiment-neutral-color){% else %}var(--muted-text-color){% endif %};">
+                            {{ stock.prediction }}
+                        </span>
+                    </p>
+                    <div class="chart-canvas-container">
+                        <canvas id="chart-{{ loop.index }}"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
 
-<!-- Chart.js CDN 추가 -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-  {% for stock in results %}
-  const ctx{{ loop.index }} = document.getElementById('chart-{{ loop.index }}').getContext('2d');
-  new Chart(ctx{{ loop.index }}, {
-    type: 'line',
-    data: {
-      labels: ['최근 5일 전', '4일 전', '3일 전', '2일 전', '최신'],
-      datasets: [{
-        label: '{{ stock.name }} 주가',
-        data: {{ stock.price_chart | tojson }},
-        backgroundColor: 'rgba(75, 192, 192, 0.3)',
-        borderColor: 'rgba(75, 192, 192, 1)',
-        borderWidth: 2,
-        fill: true
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: {
-          beginAtZero: false
-        }
-      }
-    }
-  });
-  {% endfor %}
-</script>
-{% else %}
-<p>검색 결과가 없습니다.</p>
-{% endif %}
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <div style="margin-top: 15px;">
+                <a href="{{ url_for('stock_model') }}"
+                  style="padding: 10px 20px; background-color: var(--primary-color); color: white; border-radius: 8px; text-decoration: none; font-weight: 500; display: inline-block;">
+                   단기 추세 예측 모델 설명 보기
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chartDefaultOptions = {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        ticks: {
+                            font: { size: 10 },
+                            color: '#FFFFFF'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            font: { size: 10 },
+                            maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 6,
+                            color: '#FFFFFF'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        enabled: true,
+                        mode: 'index',
+                        intersect: false,
+                        titleColor: '#FFFFFF',
+                        bodyColor: '#FFFFFF',
+                        backgroundColor: 'rgba(44, 49, 58, 0.9)',
+                        borderColor: 'var(--primary-color)',
+                        borderWidth: 1,
+                        titleFont: { size: 12, weight: 'bold' },
+                        bodyFont: { size: 11 }
+                    }
+                },
+                elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } }
+            };
+
+            if (typeof Chart !== 'undefined') {
+                Chart.defaults.color = '#FFFFFF';
+                Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+            }
+
+
+            {% for stock in results %}
+            const ctx{{ loop.index }} = document.getElementById('chart-{{ loop.index }}').getContext('2d');
+            new Chart(ctx{{ loop.index }}, {
+                type: 'line',
+                data: {
+                    labels: ['최근 5일 전', '4일 전', '3일 전', '2일 전', '최신'],
+                    datasets: [{
+                        label: '{{ stock.name }} 주가',
+                        data: {{ stock.price_chart | tojson }},
+                        backgroundColor: 'rgba(75, 192, 192, 0.3)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 2,
+                        fill: true
+                    }]
+                },
+                options: chartDefaultOptions
+            });
+            {% endfor %}
+
+            const stockDetailModal = new bootstrap.Modal(document.getElementById('stockDetailModal'));
+
+            function renderFinancialTable(statementJson, targetElementId, notFoundMessage = '정보 없음') {
+                const targetElement = document.getElementById(targetElementId);
+                if (!statementJson) {
+                    targetElement.innerHTML = `<p class="text-muted text-center p-4">${notFoundMessage}</p>`; return;
+                }
+                try {
+                    const stmt = JSON.parse(statementJson);
+                    let table = '<div class="table-responsive"><table class="table table-bordered table-hover financial-table">';
+                    table += '<thead><tr><th>항목</th>';
+                    stmt.columns.forEach(col => { table += `<th>${col}</th>`; });
+                    table += '</tr></thead><tbody>';
+                    stmt.data.forEach((rowData, rowIndex) => {
+                        table += `<tr><td><strong>${stmt.index[rowIndex]}</strong></td>`;
+                        rowData.forEach(cellData => { cellData = (typeof cellData === 'number') ? cellData.toLocaleString() : (cellData || ' '); table += `<td>${cellData}</td>`; });
+                        table += '</tr>';
+                    });
+                    table += '</tbody></table></div>';
+                    targetElement.innerHTML = table;
+                } catch (e) {
+                    targetElement.innerHTML = '<p class="text-danger">정보를 표시할 수 없습니다.</p>';
+                }
+            }
+
+
+            document.body.addEventListener('click', function(event) {
+                const stockNameLink = event.target.closest('.stock-name');
+
+                if (stockNameLink) {
+                    event.preventDefault();
+                    const stockCode = stockNameLink.getAttribute('data-code'); // yfinance용 full_code (예: 005930.KS)
+                    const krxCode = stockNameLink.getAttribute('data-krx-code'); // DART/pykrx용 6자리 코드 (예: 005930)
+                    const stockName = stockNameLink.textContent.trim();
+                    
+                    document.getElementById('stockDetailModalLabel').textContent = `${stockName} (${krxCode})`; // 모달 제목에 6자리 코드 사용
+                    const spinnerHtml = '<div class="d-flex justify-content-center my-5"><div class="spinner-border" role="status" style="color: var(--primary-color);"><span class="visually-hidden">Loading...</span></div></div>';
+                    ['news-content', 'profile-content', 'financials-content', 'reports-content'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if(el) el.innerHTML = spinnerHtml;
+                    });
+                    stockDetailModal.show();
+
+                    // 기업 개요, 재무정보, 공시 로드 (askfin_bp 라우트 호출)
+                    // 이 API는 yfinance 코드 (full_code)를 받음
+                    fetch(`/askfin/stock/${stockCode}/profile`)
+                        .then(res => res.ok ? res.json() : Promise.reject('Server error in profile fetch'))
+                        .then(data => {
+                            const profileContent = document.getElementById('profile-content');
+                            if (data.company_profile) {
+                                let content = '<dl class="row">';
+                                for (const [key, value] of Object.entries(data.company_profile)) {
+                                     content += `<dt class="col-sm-3">${key}</dt><dd class="col-sm-9">${value || 'N/A'}</dd>`;
+                                }
+                                profileContent.innerHTML = content + '</dl>';
+                            } else { profileContent.innerHTML = `<p class="text-danger">${data.profile_error || '기업 개요를 불러올 수 없습니다.'}</p>`; }
+
+                            const financialsContent = document.getElementById('financials-content');
+                            if (data.financials_error) {
+                                financialsContent.innerHTML = `<p class="text-danger text-center p-4">${data.financials_error}</p>`;
+                            } else { renderFinancialTable(data.key_financial_info, 'financials-content', '주요 재무정보를 불러올 수 없습니다.'); }
+
+                            const reportsContent = document.getElementById('reports-content');
+                            if (data.reports_error) {
+                                reportsContent.innerHTML = `<p class="text-danger">${data.reports_error}</p>`;
+                            } else if (data.report_list && data.report_list.length > 0) {
+                                let html = '<ul class="list-group list-group-flush">';
+                                data.report_list.forEach(r => { html += `<li class="list-group-item"><a href="${r.url}" target="_blank" rel="noopener noreferrer">${r.report_nm}</a><small class="d-block text-muted mt-1">${r.flr_nm} - ${r.rcept_dt}</small></li>`; });
+                                reportsContent.innerHTML = html + '</ul>';
+                            } else { reportsContent.innerHTML = '<p class="text-muted text-center p-4">최근 1년간 주요 공시가 없습니다.</p>'; }
+                        })
+                        .catch(err => {
+                            console.error('Modal Fetch Error (profile/financials/reports):', err); // 오류 디버그
+                            const errorHtml = `<p class="text-danger">데이터를 불러오는 데 실패했습니다: ${err}</p>`;
+                            ['profile-content', 'financials-content', 'reports-content'].forEach(id => document.getElementById(id).innerHTML = errorHtml);
+                        });
+
+                    // 관련 뉴스 로드 (app.py 라우트 호출)
+                    // 이 API도 yfinance 코드 (full_code)를 받음
+                    fetch(`/news/${stockCode}`)
+                        .then(res => res.ok ? res.json() : Promise.reject('Server error in news fetch'))
+                        .then(data => {
+                            const newsContent = document.getElementById('news-content');
+                            if (data.error || data.length === 0) {
+                                newsContent.innerHTML = `<p class="p-3 text-muted text-center">${data.error || '관련 뉴스가 없습니다.'}</p>`; return;
+                            }
+                            let newsHtml = '<ul class="list-group list-group-flush">';
+                            data.forEach(item => {
+                                newsHtml += `<li class="list-group-item"><a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.title}</a><small class="d-block text-muted mt-1">${item.press} - ${item.date}</small></li>`;
+                            });
+                            newsContent.innerHTML = newsHtml + '</ul>';
+                        }).catch(err => {
+                            document.getElementById('news-content').innerHTML = `<p class="p-3 text-danger">뉴스 로딩 오류: ${err}</p>`;
+                            console.error('Modal Fetch Error (news):', err); // 오류 디버그
+                        });
+                }
+            });
+        });
+    </script>
+    {% else %}
+    <p class="text-muted text-center p-5">검색 결과가 없습니다.</p>
+    {% endif %}
+</div>
+
+<div class="modal fade" id="stockDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="stockDetailModalLabel">기업 정보</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="stockDetailTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="news-tab" data-bs-toggle="tab" data-bs-target="#news-content" type="button">관련 뉴스</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile-content" type="button">기업 개요</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="financials-tab" data-bs-toggle="tab" data-bs-target="#financials-content" type="button">주요 재무정보</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports-content" type="button">주요 공시</button>
+                    </li>
+                </ul>
+                <div class="tab-content pt-3">
+                    <div class="tab-pane fade show active" id="news-content"></div>
+                    <div class="tab-pane fade" id="profile-content"></div>
+                    <div class="tab-pane fade" id="financials-content"></div>
+                    <div class="tab-pane fade" id="reports-content"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

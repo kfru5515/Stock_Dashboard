@@ -12,7 +12,7 @@
             <strong>시장:</strong>
             <span>{{ stock.get('exchange', 'N/A') }}</span>
         </li>
-        <li class="list-group-item d-flex justify-content-between">
+        <li class="list-group-item d-flex justify-content="between">
             <strong>시가총액:</strong>
             <span>{{ stock.get('marketCap', 'N/A') }}</span>
         </li>
@@ -24,7 +24,7 @@
             <strong>52주 최저:</strong>
             <span>{{ stock.get('fiftyTwoWeekLow', 'N/A') }}</span>
         </li>
-        <!-- 필요하면 더 추가하세요 -->
-    </ul>
-</div>
+        </ul>
+
+    </div>
 {% endblock %}

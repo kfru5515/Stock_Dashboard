@@ -11,7 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 import traceback
 from urllib.parse import urljoin
-from readability import Document
+from readability import Document #
 import pickle
 import re
 
@@ -22,7 +22,7 @@ from blueprints.join import join_bp
 from blueprints.data import data_bp
 from blueprints.auth import auth_bp
 from blueprints import askfin
-from blueprints.askfin import askfin_bp, initialize_global_data, GLOBAL_TICKER_NAME_MAP
+from blueprints.askfin import askfin_bp, initialize_global_data, GLOBAL_TICKER_NAME_MAP #
 from blueprints.search import search_bp
 from dotenv import load_dotenv
 
@@ -111,8 +111,8 @@ def fetch_body(url: str) -> str:
         resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
         resp.raise_for_status()
         html = resp.text
-        doc = Document(html)
-        content_html = doc.summary()
+        doc = Document(html) #
+        content_html = doc.summary() #
         soup = BeautifulSoup(content_html, "html.parser")
         for tag in soup(["script", "style"]):
             tag.decompose()
@@ -200,23 +200,31 @@ def calculate_change_info(df, name):
     return {'name': name, 'value': f"{value:,.2f}", 'change': f"{change:,.2f}", 'change_pct': f"{change_pct:+.2f}%", 'raw_change': change}
 
 def get_fdr_or_yf_data(ticker, start, end, interval='1d'):
+    # ticker가 '.KS' 또는 '.KQ'로 끝나는 한국 주식 코드일 경우, yfinance 티커 맵에서 제거하고 직접 사용
+    # 왜냐하면 'KS11'이나 'KQ11' 같은 지수 티커와 '005930.KS' 같은 개별 주식 티커를 구분해야 하기 때문
+    yf_ticker_map = {'USD/KRW': 'KRW=X', 'KS11': '^KS11', 'KQ11': '^KQ11', 'CL=F': 'CL=F'}
+    
+    # 한국 개별 주식은 yf_ticker_map에 없으므로 직접 ticker 사용
+    if ticker.endswith(('.KS', '.KQ')):
+        actual_yf_ticker = ticker
+    else:
+        actual_yf_ticker = yf_ticker_map.get(ticker, ticker) # 매핑된 이름 사용
+
     if interval != '1d':
         try:
-            print(f"Attempting to fetch '{ticker}' with yfinance (interval: {interval})...")
-            yf_ticker_map = {'USD/KRW': 'KRW=X', 'KS11': '^KS11', 'KQ11': '^KQ11', 'CL=F': 'CL=F'}
-            if ticker in yf_ticker_map:
-                yf_df = yf.download(yf_ticker_map[ticker], start=start, end=end, interval=interval, auto_adjust=True)
-                if not yf_df.empty:
-                    yf_df = yf_df.reset_index()
-                    if 'index' in yf_df.columns:
-                        yf_df.rename(columns={'index': 'Date'}, inplace=True)
-                    elif 'Datetime' in yf_df.columns:
-                        yf_df.rename(columns={'Datetime': 'Date'}, inplace=True)
-                    print("yfinance fetch successful.")
-                    return yf_df[['Date', 'Close']].copy()
-            raise ValueError("Ticker not in yfinance map or fetch failed")
+            print(f"Attempting to fetch '{actual_yf_ticker}' with yfinance (interval: {interval})...")
+            yf_df = yf.download(actual_yf_ticker, start=start, end=end, interval=interval, auto_adjust=True, show_errors=True) # show_errors=True 추가
+            if not yf_df.empty:
+                yf_df = yf_df.reset_index()
+                if 'index' in yf_df.columns:
+                    yf_df.rename(columns={'index': 'Date'}, inplace=True)
+                elif 'Datetime' in yf_df.columns:
+                    yf_df.rename(columns={'Datetime': 'Date'}, inplace=True)
+                print("yfinance fetch successful.")
+                return yf_df[['Date', 'Close']].copy()
+            raise ValueError("yfinance returned empty dataframe or ticker not in map")
         except Exception as yf_e:
-            print(f"yfinance (interval) failed for '{ticker}': {yf_e}. Falling back to fdr.")
+            print(f"yfinance (interval) failed for '{actual_yf_ticker}': {yf_e}. Falling back to fdr.")
 
     try:
         print(f"Attempting to fetch '{ticker}' with fdr...")
@@ -231,9 +239,8 @@ def get_fdr_or_yf_data(ticker, start, end, interval='1d'):
     except Exception as e:
         print(f"FDR failed for '{ticker}': {e}. Falling back to yfinance (daily).")
         try:
-            yf_ticker_map = {'USD/KRW': 'KRW=X', 'KS11': '^KS11', 'KQ11': '^KQ11', 'CL=F': 'CL=F'}
-            if ticker not in yf_ticker_map: return pd.DataFrame()
-            yf_df = yf.download(yf_ticker_map[ticker], start=start, end=end, interval='1d', auto_adjust=True)
+            # yfinance 일별 데이터 폴백
+            yf_df = yf.download(actual_yf_ticker, start=start, end=end, interval='1d', auto_adjust=True, show_errors=True) # show_errors=True 추가
             if yf_df.empty: return pd.DataFrame()
             print("yfinance (daily) fetch successful.")
             yf_df = yf_df.reset_index()
@@ -243,15 +250,21 @@ def get_fdr_or_yf_data(ticker, start, end, interval='1d'):
                 yf_df.rename(columns={'Datetime': 'Date'}, inplace=True)
             return yf_df[['Date', 'Close']].copy()
         except Exception as yf_e:
-            print(f"yfinance (daily) also failed for '{ticker}': {yf_e}")
+            print(f"yfinance (daily) also failed for '{actual_yf_ticker}': {yf_e}")
             return pd.DataFrame()
 
 @app.route('/news/<string:code>')
 def get_news(code):
+    """
+    특정 종목 코드에 대한 뉴스를 가져옵니다.
+    code는 '005930.KS'와 같은 yfinance 형식일 수 있습니다.
+    """
     formatted_news = []
-    print(f"DEBUG: '{code}' 종목 코드에 대해 네이버 모바일 API에서 뉴스 가져오기 시도.")
+    # yfinance 코드에서 6자리 순수 종목 코드 추출 (네이버 API용)
+    stock_code_6_digit = code.split('.')[0]
+    print(f"DEBUG: '{code}' (6자리: {stock_code_6_digit}) 종목 코드에 대해 네이버 모바일 API에서 뉴스 가져오기 시도.")
     try:
-        url = f"https://m.stock.naver.com/api/news/stock/{code}?pageSize=10&page=1"
+        url = f"https://m.stock.naver.com/api/news/stock/{stock_code_6_digit}?pageSize=10&page=1" # 6자리 코드 사용
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=5)
         response.raise_for_status()
@@ -275,10 +288,45 @@ def get_news(code):
 
         if not formatted_news:
             print(f"DEBUG: '{code}'에 대한 뉴스를 API에서 가져왔으나 항목이 0개입니다.")
-            return jsonify({"error": "관련 뉴스가 없습니다. (API 결과 없음)"}), 500
+            return jsonify({"error": "관련 뉴스가 없습니다. (API 결과 없음)"}), 200 # 500 대신 200으로 변경
+        
+        # 뉴스 감성 분석 및 기업명 추출 (뉴스 컨텐츠 크롤링이 필요하므로 시간이 걸릴 수 있음)
+        processed_news = []
+        for news_item in formatted_news[:5]: # 너무 많은 뉴스 본문 분석은 비효율적이므로 상위 5개만
+            body = fetch_body(news_item["url"])
+            sentiment = "없음"
+            companies = []
 
-        print(f"DEBUG: '{code}'에 대한 뉴스 {len(formatted_news)}개 성공적으로 가져옴.")
-        return jsonify(formatted_news[:10])
+            # 본문이 비어있지 않고 길이가 충분할 때만 감성 분석 및 기업명 추출 시도
+            if body and len(body.strip()) > 50: # 최소 길이 설정
+                title_clean = clean_for_sentiment(news_item["title"])
+                target_text = title_clean if title_clean.strip() else clean_for_sentiment(body)[:256]
+
+                if target_text.strip():
+                    try:
+                        sentiment_result = sentiment_pipeline(target_text)[0]["label"]
+                        sentiment = sentiment_result if sentiment_result else "없음"
+                    except Exception as sentiment_e:
+                        print(f"DEBUG: 감성 분석 오류: {sentiment_e}")
+                        sentiment = "오류" # 감성 분석 실패 시
+
+                try:
+                    companies = extract_companies(body)
+                except Exception as company_e:
+                    print(f"DEBUG: 기업명 추출 오류: {company_e}")
+                    companies = [] # 기업명 추출 실패 시
+            
+            processed_news.append({
+                'title': news_item['title'],
+                'press': news_item['press'],
+                'date': news_item['date'],
+                'url': news_item['url'],
+                'sentiment': sentiment,
+                'companies': companies
+            })
+
+        print(f"DEBUG: '{code}'에 대한 뉴스 {len(processed_news)}개 성공적으로 가져옴 (감성 분석 포함).")
+        return jsonify(processed_news)
 
     except requests.exceptions.Timeout:
         print(f"DEBUG: 뉴스 API 요청 타임아웃 발생 (종목코드: {code})")
@@ -303,11 +351,6 @@ def _get_news_from_naver_scraping():
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
-
-        # 디버깅용 응답 내용 출력
-        print("\n--- 네이버 스크래핑 응답 내용 시작 ---")
-        print(response.text[:1000])
-        print("--- 네이버 스크래핑 응답 내용 끝 ---\n")
 
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -356,11 +399,6 @@ def get_key_statistic_current_data():
         response = requests.get(api_url, timeout=10)
         response.raise_for_status()
 
-        # 응답 내용을 콘솔에 출력하여 확인 (디버깅용, 배포 시 주석 처리 권장)
-        # print("\n--- ECOS KeyStatistic Current Data API 응답 내용 시작 ---")
-        # print(response.content.decode('utf-8'))
-        # print("--- ECOS KeyStatistic Current Data API 응답 내용 끝 ---\n")
-
         soup = BeautifulSoup(response.content, 'xml')
         items = soup.find_all('row')
 
@@ -399,7 +437,7 @@ def get_key_statistic_current_data():
 def get_general_market_news():
     """
     한국 시장 주요 뉴스를 가져와
-    본문(fetch) → 감성분석 → 기업명추출 후 반환합니다.
+    본문(fetch) → 금융 키워드 필터 → 감성분석(제목만) & 기업명추출 후 반환합니다.
     """
     news_api_key = os.getenv("NEWS_API_KEY")
     raw_list = []
@@ -459,7 +497,18 @@ def get_general_market_news():
         else:
             target_text = title_clean
 
-        sentiment = sentiment_pipeline(target_text[:256])[0]["label"]
+        # sentiment_pipeline 로딩 확인 추가
+        sentiment = "없음"
+        if 'sentiment_pipeline' in globals() and sentiment_pipeline is not None:
+            try:
+                sentiment = sentiment_pipeline(target_text[:256])[0]["label"]
+            except Exception as sentiment_e:
+                print(f"DEBUG: 감성 분석 파이프라인 호출 오류: {sentiment_e}")
+                sentiment = "오류"
+        else:
+            print("DEBUG: sentiment_pipeline이 로드되지 않았습니다.")
+
+
         companies = extract_companies(body)
 
         processed.append({
@@ -477,7 +526,7 @@ def get_international_market_news():
     """해외 시장 뉴스를 가져옵니다 (NewsAPI.org - 미국 비즈니스 헤드라인)."""
     news_api_key = os.getenv("NEWS_API_KEY")
     if not news_api_key:
-        print("DEBUG: NEWS_API_KEY 없음. 해외 뉴스 가져오기 건너뜁니다.")
+        print("DEBUG: NEWS_API_KEY 없음. 해외 뉴스 가져오기 건너뜜니다.")
         return [] # API 키 없으면 해외 뉴스는 가져오지 않음
     try:
         api_url = f"https://newsapi.org/v2/top-headlines?country=us&category=business&apiKey={news_api_key}&pageSize=10"
@@ -541,8 +590,8 @@ def index():
         print(f"DEBUG: 캐시 업데이트 필요. 현재 영업일: {latest_bday}, 캐시된 날짜: {cache.get('date')}")
         new_cache = {'date': latest_bday}
         
-        kospi_all_data = [] # 초기화
-        kosdaq_all_data = [] # 초기화
+        kospi_all_data = []
+        kosdaq_all_data = []
 
         try:
             kospi_all_data, kosdaq_all_data = get_market_rank_data(latest_bday)
@@ -715,3 +764,4 @@ def stock_model():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
+

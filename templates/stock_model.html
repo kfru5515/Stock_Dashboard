@@ -4,14 +4,24 @@
     <meta charset="UTF-8">
     <title>주식 예측 모델 설명</title>
     <style>
+        /* index.html의 root 변수를 참고하여 다크 테마 색상 적용 */
+        :root {
+            --primary-color: #00aaff;
+            --dark-bg: #212529;
+            --card-bg: #2c313a;
+            --text-color: #FFFFFF;
+            --heading-color: #ffffff;
+            --border-color: #444a50;
+        }
+
         body {
-            background-color: #1e1e2f;
-            color: #f5f5f5;
+            background-color: var(--dark-bg); /* index.html의 dark-bg 사용 */
+            color: var(--text-color); /* index.html의 text-color 사용 */
             font-family: 'Noto Sans KR', sans-serif;
             padding: 30px;
         }
         h1, h2 {
-            color: #00bcd4;
+            color: var(--primary-color); /* index.html의 primary-color 사용 */
         }
         p, li {
             font-size: 16px;
@@ -21,7 +31,10 @@
         }
         hr {
             margin-top: 30px;
-            border: 1px solid #444;
+            border: 1px solid var(--border-color); /* index.html의 border-color 사용 */
+        }
+        strong {
+            color: var(--heading-color); /* 흰색 강조 */
         }
     </style>
 </head>
@@ -39,7 +52,7 @@
     <p>시가(Open)와 종가(Close)의 차이를 기준으로 다음과 같이 라벨링합니다:</p>
     <ul>
         <li><strong>상승:</strong> 종가 - 시가 > 0.07</li>
-        <li><strong>하락:</strong> 종가 - 시가 < -0.07</li>
+        <li><strong>하락:</b> 종가 - 시가 < -0.07</li>
         <li><strong>횡보:</strong> 나머지 구간</li>
     </ul>
 

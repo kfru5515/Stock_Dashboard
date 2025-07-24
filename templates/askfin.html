@@ -414,7 +414,7 @@
             chatWindow.appendChild(rowDiv);
             chatWindow.scrollTop = chatWindow.scrollHeight;
             
-            return rowDiv; // 생성된 rowDiv를 반환
+            return rowDiv;
         }
         
         function renderPagination(pagination) {
@@ -432,45 +432,35 @@
         function fetchAnalysis(query, page = 1) {
             if (!query) return;
 
-            // 1. 사용자 메시지 추가 로직 (새로운 쿼리일 때만)
-            // 현재 쿼리가 이전 쿼리와 다르거나, 페이지가 1이고 캐시 키가 없을 때 (즉, 완전히 새로운 질문일 때)
             if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
-                addMessageToChat('user', query); // 새로운 사용자 질문만 추가
-                queryInput.value = ''; // 입력창 비우기
+                addMessageToChat('user', query);
+                queryInput.value = '';
             }
-            // else: 페이지네이션 클릭 시에는 사용자 메시지를 추가하지 않습니다.
 
-            // 2. AI 답변 버블 처리 로직
-            // 새로운 쿼리이거나, 첫 페이지의 새로운 분석을 시작할 때, 새 AI 버블 생성
             if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
-                currentQuery = query; // 현재 쿼리 업데이트 (새로운 쿼리가 들어왔을 때만)
-                currentCacheKey = null; // 새로운 분석 시작 시 캐시 키 초기화
+                currentQuery = query;
+                currentCacheKey = null;
                 currentAnalysisBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
-            } else { // 페이지네이션 클릭 시 (기존 AI 버블의 내용을 스피너로 교체)
+            } else {
                 if (currentAnalysisBubble) {
                     currentAnalysisBubble.querySelector('.message').innerHTML = '<div class="spinner d-block mx-auto"></div>';
-                } else { // 예외 상황: currentAnalysisBubble이 없는데 페이지네이션 클릭 시 (새로 생성)
+                } else {
                     currentAnalysisBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
                 }
             }
             
-            // 3. fetch 호출 시 cache_key 결정 로직
             let fetchCacheKey = currentCacheKey;
             if (query !== currentQuery && page === 1) { 
                 fetchCacheKey = null;
             }
 
-            
-            fetch("{{ url_for('askfin.analyze_query') }}", {
+            fetch("/askfin/analyze", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: currentQuery, page: page, cache_key: fetchCacheKey }) // currentQuery 사용
+                body: JSON.stringify({ query: currentQuery, page: page, cache_key: fetchCacheKey })
             })
             .then(response => response.ok ? response.json() : Promise.reject(response))
             .then(data => {
-                // spinnerBubble 대신 currentAnalysisBubble 사용
-                // currentAnalysisBubble.remove(); // 이 줄을 제거
-
                 if (data.cache_key) { currentCacheKey = data.cache_key; }
     
                 if (data.error) {
@@ -497,7 +487,6 @@
                                     <tbody>`;
                     
                     result.forEach((item, index) => {
-                        // 한 페이지에 표시되는 항목 수 (기본값 20)
                         const itemsPerPage = data.pagination.per_page || 20; 
                         const rank = ((data.pagination.current_page - 1) * itemsPerPage) + index + 1;
                         
@@ -534,17 +523,14 @@
                      responseHtml += `<p class="text-muted">분석 결과가 없습니다.</p>`;
                 }
                 
-                // currentAnalysisBubble이 존재하면 그 내용을 업데이트
                 if (currentAnalysisBubble) {
                     currentAnalysisBubble.querySelector('.message').innerHTML = responseHtml;
                 } else {
-                    // currentAnalysisBubble이 없는 경우 (오류 처리 후 등), 새로 추가
                     addMessageToChat('ai', responseHtml);
                 }
                 chatWindow.scrollTop = chatWindow.scrollHeight;
             })
             .catch(error => {
-                // 오류 발생 시 스피너 버블의 내용을 오류 메시지로 교체
                 if (currentAnalysisBubble) {
                     currentAnalysisBubble.querySelector('.message').innerHTML = '<p class="text-danger">분석 중 심각한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</p>';
                 } else {
@@ -554,23 +540,16 @@
             });
         }
     
-        // ***************************************************************
-        // MODIFIED renderFinancialTable FUNCTION FOR askfin.html
-        // 이 함수 정의를 통째로 이 위치(askfin.html의 <script> 태그 내부)에 넣으세요.
-        // ***************************************************************
         function renderFinancialTable(jsonData, targetElementId, notFoundMessage = '정보 없음') {
             const targetElement = document.getElementById(targetElementId);
             if (!targetElement) {
                 console.error(`Target element with ID '${targetElementId}' not found.`);
-                return; // 대상 요소가 없으면 함수 종료
+                return;
             }
 
             console.log("renderFinancialTable 호출됨. jsonData:", jsonData);
             let data;
             try {
-                // `data.key_financial_info`가 이미 JSON 객체일 수도 있고,
-                // `app.py`에서 `json.dumps()`로 문자열화된 상태로 넘어올 수도 있습니다.
-                // 따라서 JSON.parse를 시도하되, 실패하면 원본 데이터를 사용합니다.
                 data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
             } catch (e) {
                 console.error("renderFinancialTable: JSON 파싱 오류!", e);
@@ -578,7 +557,6 @@
                 return;
             }
 
-            // 데이터의 필수 속성 확인 및 데이터가 비어있는지 확인
             if (!data || !data.columns || !data.index || !data.data || data.data.length === 0) {
                 console.warn("renderFinancialTable: 필요한 데이터가 누락되었거나 데이터가 비어있음.", data);
                 targetElement.innerHTML = `<p class="text-muted text-center p-4">${notFoundMessage}</p>`;
@@ -602,27 +580,26 @@
                     tableData[i].forEach(value => {
                         let formattedValue = '';
                         if (typeof value === 'number') {
-                            // 금액 단위를 조원, 억원, 원으로 포맷팅
-                            if (Math.abs(value) >= 1_0000_0000_0000) { // 조
+                            if (Math.abs(value) >= 1_0000_0000_0000) {
                                 formattedValue = `${(value / 1_0000_0000_0000).toFixed(2)} 조원`;
-                            } else if (Math.abs(value) >= 1_0000_0000) { // 억
+                            } else if (Math.abs(value) >= 1_0000_0000) {
                                 formattedValue = `${(value / 1_0000_0000).toFixed(2)} 억원`;
-                            } else { // 원
+                            } else {
                                 formattedValue = `${value.toLocaleString()} 원`;
                             }
                         } else {
-                            formattedValue = value; // 숫자가 아닌 값은 그대로 사용
+                            formattedValue = value;
                         }
                         html += `<td>${formattedValue}</td>`;
                     });
                 } else {
-                    html += `<td>데이터 없음</td>`.repeat(columns.length); // 해당 행 데이터가 없으면 '데이터 없음'으로 채움
+                    html += `<td>데이터 없음</td>`.repeat(columns.length);
                 }
                 html += '</tr>';
             });
             html += '</tbody></table></div>';
             
-            targetElement.innerHTML = html; // **가장 중요: 생성된 HTML을 대상 요소에 직접 삽입**
+            targetElement.innerHTML = html;
         }
 
         // --- Event Listeners ---
@@ -637,8 +614,8 @@
         newChatBtn.addEventListener('click', () => {
             currentCacheKey = null;
             currentQuery = '';
-            currentAnalysisBubble = null; // 새 대화 시작 시 분석 버블 초기화
-            fetch("{{ url_for('askfin.new_chat') }}", { method: 'POST' })
+            currentAnalysisBubble = null;
+            fetch("/askfin/new_chat", { method: 'POST' })
             .then(() => {
                 chatWindow.innerHTML = '';
                 addMessageToChat('ai', '새로운 대화를 시작합니다. 무엇이 궁금하신가요?');
@@ -655,79 +632,80 @@
                 fetchAnalysis(currentQuery, page);
             }
 
-        if (target.classList.contains('stock-name')) { 
-            event.preventDefault();
-            const stockCode = target.dataset.code;
-            const stockName = target.dataset.name;
-            
-            document.getElementById('stockDetailModalLabel').textContent = `${stockName} (${stockCode})`; 
-            const spinnerHtml = '<div class="d-flex justify-content-center my-5"><div class="spinner-border" role="status" style="color: var(--primary-color);"><span class="visually-hidden">Loading...</span></div></div>';
-            ['news-content', 'profile-content', 'financials-content', 'reports-content'].forEach(id => { 
-                const el = document.getElementById(id);
-                if(el) el.innerHTML = spinnerHtml;
-            });
-            
-            stockDetailModal.show();
+            if (target.classList.contains('stock-name')) {
+                event.preventDefault();
+                const stockCode = target.dataset.code;
+                const stockName = target.dataset.name;
+                
+                document.getElementById('stockDetailModalLabel').textContent = `${stockName} (${stockCode})`;
+                const spinnerHtml = '<div class="d-flex justify-content-center my-5"><div class="spinner-border" role="status" style="color: var(--primary-color);"><span class="visually-hidden">Loading...</span></div></div>';
+                ['news-content', 'profile-content', 'financials-content', 'reports-content'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el) el.innerHTML = spinnerHtml;
+                });
+                
+                stockDetailModal.show();
 
-            fetch(`/askfin/stock/${stockCode}/profile`).then(res => res.ok ? res.json() : Promise.reject('Server error'))
-                .then(data => {
-                    const profileContent = document.getElementById('profile-content');
-                    if(data.company_profile) {
-                        let content = '<dl class="row">';
-                        for (const [key, value] of Object.entries(data.company_profile)) {
-                             content += `<dt class="col-sm-3">${key}</dt><dd class="col-sm-9">${value || 'N/A'}</dd>`;
+                fetch(`/askfin/stock/${stockCode}/profile`).then(res => res.ok ? res.json() : Promise.reject('Server error'))
+                    .then(data => {
+                        const profileContent = document.getElementById('profile-content');
+                        if(data.company_profile) {
+                            let content = '<dl class="row">';
+                            for (const [key, value] of Object.entries(data.company_profile)) {
+                                 content += `<dt class="col-sm-3">${key}</dt><dd class="col-sm-9">${value || 'N/A'}</dd>`;
+                            }
+                            profileContent.innerHTML = content + '</dl>';
+                        } else {
+                            profileContent.innerHTML = `<p class="text-danger">${data.profile_error || '기업 개요를 불러올 수 없습니다.'}</p>`;
                         }
-                        profileContent.innerHTML = content + '</dl>';
-                    } else {
-                        profileContent.innerHTML = `<p class="text-danger">${data.profile_error || '기업 개요를 불러올 수 없습니다.'}</p>`;
-                    }
 
-                    const financialsContent = document.getElementById('financials-content');
-                    if (data.financials_error) {
-                        financialsContent.innerHTML = `<p class="text-danger text-center p-4">${data.financials_error}</p>`;
-                    } else {
-                        // **이 부분이 수정되어야 합니다.**
-                        // renderFinancialTable 함수가 이제 세 인자를 받으므로, 정확히 전달해야 합니다.
-                        renderFinancialTable(data.key_financial_info, 'financials-content', '주요 재무정보를 불러올 수 없습니다.');
-                    }
+                        const financialsContent = document.getElementById('financials-content');
+                        if (data.financials_error) {
+                            financialsContent.innerHTML = `<p class="text-danger text-center p-4">${data.financials_error}</p>`;
+                        } else {
+                            renderFinancialTable(data.key_financial_info, 'financials-content', '주요 재무정보를 불러올 수 없습니다.');
+                        }
 
-                    const reportsContent = document.getElementById('reports-content');
-                    if (data.reports_error) {
-                        reportsContent.innerHTML = `<p class="text-danger">${data.reports_error}</p>`;
-                    } else if (data.report_list && data.report_list.length > 0) {
-                        let html = '<ul class="list-group list-group-flush">';
-                        data.report_list.forEach(r => {
-                            html += `<li class="list-group-item"><a href="${r.url}" target="_blank" rel="noopener noreferrer">${r.report_nm}</a><small class="d-block text-muted mt-1">${r.flr_nm} - ${r.rcept_dt}</small></li>`;
-                        });
-                        reportsContent.innerHTML = html + '</ul>';
-                    } else {
-                        reportsContent.innerHTML = '<p class="text-muted text-center p-4">최근 1년간 주요 공시가 없습니다.</p>';
-                    }
-                }).catch(err => {
-                    const errorHtml = `<p class="text-danger">전체 정보를 불러오는 데 실패했습니다: ${err}</p>`;
-                    document.getElementById('profile-content').innerHTML = errorHtml;
-                    document.getElementById('financials-content').innerHTML = errorHtml;
-                    document.getElementById('reports-content').innerHTML = errorHtml;
-                    console.error('Modal Fetch Error (profile/financials/reports):', err);
-                });
-
-            fetch(`/news/${stockCode}`)
-                .then(res => res.ok ? res.json() : Promise.reject('Server error'))
-                .then(data => {
-                    const newsContent = document.getElementById('news-content');
-                    if (data.error || data.length === 0) {
-                        newsContent.innerHTML = `<p class="p-3 text-muted text-center">${data.error || '관련 뉴스가 없습니다.'}</p>`; return;
-                    }
-                    let newsHtml = '<ul class="list-group list-group-flush">';
-                    data.forEach(item => {
-                        newsHtml += `<li class="list-group-item"><a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.title}</a><small class="d-block text-muted mt-1">${item.press} - ${item.date}</small></li>`;
+                        const reportsContent = document.getElementById('reports-content');
+                        if (data.reports_error) {
+                            reportsContent.innerHTML = `<p class="text-danger">${data.reports_error}</p>`;
+                        } else if (data.report_list && data.report_list.length > 0) {
+                            let html = '<ul class="list-group list-group-flush">';
+                            data.report_list.forEach(r => {
+                                html += `<li class="list-group-item"><a href="${r.url}" target="_blank" rel="noopener noreferrer">${r.report_nm}</a><small class="d-block text-muted mt-1">${r.flr_nm} - ${r.rcept_dt}</small></li>`;
+                            });
+                            reportsContent.innerHTML = html + '</ul>';
+                        } else {
+                            reportsContent.innerHTML = '<p class="text-muted text-center p-4">최근 1년간 주요 공시가 없습니다.</p>';
+                        }
+                    }).catch(err => {
+                        const errorHtml = `<p class="text-danger">전체 정보를 불러오는 데 실패했습니다: ${err}</p>`;
+                        document.getElementById('profile-content').innerHTML = errorHtml;
+                        document.getElementById('financials-content').innerHTML = errorHtml;
+                        document.getElementById('reports-content').innerHTML = errorHtml;
+                        console.error('Modal Fetch Error (profile/financials/reports):', err);
                     });
-                    newsContent.innerHTML = newsHtml + '</ul>';
-                }).catch(err => {
-                    document.getElementById('news-content').innerHTML = `<p class="p-3 text-danger">뉴스 로딩 오류: ${err}</p>`;
-                    console.error('Modal Fetch Error (news):', err);
-                });
-        }
+
+                fetch(`/news/${stockCode}`)
+                    .then(res => res.ok ? res.json() : Promise.reject('Server error'))
+                    .then(data => {
+                        const newsContent = document.getElementById('news-content');
+                        if (data.error || data.length === 0) {
+                            newsContent.innerHTML = `<p class="p-3 text-muted text-center">${data.error || '관련 뉴스가 없습니다.'}</p>`; return;
+                        }
+                        let newsHtml = '<ul class="list-group list-group-flush">';
+                        data.forEach(item => {
+                            newsHtml += `<li class="list-group-item"><a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.title}</a><small class="d-block text-muted mt-1">${item.press} - ${item.date}</small></li>`;
+                        });
+                        newsContent.innerHTML = newsHtml + '</ul>';
+                    }).catch(err => {
+                        document.getElementById('news-content').innerHTML = `<p class="p-3 text-danger">뉴스 로딩 오류: ${err}</p>`;
+                        console.error('Modal Fetch Error (news):', err);
+                    });
+            }
+        });
     });
 </script>
+</body>
+</html>
 {% endblock %}

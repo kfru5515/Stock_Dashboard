@@ -148,14 +148,11 @@ def initialize_global_data():
         print(f"  - 종목 목록 로딩 완료. 총 {len(GLOBAL_KRX_LISTING)}개 종목.")
         print(f"  - GLOBAL_KRX_LISTING 컬럼: {GLOBAL_KRX_LISTING.columns.tolist()}")
 
-        if 'Industry' in GLOBAL_KRX_LISTING.columns:
-            print("\n  - FinanceDataReader 'Industry' 컬럼 고유값 (상위 20개):")
-            for industry in GLOBAL_KRX_LISTING['Industry'].dropna().unique().tolist()[:20]:
-                print(f"    - {industry}")
-            if len(GLOBAL_KRX_LISTING['Industry'].dropna().unique()) > 20:
-                print("    ... (더 많은 업종이 있습니다)")
-        else:
-            print("  - GLOBAL_KRX_LISTING에 'Industry' 컬럼이 없습니다.")
+        # **추가: GLOBAL_KRX_LISTING에 FullCode 컬럼 추가**
+        GLOBAL_KRX_LISTING['FullCode'] = GLOBAL_KRX_LISTING.apply(
+            lambda row: f"{row['Code']}.KQ" if row['Market'] == 'KOSDAQ' else f"{row['Code']}.KS", axis=1
+        )
+        print(f"  - GLOBAL_KRX_LISTING에 'FullCode' 컬럼 추가 완료.")
 
         # 2. 종목 코드 <-> 이름 매핑 로딩 (pykrx)
         print("  - 종목 코드/이름 매핑 (pykrx) 로딩 중...")
@@ -163,7 +160,7 @@ def initialize_global_data():
         GLOBAL_TICKER_NAME_MAP = {ticker: stock.get_market_ticker_name(ticker) for ticker in all_tickers}
         GLOBAL_NAME_TICKER_MAP = {name: ticker for ticker, name in GLOBAL_TICKER_NAME_MAP.items()}
         print(f"  - 종목 코드/이름 매핑 생성 완료. 총 {len(GLOBAL_NAME_TICKER_MAP)}개 매핑.")
-        
+
 
         print("[애플리케이션 초기화] 모든 필수 주식 데이터 로딩 완료.")
 
@@ -475,7 +472,7 @@ def get_stock_profile(code):
                 'report_nm': r.report_nm, 'flr_nm': r.flr_nm, 'rcept_dt': r.rcept_dt,
                 'url': f"http://dart.fss.or.kr/dsaf001/main.do?rcpNo={r.rcept_no}"
             } for r in reports[:15]] if reports else []
-
+            
             api_url = "https://opendart.fss.or.kr/api/fnlttSinglAcnt.json"
             fs_data_list = [] 
             
@@ -720,8 +717,6 @@ def get_target_stocks(target_str):
     
     print(f"--- 디버그 종료 (get_target_stocks) ---")
     return target_stocks, analysis_subject
-
-
 
 
 def parse_period(period_str):
@@ -994,7 +989,6 @@ def _fetch_and_analyze_single_stock(stock_code, stock_name, overall_start, overa
                 "start_price": start_price,
                 "end_price": end_price,
             }
-
     except Exception as e:
         print(f"       -> [분석 실패] {stock_name}({stock_code}) 분석 중 예외 발생: {e}")
 
