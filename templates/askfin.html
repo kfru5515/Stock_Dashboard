@@ -40,6 +40,14 @@
         overflow-y: auto;
         background-color: var(--dark-bg); /* Chat window area is slightly darker */
     }
+    .price-up {
+        color: var(--danger-color) !important;
+        font-weight: bold;
+    }
+    .price-down {
+        color: var(--info-color) !important;
+        font-weight: bold;
+    }
 
     .message-row { 
         display: flex; /* Flexbox 컨테이너로 만듦 (확실히) */
@@ -122,7 +130,11 @@
         box-shadow: var(--box-shadow-light);
     }
 
-
+    .askfin-chart-selector .btn.active {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+    }
 
     #askfin-form-container { 
         padding: 15px 20px;
@@ -390,6 +402,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const queryInput = document.getElementById('query-input');
@@ -400,8 +413,65 @@
     
         let currentQuery = '';
         let currentCacheKey = null;
-        let currentAnalysisBubble = null; 
-    
+        let currentAnalysisBubble = null;
+        
+        // --- 차트 관련 설정 ---
+        let chartInstances = {};
+        const chartDefaultOptions = {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    ticks: { font: { size: 10 }, color: '#FFFFFF' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                x: {
+                    ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, color: '#FFFFFF' },
+                    grid: { display: false }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: { enabled: true, mode: 'index', intersect: false, titleColor: '#FFFFFF', bodyColor: '#FFFFFF', backgroundColor: 'rgba(44, 49, 58, 0.9)', borderColor: 'var(--primary-color)', borderWidth: 1 }
+            },
+            elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } }
+        };
+        Chart.defaults.color = '#FFFFFF';
+        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+
+        function parseChartJsData(data, interval = 'daily') {
+            if (!data || !Array.isArray(data)) return { labels: [], closes: [] };
+            return {
+                labels: data.map(item => {
+                    if (!item.Date) return '';
+                    const parts = item.Date.split('-');
+                    return interval === 'daily' ? `${parts[1]}/${parts[2]}` : `${parts[0].slice(-2)}/${parts[1]}`;
+                }),
+                closes: data.map(item => item.Close)
+            };
+        }
+
+        function renderSingleStockChart(canvasId, chartData, interval = 'daily') {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas || !chartData || !chartData.length) return;
+
+            const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
+            const color = primaryColor || '#00aaff'; 
+
+            const apiFormattedData = chartData.map(item => ({ Date: item.date, Close: item.price }));
+            const parsedData = parseChartJsData(apiFormattedData, interval);
+            
+            if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+            chartInstances[canvasId] = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: parsedData.labels,
+                    datasets: [{ data: parsedData.closes, borderColor: color, fill: false }]
+                },
+                options: chartDefaultOptions
+            });
+        }
+
         function addMessageToChat(type, contentHtml) {
             const rowDiv = document.createElement('div');
             rowDiv.className = `message-row ${type}-row`;
@@ -466,8 +536,6 @@
                 if (data.error) {
                     if (currentAnalysisBubble) {
                         currentAnalysisBubble.querySelector('.message').innerHTML = `<p class="text-danger">오류: ${data.error}</p>`;
-                    } else {
-                        addMessageToChat('ai', `<p class="text-danger">오류: ${data.error}</p>`);
                     }
                     return;
                 }
@@ -487,7 +555,7 @@
                                     <tbody>`;
                     
                     result.forEach((item, index) => {
-                        const itemsPerPage = data.pagination.per_page || 20; 
+                        const itemsPerPage = 20;
                         const rank = ((data.pagination.current_page - 1) * itemsPerPage) + index + 1;
                         
                         const itemName = item?.name || 'N/A';
@@ -516,18 +584,44 @@
                     responseHtml += renderPagination(data.pagination);
                 
                 } else if (Array.isArray(result) && result.length > 0) {
-                    responseHtml += `<p>${result.join('<br>')}</p>`;
-                } else if (typeof result === 'string') {
-                     responseHtml += `<p>${result}</p>`;
+                    let resultText = result.join('<br>');
+                    
+                    if (data.stock_code && data.stock_name) {
+                        const linkHtml = `<a href="#" class="stock-name" data-code="${data.stock_code}" data-name="${data.stock_name}">${data.stock_name}(${data.stock_code})</a>`;
+                        const originalText = `${data.stock_name}(${data.stock_code})`;
+                        resultText = resultText.replace(originalText, linkHtml);
+                    }
+
+                    responseHtml += `<p>${resultText}</p>`;
                 } else {
                      responseHtml += `<p class="text-muted">분석 결과가 없습니다.</p>`;
                 }
                 
+                let chartCanvasId = null;
+                if (data.chart_data && Array.isArray(data.chart_data) && data.chart_data.length > 0) {
+                    chartCanvasId = `stockChart_${new Date().getTime()}`;
+                    responseHtml += `
+                        <div class="d-flex justify-content-end mt-2 mb-1">
+                            <div class="btn-group btn-group-sm askfin-chart-selector" role="group">
+                                <button type="button" class="btn btn-outline-secondary active" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="daily">일</button>
+                                <button type="button" class="btn btn-outline-secondary" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="weekly">주</button>
+                                <button type="button" class="btn btn-outline-secondary" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="monthly">월</button>
+                            </div>
+                        </div>
+                        <div class="chart-canvas-container" style="height: 250px;">
+                            <canvas id="${chartCanvasId}"></canvas>
+                        </div>
+                    `;
+                }
+                
                 if (currentAnalysisBubble) {
                     currentAnalysisBubble.querySelector('.message').innerHTML = responseHtml;
-                } else {
-                    addMessageToChat('ai', responseHtml);
                 }
+                
+                if (chartCanvasId) {
+                    renderSingleStockChart(chartCanvasId, data.chart_data, 'daily');
+                }
+
                 chatWindow.scrollTop = chatWindow.scrollHeight;
             })
             .catch(error => {
@@ -547,18 +641,15 @@
                 return;
             }
 
-            console.log("renderFinancialTable 호출됨. jsonData:", jsonData);
             let data;
             try {
                 data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
             } catch (e) {
-                console.error("renderFinancialTable: JSON 파싱 오류!", e);
-                targetElement.innerHTML = `<p class="text-danger text-center p-4">재무정보 표시 중 오류가 발생했습니다: 데이터 형식이 잘못되었습니다.</p>`;
+                targetElement.innerHTML = `<p class="text-danger text-center p-4">재무정보 표시 중 오류가 발생했습니다.</p>`;
                 return;
             }
 
             if (!data || !data.columns || !data.index || !data.data || data.data.length === 0) {
-                console.warn("renderFinancialTable: 필요한 데이터가 누락되었거나 데이터가 비어있음.", data);
                 targetElement.innerHTML = `<p class="text-muted text-center p-4">${notFoundMessage}</p>`;
                 return;
             }
@@ -585,7 +676,7 @@
                             } else if (Math.abs(value) >= 1_0000_0000) {
                                 formattedValue = `${(value / 1_0000_0000).toFixed(2)} 억원`;
                             } else {
-                                formattedValue = `${value.toLocaleString()} 원`;
+                                formattedValue = value.toLocaleString();
                             }
                         } else {
                             formattedValue = value;
@@ -625,14 +716,14 @@
         chatWindow.addEventListener('click', (event) => {
             const target = event.target;
     
-            if (target.classList.contains('page-btn') && !target.classList.contains('active')) {
+            if (target.matches('.page-btn') && !target.classList.contains('active')) {
                 event.preventDefault();
                 const page = parseInt(target.dataset.page, 10);
                 
                 fetchAnalysis(currentQuery, page);
             }
 
-            if (target.classList.contains('stock-name')) {
+            if (target.matches('.stock-name')) {
                 event.preventDefault();
                 const stockCode = target.dataset.code;
                 const stockName = target.dataset.name;
@@ -703,9 +794,30 @@
                         console.error('Modal Fetch Error (news):', err);
                     });
             }
+            
+            if (target.matches('.askfin-chart-selector button')) {
+                event.preventDefault();
+                const btnGroup = target.parentElement;
+                btnGroup.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                target.classList.add('active');
+                
+                const { ticker, interval, chartId } = target.dataset;
+                const chartInstance = chartInstances[chartId];
+                if (!ticker || !interval || !chartInstance) return;
+
+                fetch(`/api/chart_data/${encodeURIComponent(ticker)}/${interval}`)
+                    .then(response => response.ok ? response.json() : Promise.reject('Error'))
+                    .then(data => {
+                        if (data.error) { console.error('Chart data error:', data.error); return; }
+                        
+                        const newChartData = parseChartJsData(data, interval);
+                        chartInstance.data.labels = newChartData.labels;
+                        chartInstance.data.datasets[0].data = newChartData.closes;
+                        chartInstance.update();
+                    })
+                    .catch(error => console.error('Error fetching chart data:', error));
+            }
         });
     });
 </script>
-</body>
-</html>
 {% endblock %}

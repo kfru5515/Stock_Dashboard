@@ -765,21 +765,34 @@ def get_target_stocks(target_str):
                     "반도체": ["반도체 제조업", "전자부품 제조업", "반도체 및 평판디스플레이 제조업"],
                     "자동차": ["자동차용 엔진 및 자동차 제조업", "자동차 부품 제조업"],
                     "IT": ["소프트웨어 개발 및 공급업", "컴퓨터 프로그래밍, 시스템 통합 및 관리업", "정보서비스업"],
-                    "은행": ["은행"],
-                    "증권": ["증권 및 선물 중개업"],
-                    "보험": ["보험 및 연금업"],
-                    "건설": ["종합 건설업", "건물 건설업", "토목 건설업"],
-                    "화학": ["화학물질 및 화학제품 제조업", "고무 및 플라스틱제품 제조업"],
-                    "콘텐츠": ["영화, 비디오물, 방송프로그램 제작 및 배급업", "음악 및 기타 엔터테인먼트업", "출판업"], 
+                    "반도체": ["반도체 제조업", "전자부품 제조업", "반도체 및 평판디스플레이 제조업"],
                     "게임": ["게임 소프트웨어 개발 및 공급업", "데이터베이스 및 온라인 정보 제공업"],
-                    "철강": ["1차 철강 제조업", "금속 가공제품 제조업"],
+                    "콘텐츠": ["영화, 비디오물, 방송프로그램 제작 및 배급업", "음악 및 기타 엔터테-인먼트업", "출판업"],
+                    "통신": ["통신업"],
+
+                    "자동차": ["자동차용 엔진 및 자동차 제조업", "자동차 부품 제조업"],
+                    "화학": ["화학물질 및 화학제품 제조업", "고무 및 플라스틱제품 제조업"],
+                    "철강": ["1차 철강 제조업", "금속 가-공제품 제조업"],
                     "조선": ["선박 및 보트 건조업"],
+                    "기계": ["기계 장비 제조업"],
+                    "건설": ["종합 건설업", "건물 건설업", "토목 건설업"],
+                    "방산": ["항공기, 우주선 및 보조장비 제조업"],
                     "해운": ["해상 운송업"],
                     "항공": ["항공 운송업"],
-                    "방산": ["항공기, 우주선 및 보조장비 제조업"],
+                    "에너지": ["전기, 가스, 증기 및 공기 조절 공급업", "석유 정제품 제조업"],
+
                     "음식료": ["식료품 제조업", "음료 제조업", "담배 제조업"],
                     "유통": ["종합 소매업", "전문 소매업", "무점포 소매업"],
-                    # ... FinanceDataReader의 'Industry' 고유값을 참고하여 추가/수정
+                    "화장품": ["화장품 제조업"],
+                    "의류": ["의복, 의복 액세서리 및 모피제품 제조업", "섬유제품 제조업; 의복 제외"],
+                    "제약": ["의약품 제조업", "의료용 물질 및 의약품 제조업", "생물학적 제제 제조업"],
+                    "바이오": ["의료용 물질 및 의약품 제조업", "생물학적 제제 제조업", "기초 의약물질 및 생물학적 제제 제조업"],
+                    "헬스케어": ["의료기기 제조업", "의료, 정밀, 광학 기기 및 시계 제조업"],
+
+                    "금융": ["금융업", "은행 및 저축기관", "금융 지주회사"],
+                    "은행": ["은행 및 저축기관"],
+                    "증권": ["증권 및 선물 중개업"],
+                    "보험": ["보험 및 연금업"]
                 }
                 for industry_key, industry_names in INDUSTRY_KEYWORD_MAP.items():
                     if lower_keyword == industry_key.lower() or any(name.lower() in lower_keyword for name in industry_names):
@@ -790,7 +803,6 @@ def get_target_stocks(target_str):
                         break
             
             if not found_by_industry:
-                # 3. Fallback to name-based search (가장 마지막 순위)
                 print(f"디버그: 종목명에 '{keyword}' 키워드가 포함된 종목을 검색합니다. (최종 폴백)")
                 target_stocks = krx[krx['Name'].str.contains(keyword, na=False)]
     
@@ -808,7 +820,6 @@ def parse_period(period_str):
         return today - timedelta(days=365), today # 기본값: 최근 1년
 
     try:
-        # --- 단기 기간 처리 ---
         if "오늘" in period_str:
             return today.replace(hour=0, minute=0, second=0, microsecond=0), today
         if "어제" in period_str:
@@ -823,7 +834,6 @@ def parse_period(period_str):
             first_day_of_last_month = last_day_of_last_month.replace(day=1)
             return first_day_of_last_month, last_day_of_last_month
 
-        # --- 분기 처리 (예: "올해 1분기") ---
         if "분기" in period_str:
             quarter_match = re.search(r'(\d)분기', period_str)
             if quarter_match:
@@ -938,8 +948,8 @@ def analyze_target_price_upside(target_stocks):
         return []
 def execute_single_stock_price(intent_json):
     """
-    [효율성 개선 버전]
-    단일 종목의 현재가를 pykrx의 get_market_ohlcv_by_date를 사용하여 빠르게 조회합니다.
+    [띄어쓰기 대응 강화 버전]
+    단일 종목의 현재가를 조회하며, 종목명에 포함된 띄어쓰기를 자동으로 제거하고 검색합니다.
     """
     try:
         if GLOBAL_NAME_TICKER_MAP is None:
@@ -949,17 +959,18 @@ def execute_single_stock_price(intent_json):
         if not target_name:
             return {"error": "종목명이 지정되지 않았습니다."}
 
-        ticker = GLOBAL_NAME_TICKER_MAP.get(target_name)
+        cleaned_name = target_name.replace(" ", "")
+        ticker = GLOBAL_NAME_TICKER_MAP.get(cleaned_name)
+
         if not ticker:
-            return {
-                "analysis_subject": "오류",
-                "result": [f"'{target_name}'에 해당하는 종목을 찾을 수 없습니다. 종목명을 확인해주세요."]
-            }
+            ticker = GLOBAL_NAME_TICKER_MAP.get(target_name)
+            if not ticker:
+                return {
+                    "analysis_subject": "오류",
+                    "result": [f"'{target_name}'에 해당하는 종목을 찾을 수 없습니다. 종목명을 확인해주세요."]
+                }
 
-        # 가장 가까운 영업일 찾기
         latest_bday = stock.get_nearest_business_day_in_a_week()
-
-        # 특정 티커(종목코드)의 하루치 데이터만 효율적으로 조회합니다.
         df = stock.get_market_ohlcv_by_date(fromdate=latest_bday, todate=latest_bday, ticker=ticker)
 
         if df.empty:
@@ -968,23 +979,26 @@ def execute_single_stock_price(intent_json):
                 "result": [f"'{target_name}'의 {latest_bday} 거래 정보를 찾을 수 없습니다."]
             }
 
-        # 데이터프레임의 첫 번째 행에서 정보 추출
         stock_info = df.iloc[0]
         current_price = stock_info['종가']
         change = stock_info['종가'] - stock_info['시가']
         
+        price_color_class = "price-up" if change > 0 else "price-down" if change < 0 else ""
         change_str = f"{abs(change):,}원 상승" if change > 0 else f"{abs(change):,}원 하락" if change < 0 else "변동 없음"
+        date_str = df.index[-1].strftime('%Y-%m-%d')
         
-        date_str = f"{latest_bday[:4]}-{latest_bday[4:6]}-{latest_bday[6:8]}"
         result_sentence = (
-            f"**{target_name}**({ticker})의 가장 최근 종가({date_str})는"
-            f" **{current_price:,}원**이며, 시가 대비 {change_str}했습니다."
+            f"{target_name}({ticker})의 가장 최근 종가({date_str})는 "
+            f"<span class='{price_color_class}'>{current_price:,}원</span>이며, 시가 대비 <span class='{price_color_class}'>{change_str}</span>했습니다."
         )
 
         return {
             "query_intent": intent_json,
             "analysis_subject": f"{target_name} 현재가",
-            "result": [result_sentence]
+            "result": [result_sentence],
+            "chart_data": [], 
+            "stock_code": ticker,
+            "stock_name": target_name
         }
     except Exception as e:
         traceback.print_exc()
@@ -997,13 +1011,11 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
     try:
         action_str = intent_json.get("action", "")
 
-        # 캐시 처리 로직 (생략, 기존과 동일)
         if cache_key and cache_key in ANALYSIS_CACHE and 'full_result' in ANALYSIS_CACHE[cache_key]:
             sorted_result = ANALYSIS_CACHE[cache_key]['full_result']
             analysis_subject = ANALYSIS_CACHE[cache_key]['analysis_subject']
             print(f"✅ CACHE HIT: 캐시된 전체 결과 {len(sorted_result)}개를 사용합니다.")
         else:
-            # 캐시가 없는 경우 새로운 분석 시작
             print(f"🔥 CACHE MISS: 새로운 분석을 시작합니다.")
             target_str = intent_json.get("target")
             condition_obj = intent_json.get("condition")
@@ -1014,13 +1026,10 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
             
             result_data = []
 
-            # --- ▼▼▼ [핵심] action_str에 따라 다른 분석 함수를 호출하는 부분 ▼▼▼ ---
             if "순매수" in action_str and isinstance(condition_obj, dict) and condition_obj.get('who') == '기관':
-                # "기관 순매수" 요청일 경우, 새로 만든 함수를 호출합니다.
                 result_data = analyze_institutional_buying(start_date.strftime('%Y%m%d'), end_date.strftime('%Y%m%d'))
                 reverse_sort = True 
             else:
-                # 그 외의 모든 요청은 기존의 수익률/변동성 분석 로직을 따릅니다.
                 event_periods = []
                 if isinstance(condition_obj, str) and any(s in condition_obj for s in ["여름", "겨울"]):
                     season = "여름" if "여름" in condition_obj else "겨울"
@@ -1038,7 +1047,6 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
                     result_data = analyze_target_price_upside(target_stocks)
                 
                 reverse_sort = False if "내린" in action_str else True
-            # --- ▲▲▲ 분기 처리 종료 ▲▲▲ ---
 
             sorted_result = sorted(result_data, key=lambda x: x.get('value', -99999), reverse=reverse_sort)
             
@@ -1049,7 +1057,6 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
             print(f"새로운 분석 결과 {len(sorted_result)}개를 캐시에 저장했습니다. (키: {cache_key})")
 
 
-        # 페이지네이션 로직 (생략, 기존과 동일)
         items_per_page = 20
         total_items = len(sorted_result)
         total_pages = (total_items + items_per_page - 1) // items_per_page
@@ -1057,7 +1064,6 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
         end_index = start_index + items_per_page
         paginated_result = sorted_result[start_index:end_index]
         
-        # 설명(description) 생성 로직 (생략, 기존과 동일)
         condition_str = intent_json.get("condition")
         description = ""
         if isinstance(condition_str, str):
