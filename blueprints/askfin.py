@@ -946,10 +946,10 @@ def analyze_target_price_upside(target_stocks):
     except Exception as e:
         print(f"목표주가 컨센서스 조회 중 오류 발생: {e}")
         return []
+
 def execute_single_stock_price(intent_json):
     """
-    [띄어쓰기 대응 강화 버전]
-    단일 종목의 현재가를 조회하며, 종목명에 포함된 띄어쓰기를 자동으로 제거하고 검색합니다.
+    [완전판] 띄어쓰기 대응, 그래프 데이터 생성 기능이 모두 포함된 버전
     """
     try:
         if GLOBAL_NAME_TICKER_MAP is None:
@@ -961,25 +961,36 @@ def execute_single_stock_price(intent_json):
 
         cleaned_name = target_name.replace(" ", "")
         ticker = GLOBAL_NAME_TICKER_MAP.get(cleaned_name)
-
+        
         if not ticker:
-            ticker = GLOBAL_NAME_TICKER_MAP.get(target_name)
+            ticker = GLOBAL_NAME_TICKER_MAP.get(target_name) 
             if not ticker:
                 return {
                     "analysis_subject": "오류",
                     "result": [f"'{target_name}'에 해당하는 종목을 찾을 수 없습니다. 종목명을 확인해주세요."]
                 }
 
-        latest_bday = stock.get_nearest_business_day_in_a_week()
-        df = stock.get_market_ohlcv_by_date(fromdate=latest_bday, todate=latest_bday, ticker=ticker)
+        latest_bday_dt = datetime.strptime(stock.get_nearest_business_day_in_a_week(), '%Y%m%d')
+        start_date_for_chart = (latest_bday_dt - timedelta(days=45)).strftime('%Y%m%d')
+        latest_bday_str = latest_bday_dt.strftime('%Y%m%d')
+
+        df = stock.get_market_ohlcv_by_date(fromdate=start_date_for_chart, todate=latest_bday_str, ticker=ticker)
 
         if df.empty:
             return {
                 "analysis_subject": "정보 없음",
-                "result": [f"'{target_name}'의 {latest_bday} 거래 정보를 찾을 수 없습니다."]
+                "result": [f"'{target_name}'의 거래 정보를 찾을 수 없습니다."]
             }
 
-        stock_info = df.iloc[0]
+        chart_data = []
+        df_for_chart = df.reset_index()
+        for index, row in df_for_chart.iterrows():
+            chart_data.append({
+                "date": row['날짜'].strftime('%Y-%m-%d'),
+                "price": row['종가']
+            })
+
+        stock_info = df.iloc[-1]
         current_price = stock_info['종가']
         change = stock_info['종가'] - stock_info['시가']
         
@@ -996,14 +1007,14 @@ def execute_single_stock_price(intent_json):
             "query_intent": intent_json,
             "analysis_subject": f"{target_name} 현재가",
             "result": [result_sentence],
-            "chart_data": [], 
+            "chart_data": chart_data,
             "stock_code": ticker,
             "stock_name": target_name
         }
     except Exception as e:
         traceback.print_exc()
         return {"error": f"단일 종목 가격 조회 중 오류 발생: {e}"}
-    
+        
 def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
     """
     [수정] '순매수' 분석과 기존 '수익률/변동성' 분석을 분기 처리하는 최종 함수.
