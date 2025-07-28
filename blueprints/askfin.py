@@ -50,91 +50,127 @@ try:
     model = genai.GenerativeModel('gemini-1.5-flash')
 
     PROMPT_TEMPLATE = """
-You are a financial analyst. Your task is to analyze a user's query and convert it into a structured JSON object.
-First, classify the query_type as "stock_analysis" or "indicator_lookup".
+You are a financial analyst. Your primary task is to analyze a user's query and convert it into a structured JSON object.
 
-- "stock_analysis": For questions about stock performance under certain conditions.
-- "indicator_lookup": For questions asking for a specific economic indicator's value.
-- "comparison_analysis": For questions that explicitly compare multiple stocks or themes to find the best/worst performing one.
-- "general_inquiry": For general financial advice, trends, or information not covered by the above.
-
-- You MUST only respond with a JSON object. No other text.
+- You MUST respond with a JSON object that follows the schema.
+- **EXCEPTION**: If the user's query is a general question, a greeting, or something that CANNOT be structured into the JSON schema, you MUST respond with a conversational, friendly answer in plain text INSTEAD of JSON.
 - For "comparison_analysis", the "target" MUST be an array of strings.
-
+- Be specific with the "period" value. If the user says "이번주", use "이번주". If they say "지난 1분기", use "지난 1분기".
 
 ## JSON Schema:
-{{"query_type": "stock_analysis|indicator_lookup", "period": "string|null", "condition": "string|object|null", "target": "string|null", "action": "string|null"}}
+{{"query_type": "string", "period": "string|null", "condition": "string|object|null", "target": "string|array|null", "action": "string|null"}}
 
-## Examples:
-1. User Query: "지난 3년 동안 겨울에 오른 콘텐츠 관련 주식"
+## Examples (JSON Output):
+
+# --- 기본 예시 ---
+1.  User Query: "지난 3년 동안 겨울에 오른 콘텐츠 관련 주식"
     JSON Output:
     ```json
     {{"query_type": "stock_analysis", "period": "지난 3년", "condition": "겨울", "target": "콘텐츠 관련주", "action": "오른 주식"}}
     ```
-2. User Query: "최근 CPI 지수 알려줘"
+2.  User Query: "최근 CPI 지수 알려줘"
     JSON Output:
     ```json
     {{"query_type": "indicator_lookup", "period": "최근", "condition": null, "target": "CPI 지수", "action": "조회"}}
     ```
-3. User Query: "지난 3년 동안 겨울에 오른 콘텐츠 관련 주식을 보여줘"
+3.  User Query: "인공지능, 2차전지 중 지난 1년간 가장 많이 오른 테마는?"
     JSON Output:
     ```json
-    {{"query_type": "stock_analysis", "period": "지난 3년", "condition": "겨울", "target": "콘텐츠 관련주", "action": "오른 주식"}}
+    {{"query_type": "comparison_analysis", "period": "지난 1년간", "condition": null, "target": ["인공지능", "2차전지"], "action": "가장 많이 오른 테마"}}
     ```
-4. User Query: "최근 CPI 지수가 3.5%보다 높았을 때 가장 많이 오른 주식은?"
+
+# --- 구체적인/단기 기간 예시 ---
+4.  User Query: "이번주 가장 많이 오른 주식은 뭐야?"
     JSON Output:
     ```json
-    {{"query_type": "stock_analysis", "period": "최근", "condition": {{"type": "indicator", "name": "CPI", "operator": ">", "value": 3.5}}, "target": "주식", "action": "가장 많이 오른 주식"}}
+    {{"query_type": "stock_analysis", "period": "이번주", "condition": null, "target": "주식", "action": "가장 많이 오른 주식"}}
     ```
-5. User Query: "지난 1년간 2차전지주 중 가장 많이 내린 주식은?"
+5.  User Query: "오늘 제일 많이 내린 반도체주는?"
     JSON Output:
     ```json
-    {{"query_type": "stock_analysis", "period": "지난 1년간", "condition": null, "target": "2차전지주", "action": "가장 많이 내린 주식"}}
+    {{"query_type": "stock_analysis", "period": "오늘", "condition": null, "target": "반도체주", "action": "제일 많이 내린 주식"}}
     ```
-6. User Query: "최근 유행하는 테마주 추천해줄래?"
+
+# --- 분기/실적 및 재무지표 조건 예시 ---
+6.  User Query: "올해 1분기 실적이 좋았던 IT 주식 찾아줘"
     JSON Output:
     ```json
-    {{"query_type": "general_inquiry", "period": "최근", "target": "테마주", "action": "추천", "recommendation_type": "유행"}}
+    {{"query_type": "stock_analysis", "period": "올해 1분기", "condition": {{"type": "earnings", "performance": "good"}}, "target": "IT 주식", "action": "찾아줘"}}
     ```
-7. User Query: "요즘 국제 정세를 알려줄래?"
+7.  User Query: "PBR이 1보다 낮은 우량주 알려줘"
     JSON Output:
     ```json
-    {{"query_type": "general_inquiry", "period": "최근", "target": "국제 정세", "action": "정보 제공"}}
+    {{"query_type": "stock_analysis", "period": null, "condition": {{"type": "fundamental", "indicator": "PBR", "operator": "<", "value": 1}}, "target": "우량주", "action": "알려줘"}}
     ```
-8. User Query: "주식 초보인데 어떤 종목이 좋아?"
+
+# --- 단일 종목 현재가 조회 예시 ---
+8.  User Query: "삼성전자 지금 얼마야?"
     JSON Output:
     ```json
-    {{"query_type": "general_inquiry", "target": "주식", "action": "추천", "recommendation_type": "초보"}}
+    {{"query_type": "single_stock_price", "period": null, "condition": null, "target": "삼성전자", "action": "현재가 조회"}}
     ```
-9. User Query: "CPI지수는"
+9.  User Query: "한화오션 주가 알려줄래"
     JSON Output:
     ```json
-    {{"query_type": "indicator_lookup", "period": "최근", "condition": null, "target": "CPI 지수", "action": "조회"}}
+    {{"query_type": "single_stock_price", "period": null, "condition": null, "target": "한화오션", "action": "현재가 조회"}}
     ```
-10. User Query: "환율"
+# --- ▼▼▼ [추가] 코스닥 종목 예시 ▼▼▼ ---
+10. User Query: "에코프로비엠 현재 주가"
     JSON Output:
     ```json
-    {{"query_type": "indicator_lookup", "period": "최근", "condition": null, "target": "환율", "action": "조회"}}
+    {{"query_type": "single_stock_price", "period": null, "condition": null, "target": "에코프로비엠", "action": "현재가 조회"}}
     ```
-11. User Query: "기준금리 얼마"
+11. User Query: "셀트리온제약 주가"
     JSON Output:
     ```json
-    {{"query_type": "indicator_lookup", "period": "최근", "condition": null, "target": "기준금리", "action": "조회"}}
+    {{"query_type": "single_stock_price", "period": null, "condition": null, "target": "셀트리온제약", "action": "현재가 조회"}}
     ```
-12. User Query: "인공지능, 2차전지, 반도체 중 지난 1년간 가장 많이 오른 테마는?"
+12. User Query: "카카오게임즈 얼마에요?"
     JSON Output:
     ```json
-    {{"query_type": "comparison_analysis", "period": "지난 1년간", "condition": null, "target": ["인공지능", "2차전지", "반도체"], "action": "가장 많이 오른 테마"}}
+    {{"query_type": "single_stock_price", "period": null, "condition": null, "target": "카카오게임즈", "action": "현재가 조회"}}
     ```
+
+# --- ▼▼▼ [추가] 복합 조건 및 배당/거래량 예시 ▼▼▼ ---
+13. User Query: "오늘 거래량이 가장 많이 터진 주식은?"
+    JSON Output:
+    ```json
+    {{"query_type": "stock_analysis", "period": "오늘", "condition": {{"type": "volume", "level": "highest"}}, "target": "주식", "action": "거래량이 가장 많이 터진 주식"}}
+    ```
+14. User Query: "금리 인상기에 가장 많이 올랐던 은행주는?"
+    JSON Output:
+    ```json
+    {{"query_type": "stock_analysis", "period": "금리 인상기", "condition": null, "target": "은행주", "action": "가장 많이 올랐던 주식"}}
+    ```
+15. User Query: "배당수익률 높은 통신주 알려줘"
+    JSON Output:
+    ```json
+    {{"query_type": "stock_analysis", "period": null, "condition": {{"type": "fundamental", "indicator": "dividend_yield", "operator": ">", "value": "high"}}, "target": "통신주", "action": "배당수익률 높은 주식"}}
+    ```
+
+## Example (Plain Text Output):
+
+1.  User Query: "주식 초보인데 어떤 종목이 좋아?"
+    Plain Text Output: 주식 투자를 처음 시작하시는군요! 특정 종목을 추천해드리기보다는, 먼저 시가총액이 크고 모두가 잘 아는 우량주부터 소액으로 시작해보시는 것을 권해드려요. 삼성전자나 SK하이닉스 같은 종목들의 최근 뉴스와 리포트를 꾸준히 살펴보시는 것도 좋은 공부가 될 거예요.
+2.  User Query: "3년 뒤에 삼성전자 주가 얼마일까?"
+    Plain Text Output: 미래의 주가를 정확히 예측하는 것은 불가능합니다. 주가는 수많은 경제 지표, 시장 상황, 기업의 실적 등에 따라 변동하기 때문입니다. 다만, 기업의 재무 상태나 성장 가능성을 분석하며 장기적인 관점에서 투자 결정을 내리는 것이 좋습니다.
+3.  User Query: "단타랑 장기투자 중에 뭐가 더 나아?"
+    Plain Text Output: 단타와 장기투자는 각자의 장단점이 있어 어느 한쪽이 절대적으로 낫다고 말하기는 어렵습니다. 단타는 빠른 수익을 기대할 수 있지만 높은 위험과 스트레스를 동반하며, 장기투자는 안정적이지만 수익을 보기까지 오랜 시간이 걸릴 수 있습니다. 본인의 투자 성향과 목표에 맞는 방법을 선택하는 것이 가장 중요합니다.
+
+4.  User Query: "PER이 뭐야?"
+    Plain Text Output: PER(주가수익비율)은 주가를 주당순이익(EPS)으로 나눈 값으로, 기업이 벌어들이는 이익에 비해 주가가 높게 혹은 낮게 평가되었는지를 나타내는 대표적인 투자 지표입니다. PER이 낮을수록 주가가 저평가되었다고 해석하는 경우가 많습니다.
+5.  User Query: "안녕하세요"
+    Plain Text Output: 안녕하세요! 금융 분석 AI입니다. 주식이나 경제에 대해 궁금한 점이 있으시면 무엇이든 물어보세요.
+
 ## Task:
 User Query: "{user_query}"
-JSON Output:
+Your Output:
 """
+
 except Exception as e:
     print(f"AskFin Blueprint: 모델 초기화 실패 - {e}")
     model = None
 
-# --- Initial Data Loading Function ---
 def initialize_global_data():
     """
     서버 시작 시 한 번만 호출되어 전역으로 사용될 주식 기본 데이터를 로드하고 캐시합니다.
@@ -148,7 +184,6 @@ def initialize_global_data():
         print(f"  - 종목 목록 로딩 완료. 총 {len(GLOBAL_KRX_LISTING)}개 종목.")
         print(f"  - GLOBAL_KRX_LISTING 컬럼: {GLOBAL_KRX_LISTING.columns.tolist()}")
 
-        # **추가: GLOBAL_KRX_LISTING에 FullCode 컬럼 추가**
         GLOBAL_KRX_LISTING['FullCode'] = GLOBAL_KRX_LISTING.apply(
             lambda row: f"{row['Code']}.KQ" if row['Market'] == 'KOSDAQ' else f"{row['Code']}.KS", axis=1
         )
@@ -178,6 +213,53 @@ def _load_ticker_maps():
     if GLOBAL_NAME_TICKER_MAP is None:
         print("경고: _load_ticker_maps() 호출 시 글로벌 종목 맵이 초기화되지 않았습니다. 강제로 초기화 시도.")
         initialize_global_data()
+
+
+def analyze_institutional_buying(start_date, end_date):
+    """
+    주어진 기간 동안 기관의 순매수 대금을 기준으로 상위 종목을 분석합니다.
+    """
+    print(f"DEBUG: {start_date} ~ {end_date} 기간의 기관 순매수 분석을 시작합니다.")
+    try:
+        df_kospi = stock.get_market_trading_value_by_date(start_date, end_date, "KOSPI")
+        df_kosdaq = stock.get_market_trading_value_by_date(start_date, end_date, "KOSDAQ")
+        
+        df_all = pd.concat([df_kospi, df_kosdaq]).reset_index()
+
+        if '기관계' in df_all.columns:
+            df_all.rename(columns={'기관계': '기관'}, inplace=True)
+
+        if '기관' not in df_all.columns:
+            print("DEBUG: 투자자별 거래대금 데이터에 '기관' 컬럼이 없습니다.")
+            return []
+
+        institutional_net_buy = df_all.groupby('티커')['기관'].sum().sort_values(ascending=False)
+        
+        top_stocks = institutional_net_buy.head(50).reset_index()
+        
+        if GLOBAL_TICKER_NAME_MAP is None:
+            initialize_global_data()
+            
+        analysis_results = []
+        for index, row in top_stocks.iterrows():
+            ticker = row['티커']
+            net_buy_value = row['기관']
+            
+            analysis_results.append({
+                "code": ticker,
+                "name": GLOBAL_TICKER_NAME_MAP.get(ticker, "N/A"),
+                "value": round(net_buy_value / 1_0000_0000, 2), # 억 단위로 변환
+                "label": "기관 순매수(억 원)",
+            })
+        
+        print(f"DEBUG: 기관 순매수 상위 {len(analysis_results)}개 종목 분석 완료.")
+        return analysis_results
+
+    except Exception as e:
+        print(f"기관 순매수 분석 중 오류 발생: {e}")
+        traceback.print_exc()
+        return []
+    
 
 def _get_fdr_indicator(indicator_info, intent_json):
     """FinanceDataReader를 통해 일별 지표를 조회하고 결과를 반환하는 헬퍼 함수"""
@@ -720,27 +802,67 @@ def get_target_stocks(target_str):
 
 
 def parse_period(period_str):
-    """'지난 3년간' 같은 문자열을 시작일과 종료일로 변환하는 함수"""
+    """'지난 3년간' 같은 문자열을 시작일과 종료일로 변환하는 함수 (기능 확장)"""
     today = datetime.now()
     if not period_str:
-        return today - timedelta(days=365), today
+        return today - timedelta(days=365), today # 기본값: 최근 1년
+
     try:
-        if "년간" in period_str:
-            years = int(period_str.replace("지난", "").replace("년간", "").strip())
-            return today - timedelta(days=365 * years), today
-        elif "개월" in period_str:
-            months = int(period_str.replace("지난", "").replace("개월", "").strip())
-            return today - timedelta(days=30 * months), today
-        elif "작년" in period_str:
-            last_year = today.year - 1
-            return datetime(last_year, 1, 1), datetime(last_year, 12, 31)
-        elif "올해" in period_str:
-            return datetime(today.year, 1, 1), today
-    except (ValueError, TypeError):
-        pass
+        # --- 단기 기간 처리 ---
+        if "오늘" in period_str:
+            return today.replace(hour=0, minute=0, second=0, microsecond=0), today
+        if "어제" in period_str:
+            yesterday = today - timedelta(days=1)
+            return yesterday.replace(hour=0, minute=0, second=0, microsecond=0), yesterday.replace(hour=23, minute=59, second=59)
+        if "이번주" in period_str:
+            start_of_week = today - timedelta(days=today.weekday()) # 이번 주 월요일
+            return start_of_week, today
+        if "지난 달" in period_str or "지난달" in period_str:
+            first_day_of_current_month = today.replace(day=1)
+            last_day_of_last_month = first_day_of_current_month - timedelta(days=1)
+            first_day_of_last_month = last_day_of_last_month.replace(day=1)
+            return first_day_of_last_month, last_day_of_last_month
 
-    return today - timedelta(days=365), today 
+        # --- 분기 처리 (예: "올해 1분기") ---
+        if "분기" in period_str:
+            quarter_match = re.search(r'(\d)분기', period_str)
+            if quarter_match:
+                quarter = int(quarter_match.group(1))
+                year = today.year
+                if "작년" in period_str:
+                    year -= 1
+                
+                start_month = 3 * quarter - 2
+                end_month = 3 * quarter
+                start_date = datetime(year, start_month, 1)
+                # 다음 달의 첫날에서 하루를 빼서 마지막 날을 구함
+                if end_month == 12:
+                    end_date = datetime(year, 12, 31)
+                else:
+                    end_date = datetime(year, end_month + 1, 1) - timedelta(days=1)
+                return start_date, end_date
 
+        # --- 기존 로직 (일/개월/년) ---
+        if "일" in period_str:
+            days_match = re.search(r'(\d+)', period_str)
+            if days_match:
+                days = int(days_match.group(0))
+                return today - timedelta(days=days), today
+        if "개월" in period_str:
+            months_match = re.search(r'(\d+)', period_str)
+            if months_match:
+                months = int(months_match.group(0))
+                return today - timedelta(days=30 * months), today
+        if "년간" in period_str or "년" in period_str:
+            years_match = re.search(r'(\d+)', period_str)
+            if years_match:
+                years = int(years_match.group(0))
+                return today - timedelta(days=365 * years), today
+
+    except (ValueError, TypeError, AttributeError):
+        pass 
+
+    return today - timedelta(days=365), today
 
 def get_interest_rate_hike_dates(api_key):
     """한국은행 API로 기준금리 인상일을 가져오는 함수."""
@@ -814,56 +936,111 @@ def analyze_target_price_upside(target_stocks):
     except Exception as e:
         print(f"목표주가 컨센서스 조회 중 오류 발생: {e}")
         return []
+def execute_single_stock_price(intent_json):
+    """
+    [효율성 개선 버전]
+    단일 종목의 현재가를 pykrx의 get_market_ohlcv_by_date를 사용하여 빠르게 조회합니다.
+    """
+    try:
+        if GLOBAL_NAME_TICKER_MAP is None:
+            initialize_global_data()
+
+        target_name = intent_json.get("target")
+        if not target_name:
+            return {"error": "종목명이 지정되지 않았습니다."}
+
+        ticker = GLOBAL_NAME_TICKER_MAP.get(target_name)
+        if not ticker:
+            return {
+                "analysis_subject": "오류",
+                "result": [f"'{target_name}'에 해당하는 종목을 찾을 수 없습니다. 종목명을 확인해주세요."]
+            }
+
+        # 가장 가까운 영업일 찾기
+        latest_bday = stock.get_nearest_business_day_in_a_week()
+
+        # 특정 티커(종목코드)의 하루치 데이터만 효율적으로 조회합니다.
+        df = stock.get_market_ohlcv_by_date(fromdate=latest_bday, todate=latest_bday, ticker=ticker)
+
+        if df.empty:
+            return {
+                "analysis_subject": "정보 없음",
+                "result": [f"'{target_name}'의 {latest_bday} 거래 정보를 찾을 수 없습니다."]
+            }
+
+        # 데이터프레임의 첫 번째 행에서 정보 추출
+        stock_info = df.iloc[0]
+        current_price = stock_info['종가']
+        change = stock_info['종가'] - stock_info['시가']
+        
+        change_str = f"{abs(change):,}원 상승" if change > 0 else f"{abs(change):,}원 하락" if change < 0 else "변동 없음"
+        
+        date_str = f"{latest_bday[:4]}-{latest_bday[4:6]}-{latest_bday[6:8]}"
+        result_sentence = (
+            f"**{target_name}**({ticker})의 가장 최근 종가({date_str})는"
+            f" **{current_price:,}원**이며, 시가 대비 {change_str}했습니다."
+        )
+
+        return {
+            "query_intent": intent_json,
+            "analysis_subject": f"{target_name} 현재가",
+            "result": [result_sentence]
+        }
+    except Exception as e:
+        traceback.print_exc()
+        return {"error": f"단일 종목 가격 조회 중 오류 발생: {e}"}
     
 def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
     """
-    [최종 완성] 캐싱, 페이지네이션, 다중 분석, 폴백, 설명 기능을 모두 포함한 주식 분석 실행 함수.
+    [수정] '순매수' 분석과 기존 '수익률/변동성' 분석을 분기 처리하는 최종 함수.
     """
     try:
         action_str = intent_json.get("action", "")
 
-        if not action_str: 
-            print("DEBUG: 'action'이 지정되지 않아 기본값 '오른'으로 설정합니다.")
-            action_str = "오른" 
-
-        supported_actions = ["오른", "내린", "변동성", "변동", "목표주가"]
-
+        # 캐시 처리 로직 (생략, 기존과 동일)
         if cache_key and cache_key in ANALYSIS_CACHE and 'full_result' in ANALYSIS_CACHE[cache_key]:
             sorted_result = ANALYSIS_CACHE[cache_key]['full_result']
             analysis_subject = ANALYSIS_CACHE[cache_key]['analysis_subject']
             print(f"✅ CACHE HIT: 캐시된 전체 결과 {len(sorted_result)}개를 사용합니다.")
         else:
+            # 캐시가 없는 경우 새로운 분석 시작
             print(f"🔥 CACHE MISS: 새로운 분석을 시작합니다.")
             target_str = intent_json.get("target")
-            condition_str = intent_json.get("condition")
-            target_stocks, analysis_subject = get_target_stocks(target_str) # get_target_stocks는 이제 캐시된 GLOBAL_KRX_LISTING 사용
+            condition_obj = intent_json.get("condition")
+            target_stocks, analysis_subject = get_target_stocks(target_str)
             if target_stocks.empty: return {"result": [f"{analysis_subject}에 해당하는 종목을 찾을 수 없습니다."]}
 
             start_date, end_date = parse_period(intent_json.get("period"))
             
-            event_periods = []
-            if isinstance(condition_str, str) and any(s in condition_str for s in ["여름", "겨울"]):
-                season = "여름" if "여름" in condition_str else "겨울"
-                event_periods = handle_season_condition((start_date, end_date), season)
-            elif isinstance(condition_str, dict) and condition_str.get("type") == "indicator":
-                # Handle indicator-based conditions, e.g., "CPI 지수가 3.5%보다 높았을 때"
-                event_periods = handle_indicator_condition(condition_str, (start_date, end_date))
-            else:
-                event_periods = [(start_date, end_date)]
-
             result_data = []
-            
-            print(f"DEBUG: 분석 실행 직전 - action='{action_str}', target 개수={len(target_stocks)}, event periods 개수={len(event_periods)}")
 
-            if "오른" in action_str or "내린" in action_str:
-                result_data = analyze_top_performers(target_stocks, event_periods, (start_date, end_date))
-            elif "변동성" in action_str or "변동" in action_str:
-                result_data = analyze_volatility(target_stocks, (start_date, end_date))
-            elif "목표주가" in action_str:
-                result_data = analyze_target_price_upside(target_stocks)
+            # --- ▼▼▼ [핵심] action_str에 따라 다른 분석 함수를 호출하는 부분 ▼▼▼ ---
+            if "순매수" in action_str and isinstance(condition_obj, dict) and condition_obj.get('who') == '기관':
+                # "기관 순매수" 요청일 경우, 새로 만든 함수를 호출합니다.
+                result_data = analyze_institutional_buying(start_date.strftime('%Y%m%d'), end_date.strftime('%Y%m%d'))
+                reverse_sort = True 
+            else:
+                # 그 외의 모든 요청은 기존의 수익률/변동성 분석 로직을 따릅니다.
+                event_periods = []
+                if isinstance(condition_obj, str) and any(s in condition_obj for s in ["여름", "겨울"]):
+                    season = "여름" if "여름" in condition_obj else "겨울"
+                    event_periods = handle_season_condition((start_date, end_date), season)
+                elif isinstance(condition_obj, dict) and condition_obj.get("type") == "indicator":
+                    event_periods = handle_indicator_condition(condition_obj, (start_date, end_date))
+                else:
+                    event_periods = [(start_date, end_date)]
+                
+                if "오른" in action_str or "내린" in action_str:
+                    result_data = analyze_top_performers(target_stocks, event_periods, (start_date, end_date))
+                elif "변동성" in action_str or "변동" in action_str:
+                    result_data = analyze_volatility(target_stocks, (start_date, end_date))
+                elif "목표주가" in action_str:
+                    result_data = analyze_target_price_upside(target_stocks)
+                
+                reverse_sort = False if "내린" in action_str else True
+            # --- ▲▲▲ 분기 처리 종료 ▲▲▲ ---
 
-            reverse_sort = False if "내린" in action_str else True
-            sorted_result = sorted(result_data, key=lambda x: x.get('value', -999), reverse=reverse_sort)
+            sorted_result = sorted(result_data, key=lambda x: x.get('value', -99999), reverse=reverse_sort)
             
             if not cache_key: cache_key = str(hash(json.dumps(intent_json, sort_keys=True)))
             ANALYSIS_CACHE[cache_key] = {
@@ -871,6 +1048,8 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
             }
             print(f"새로운 분석 결과 {len(sorted_result)}개를 캐시에 저장했습니다. (키: {cache_key})")
 
+
+        # 페이지네이션 로직 (생략, 기존과 동일)
         items_per_page = 20
         total_items = len(sorted_result)
         total_pages = (total_items + items_per_page - 1) // items_per_page
@@ -878,6 +1057,7 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
         end_index = start_index + items_per_page
         paginated_result = sorted_result[start_index:end_index]
         
+        # 설명(description) 생성 로직 (생략, 기존과 동일)
         condition_str = intent_json.get("condition")
         description = ""
         if isinstance(condition_str, str):
@@ -1158,13 +1338,12 @@ def askfin_page():
 @askfin_bp.route('/analyze', methods=['POST'])
 def analyze_query():
     """
-    [수정됨] JSON 분석 실패, 지표 조회 실패, 그리고 일반 문의 유형에 대해
-    더욱 상세한 AI 답변 또는 적절한 폴백을 제공하는 API.
+    [최종 개선] AI가 종목명을 인식했지만 query_type을 잘못 판단한 경우,
+    백엔드에서 재분류하여 처리하는 로직이 추가된 버전.
     """
     if not model:
         return jsonify({"error": "모델이 초기화되지 않았습니다. API 키를 확인하세요."}), 500
     
-    final_result = None
     data = request.get_json()
     user_query = data.get('query')
     page = data.get('page', 1)
@@ -1173,139 +1352,74 @@ def analyze_query():
     if not user_query:
         return jsonify({"error": "잘못된 요청입니다."}), 400
 
+    intent_json = None
+    final_result = None
+
+    if cache_key and cache_key in ANALYSIS_CACHE:
+        print(f"✅ CACHE HIT: 캐시된 분석 결과를 사용합니다. (키: {cache_key})")
+        intent_json = ANALYSIS_CACHE[cache_key]['intent_json']
+        if intent_json.get("query_type") == "stock_analysis":
+             final_result = execute_stock_analysis(intent_json, page, user_query, cache_key)
+             return jsonify(final_result)
+
+
     try:
-        intent_json = None
-        if cache_key and cache_key in ANALYSIS_CACHE:
-            print(f"CACHE HIT: 캐시 키 '{cache_key}'를 사용합니다.")
-            intent_json = ANALYSIS_CACHE[cache_key]['intent_json']
-        else:
-            print(f"1차 시도: '{user_query}'에 대해 JSON 분석을 요청합니다.")
-            prompt = PROMPT_TEMPLATE.format(user_query=user_query)
-            response = model.generate_content(prompt)
-            raw_text = response.text
+        print(f"🔥 CACHE MISS: '{user_query}'에 대해 Gemini API 분석을 요청합니다.")
+        prompt = PROMPT_TEMPLATE.format(user_query=user_query)
+        response = model.generate_content(prompt)
+        raw_text = response.text.strip()
 
-            try:
-                start = raw_text.find('{')
-                end = raw_text.rfind('}') + 1
-                cleaned_response = raw_text[start:end]
-                intent_json = json.loads(cleaned_response)
-                
-                new_cache_key = str(hash(json.dumps(intent_json, sort_keys=True)))
-                ANALYSIS_CACHE[new_cache_key] = { 'intent_json': intent_json }
-                cache_key = new_cache_key 
+        try:
+            start = raw_text.find('{')
+            end = raw_text.rfind('}') + 1
+            cleaned_response = raw_text[start:end]
+            intent_json = json.loads(cleaned_response)
             
-            except (json.JSONDecodeError, IndexError) as e:
-                # JSON 파싱 실패 시, 일반 대화형 답변으로 폴백
-                print(f" JSON 분석 실패({e}). 일반 대화형 모델로 폴백합니다.")
-                try:
-                    general_prompt = f"다음 질문에 대해 친절하고 상세하게 답변해줘: {user_query}"
-                    fallback_response = model.generate_content(general_prompt)
+            query_type = intent_json.get("query_type")
+            
+            if query_type == "stock_analysis":
+                final_result = execute_stock_analysis(intent_json, page, user_query)
+            elif query_type == "comparison_analysis":
+                final_result = execute_comparison_analysis(intent_json)
+            elif query_type == "indicator_lookup":
+                final_result = execute_indicator_lookup(intent_json)
+            elif query_type == "single_stock_price":
+                final_result = execute_single_stock_price(intent_json)
+            else:
+                # --- ▼▼▼ [핵심] AI가 잘못 판단했을 때를 대비한 방어 코드 ▼▼▼ ---
+                # AI가 general_inquiry로 판단했지만, target이 실제 주식 종목명인지 확인
+                if query_type == "general_inquiry" and intent_json.get("target"):
+                    target_name = intent_json.get("target")
+                    if GLOBAL_NAME_TICKER_MAP is None: initialize_global_data()
                     
-                    final_result = {
-                        "analysis_subject": "일반 답변",
-                        "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()] # 줄바꿈 처리 강화
-                    }
-                    return jsonify(final_result)
-                
-                except Exception as fallback_e:
-                    print(f" 폴백 모델 호출 실패: {fallback_e}")
-                    traceback.print_exc()
-                    return jsonify({"error": "질문을 분석하는데 실패했고, 일반 답변도 가져올 수 없었습니다."}), 500
-        
-        if not intent_json or not intent_json.get("query_type"): 
-            print(f"디버그: Gemini가 반환한 JSON이 유효하지 않거나 query_type이 없습니다: {intent_json}")
-            print(f" 알 수 없는 질문 유형 또는 유효하지 않은 JSON. 일반 대화형 모델로 폴백합니다.")
-            general_prompt = f"다음 질문에 대해 친절하게 답변해줘: {user_query}"
-            fallback_response = model.generate_content(general_prompt)
+                    if target_name in GLOBAL_NAME_TICKER_MAP:
+                        print(f"DEBUG: General inquiry를 single_stock_price로 재분류합니다. (Target: {target_name})")
+                        # single_stock_price 유형으로 강제 변환하여 실행
+                        new_intent = {"query_type": "single_stock_price", "target": target_name, "action": "현재가 조회"}
+                        final_result = execute_single_stock_price(new_intent)
+                    else:
+                        final_result = {"analysis_subject": "일반 답변", "result": ["죄송합니다, 해당 질문에 대해서는 답변을 드릴 수 없습니다. 금융 관련 질문을 해주세요."]}
+                else:
+                    final_result = {"analysis_subject": "알림", "result": ["해당 유형의 분석은 아직 지원되지 않습니다."]}
+
+            if final_result and (not final_result.get('result') or final_result.get("error")):
+                 final_result = {
+                    "analysis_subject": "결과 없음",
+                    "result": [f"요청하신 '{user_query}'에 대한 데이터를 찾을 수 없거나 분석에 실패했습니다."]
+                 }
+
+        except (json.JSONDecodeError, IndexError):
             final_result = {
                 "analysis_subject": "일반 답변",
-                "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
+                "result": [raw_text.replace('\n', '<br>')]
             }
-            return jsonify(final_result)
-
-        query_type = intent_json.get("query_type")
         
-        if query_type == "stock_analysis":
-            final_result = execute_stock_analysis(intent_json, page, user_query, cache_key)
-            if not final_result.get('result') or \
-               (isinstance(final_result.get('result'), list) and len(final_result['result']) == 0) or \
-               final_result.get("error"):
-                
-                print(f"디버그: 주식 분석 결과가 0개이거나 오류입니다. 일반 대화형 모델로 폴백합니다.")
-                general_prompt = f"요청하신 '{user_query}'에 대한 주식 데이터를 충분히 찾거나 분석할 수 없었습니다. 다른 질문을 해주시겠어요?"
-                fallback_response = model.generate_content(general_prompt)
-                final_result = {
-                    "analysis_subject": "일반 답변",
-                    "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
-                }
-        elif query_type == "comparison_analysis":
-            final_result = execute_comparison_analysis(intent_json)
-            if not final_result.get('result') or \
-               (isinstance(final_result.get('result'), list) and len(final_result['result']) == 0) or \
-               final_result.get("error"):
-                
-                print(f"디버그: 비교 분석 결과가 0개이거나 오류입니다. 일반 대화형 모델로 폴백합니다.")
-                general_prompt = f"요청하신 '{user_query}'에 대한 비교 분석 데이터를 찾을 수 없었습니다. 다른 질문을 해주시겠어요?"
-                fallback_response = model.generate_content(general_prompt)
-                final_result = {
-                    "analysis_subject": "일반 답변",
-                    "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
-                }
-            
-        elif query_type == "indicator_lookup":
-            final_result = execute_indicator_lookup(intent_json)
-            if final_result.get("analysis_subject") == "지표 조회 실패":
-                print(f"디버그: 지표 조회 실패: {final_result.get('result', [''])[0]}. 일반 대화형 모델로 폴백합니다.")
-                general_prompt = f"요청하신 '{user_query}'에 대한 지표 데이터를 찾을 수 없거나 분석에 문제가 있었습니다. 다른 질문을 해주시겠어요? (오류: {final_result.get('result', [''])[0]})"
-                fallback_response = model.generate_content(general_prompt)
-                final_result = {
-                    "analysis_subject": "일반 답변",
-                    "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
-                }
-        # NEW BLOCK FOR general_inquiry
-        elif query_type == "general_inquiry":
-            print(f"디버그: 일반 문의 유형 '{query_type}' 감지. 상세 답변 생성 시도.")
-            recommendation_type = intent_json.get("recommendation_type")
-            target = intent_json.get("target")
-
-            specific_general_prompt = f"'{user_query}'에 대해 상세하게 답변해줘." # 기본 상세 프롬프트
-            if recommendation_type == "유행":
-                specific_general_prompt = f"최근 시장에서 유행하는 테마주에 대해 친절하게 설명해줘."
-            elif recommendation_type == "초보":
-                specific_general_prompt = f"주식 초보자를 위한 종목 추천이나 투자 가이드라인에 대해 친절하고 자세하게 설명해줘."
-            elif target:
-                 specific_general_prompt = f"'{target}'에 대해 친절하고 자세하게 설명해줘."
-
-            try:
-                general_response_content = model.generate_content(specific_general_prompt)
-                final_result = {
-                    "analysis_subject": "일반 답변",
-                    "result": [general_response_content.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
-                }
-            except Exception as general_e:
-                print(f" 일반 문의 상세 답변 생성 실패: {general_e}. 기본 폴백.")
-                traceback.print_exc()
-                general_prompt = f"다음 질문에 대해 친절하게 답변해줘: {user_query}" # 궁극적인 폴백
-                fallback_response = model.generate_content(general_prompt)
-                final_result = {
-                    "analysis_subject": "일반 답변",
-                    "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
-                }
-        else: # Fallback for unhandled query_types or general cases
-            print(f"디버그: 알 수 없는 query_type '{query_type}'. 일반 대화형 모델로 폴백합니다.")
-            general_prompt = f"다음 질문에 대해 친절하게 답변해줘: {user_query}"
-            fallback_response = model.generate_content(general_prompt)
-            final_result = {
-                "analysis_subject": "일반 답변",
-                "result": [fallback_response.text.replace('\r\n', '<br>').replace('\n', '<br>').strip()]
-            }
-            
         return jsonify(final_result)
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": f"분석 중 오류 발생: {str(e)}"}), 500
-    
+        return jsonify({"error": f"분석 중 심각한 오류 발생: {str(e)}"}), 500
+        
 @askfin_bp.route('/new_chat', methods=['POST'])
 def new_chat():
     """대화 기록(세션)을 초기화합니다."""
