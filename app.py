@@ -29,10 +29,27 @@ from blueprints.search import search_bp
 from dotenv import load_dotenv
 
 from db.extensions import db
+from werkzeug.security import generate_password_hash
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+
+class User(db.Model):
+    __tablename__  = 'users'
+    __table_args__ = {'extend_existing': True}
+    id         = db.Column(db.Integer, primary_key=True)
+    first_name = db.Column(db.String(30), nullable=False)
+    last_name  = db.Column(db.String(30), nullable=False)
+    username   = db.Column(db.String(30), unique=True, nullable=False)
+    email      = db.Column(db.String(120), unique=True, nullable=False)
+    password   = db.Column(db.String(200), nullable=False)
+    notes      = db.Column(db.Text)
+
+    def set_password(self, raw_pw):
+        self.password = generate_password_hash(raw_pw)
+
+
 
 # ── 금융 키워드 세트 (data‑files/finance.csv) ─────────────────────────
 finance_df = pd.read_csv(
@@ -760,6 +777,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
 with app.app_context():
+    db.create_all()
     initialize_global_data()
     app.config['QUANT_REPORT_CACHE'] = run_and_cache_quant_report()
     print("--- 모든 초기 데이터 로딩 완료 ---")
