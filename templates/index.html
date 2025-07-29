@@ -37,7 +37,139 @@
         -moz-osx-font-smoothing: grayscale;
         text-rendering: optimizeLegibility;
     }
+    .fab {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        background-color: var(--card-bg); /* 배경색을 카드와 동일하게 변경 */
+        color: var(--text-color); /* 기본 텍스트 색상 변경 */
+        padding: 15px 25px;
+        border-radius: 30px;
+        border: 1px solid var(--border-color); /* 테두리 추가 */
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        cursor: pointer;
+        box-shadow: var(--box-shadow-heavy);
+        z-index: 1050;
+        transition: all 0.2s ease-in-out;
+        white-space: nowrap;
+    }
+    .fab:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.6);
+        border-color: var(--primary-color);
+    }
+    .fab-text {
+        font-size: 1.3rem;
+        font-weight: 700;
+    }
+    .fin-color {
+        color: var(--primary-color); 
+    }
+    .widget-header .fin-color {
+        color: var(--primary-color); 
+    }
 
+    .widget-container {
+        position: fixed;
+        bottom: 100px;
+        right: 30px;
+        width: 400px;
+        height: 600px;
+        max-height: 80vh;
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 15px;
+        box-shadow: var(--box-shadow-heavy);
+        z-index: 1040;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        /* 초기 상태: 숨김 */
+        transform: translateY(20px);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s, transform 0.3s, visibility 0.3s;
+    }
+    .widget-container.show {
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .widget-header {
+        background-color: var(--card-bg); 
+        color: var(--text-color); 
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-shrink: 0;
+        border-bottom: 1px solid var(--border-color); 
+    }
+    .widget-header h5 {
+        color: var(--heading-color) !important; 
+    }
+    .widget-header .btn-close {
+        filter: invert(0.7); 
+    }
+    .widget-header .fin-color {
+        color: var(--primary-color);
+    }
+
+   
+    .nav-pills-widget .nav-link {
+        padding: 4px 12px;
+        font-size: 0.85rem;
+        color: var(--muted-text-color);
+        background-color: transparent;
+    }
+    .nav-pills-widget .nav-link.active {
+        background-color: var(--primary-color);
+        color: white; /* 활성 탭 텍스트 색상을 흰색으로 */
+        font-weight: bold;
+    }
+
+    .widget-chat-window {
+        flex-grow: 1;
+        padding: 15px;
+        overflow-y: auto;
+        background-color: var(--dark-bg);
+    }
+    /* askfin.html의 메시지 스타일 재사용 */
+    .widget-chat-window .message-row { margin-bottom: 15px; display: flex; align-items: flex-start; }
+    .widget-chat-window .user-message-row { justify-content: flex-end; }
+    .widget-chat-window .message { padding: 10px 15px; border-radius: 18px; max-width: 80%; line-height: 1.5; font-size: 0.95rem; }
+    .widget-chat-window .user-message { background-color: var(--primary-color); color: var(--dark-bg); }
+    .widget-chat-window .ai-message { background-color: var(--light-bg); color: var(--text-color); }
+    .widget-chat-window .ai-message-row::before, .widget-chat-window .user-message-row::after { content: ''; display: none; } /* 위젯에서는 아바타 숨김 */
+    .widget-chat-window .spinner { width: 24px; height: 24px; border-width: 2px; }
+
+    .widget-form-container {
+        padding: 10px 15px;
+        border-top: 1px solid var(--border-color);
+        background-color: var(--card-bg);
+        flex-shrink: 0;
+    }
+    #widget-askfin-form {
+        display: flex;
+        gap: 10px;
+    }
+    #widget-query-input {
+        border-radius: 20px;
+        padding: 8px 15px;
+    }
+    #widget-submit-btn {
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
     .card {
         border: none;
         border-radius: 12px;
@@ -275,6 +407,27 @@
         text-rendering: optimizeLegibility;
     }
 </style>
+<div id="askfin-fab" class="fab">
+    <span class="fab-text">Ask<span class="fin-color">Fin</span> AI</span>
+</div>
+
+<div id="askfin-widget-container" class="widget-container">
+    <div class="widget-header">
+        <h5 class="mb-0">Ask<span class="fin-color">Fin</span> AI</h5>
+        <button type="button" class="btn-close" id="widget-close-btn"></button>
+    </div>
+    <div id="widget-chat-window" class="widget-chat-window">
+        <div class="message-row ai-message-row">
+            <div class="message ai-message">안녕하세요! 무엇을 분석해 드릴까요?</div>
+        </div>
+    </div>
+    <div class="widget-form-container">
+        <form id="widget-askfin-form" onsubmit="return false;">
+            <input type="text" class="form-control" id="widget-query-input" placeholder="질문을 입력하세요...">
+            <button type="button" id="widget-submit-btn" class="btn btn-primary"><i class="fas fa-paper-plane"></i></button>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -782,6 +935,98 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('news-content').innerHTML = `<p class="p-3 text-danger">뉴스 로딩 오류: ${err}</p>`;
                     console.error('Modal Fetch Error (news):', err);
                 });
+        }
+    });
+});
+document.addEventListener('DOMContentLoaded', function() {
+    const fab = document.getElementById('askfin-fab');
+    const widgetContainer = document.getElementById('askfin-widget-container');
+    const closeBtn = document.getElementById('widget-close-btn');
+    const chatWindow = document.getElementById('widget-chat-window');
+    const form = document.getElementById('widget-askfin-form');
+    const queryInput = document.getElementById('widget-query-input');
+    const submitBtn = document.getElementById('widget-submit-btn');
+
+    let currentQuery = '';
+    let currentCacheKey = null;
+    let currentAnalysisBubble = null;
+
+    fab.addEventListener('click', () => {
+        widgetContainer.classList.toggle('show');
+    });
+
+    closeBtn.addEventListener('click', () => {
+        widgetContainer.classList.remove('show');
+    });
+
+    function addMessageToWidget(type, contentHtml) {
+        const rowDiv = document.createElement('div');
+        rowDiv.className = `message-row ${type}-message-row`;
+
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}-message`;
+        messageDiv.innerHTML = contentHtml;
+
+        rowDiv.appendChild(messageDiv);
+        chatWindow.appendChild(rowDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        return rowDiv;
+    }
+
+    function fetchWidgetAnalysis(query, page = 1) {
+        if (!query) return;
+
+        if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
+            addMessageToWidget('user', query);
+            queryInput.value = '';
+        }
+
+        if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
+            currentQuery = query;
+            currentCacheKey = null;
+            currentAnalysisBubble = addMessageToWidget('ai', '<div class="spinner d-block mx-auto"></div>');
+        } else {
+            if (currentAnalysisBubble) {
+                currentAnalysisBubble.querySelector('.message').innerHTML = '<div class="spinner d-block mx-auto"></div>';
+            } else {
+                currentAnalysisBubble = addMessageToWidget('ai', '<div class="spinner d-block mx-auto"></div>');
+            }
+        }
+        
+        let fetchCacheKey = (query === currentQuery) ? currentCacheKey : null;
+
+        fetch("/askfin/analyze", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: currentQuery, page: page, cache_key: fetchCacheKey })
+        })
+        .then(response => response.ok ? response.json() : Promise.reject('Server error'))
+        .then(data => {
+            if (data.cache_key) { currentCacheKey = data.cache_key; }
+            if (data.error) {
+                currentAnalysisBubble.querySelector('.message').innerHTML = `<p class="text-danger">오류: ${data.error}</p>`;
+                return;
+            }
+            
+            let responseHtml = '';
+            if (Array.isArray(data.result) && data.result.length > 0) {
+                responseHtml = data.result.join('<br>'); // 간단하게 줄바꿈으로 표시
+            } else {
+                responseHtml = '<p class="text-muted">분석 결과가 없습니다.</p>';
+            }
+            currentAnalysisBubble.querySelector('.message').innerHTML = responseHtml;
+        })
+        .catch(error => {
+            currentAnalysisBubble.querySelector('.message').innerHTML = '<p class="text-danger">분석 중 오류가 발생했습니다.</p>';
+            console.error('Widget Fetch error:', error);
+        });
+    }
+
+    submitBtn.addEventListener('click', () => fetchWidgetAnalysis(queryInput.value.trim(), 1));
+    queryInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            submitBtn.click();
         }
     });
 });

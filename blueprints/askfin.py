@@ -131,7 +131,6 @@ You are a financial analyst. Your primary task is to analyze a user's query and 
     {{"query_type": "single_stock_price", "period": null, "condition": null, "target": "카카오게임즈", "action": "현재가 조회"}}
     ```
 
-# --- ▼▼▼ [추가] 복합 조건 및 배당/거래량 예시 ▼▼▼ ---
 13. User Query: "오늘 거래량이 가장 많이 터진 주식은?"
     JSON Output:
     ```json
@@ -1017,17 +1016,17 @@ def execute_single_stock_price(intent_json):
         
 def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
     """
-    [수정] '순매수' 분석과 기존 '수익률/변동성' 분석을 분기 처리하는 최종 함수.
+    [거래량 분석 추가] '순매수', '거래량', '수익률/변동성'을 분기 처리하는 최종 함수.
     """
     try:
         action_str = intent_json.get("action", "")
-
+        
         if cache_key and cache_key in ANALYSIS_CACHE and 'full_result' in ANALYSIS_CACHE[cache_key]:
             sorted_result = ANALYSIS_CACHE[cache_key]['full_result']
             analysis_subject = ANALYSIS_CACHE[cache_key]['analysis_subject']
-            print(f"✅ CACHE HIT: 캐시된 전체 결과 {len(sorted_result)}개를 사용합니다.")
+            print(f" CACHE HIT: 캐시된 전체 결과 {len(sorted_result)}개를 사용합니다.")
         else:
-            print(f"🔥 CACHE MISS: 새로운 분석을 시작합니다.")
+            print(f" CACHE MISS: 새로운 분석을 시작합니다.")
             target_str = intent_json.get("target")
             condition_obj = intent_json.get("condition")
             target_stocks, analysis_subject = get_target_stocks(target_str)
@@ -1039,7 +1038,12 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
 
             if "순매수" in action_str and isinstance(condition_obj, dict) and condition_obj.get('who') == '기관':
                 result_data = analyze_institutional_buying(start_date.strftime('%Y%m%d'), end_date.strftime('%Y%m%d'))
+                reverse_sort = True
+            
+            elif "거래량" in action_str:
+                result_data = analyze_top_volume_stocks(start_date.strftime('%Y%m%d'))
                 reverse_sort = True 
+
             else:
                 event_periods = []
                 if isinstance(condition_obj, str) and any(s in condition_obj for s in ["여름", "겨울"]):
@@ -1066,8 +1070,7 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
                 'intent_json': intent_json, 'analysis_subject': analysis_subject, 'full_result': sorted_result
             }
             print(f"새로운 분석 결과 {len(sorted_result)}개를 캐시에 저장했습니다. (키: {cache_key})")
-
-
+        
         items_per_page = 20
         total_items = len(sorted_result)
         total_pages = (total_items + items_per_page - 1) // items_per_page
@@ -1285,7 +1288,44 @@ def _fetch_and_calculate_volatility(code, name, start_date, end_date):
     except Exception as e:
         print(f"   - {name}({code}) 변동성 분석 중 오류 발생: {e}")
     return None
+def analyze_top_volume_stocks(date_str):
+    """
+    주어진 날짜의 거래량 상위 종목을 분석하여 반환합니다.
+    """
+    print(f"DEBUG: {date_str} 기준 거래량 상위 종목 분석을 시작합니다.")
+    try:
+        # KOSPI와 KOSDAQ 시장의 전체 시세 정보를 가져옵니다.
+        df_all = stock.get_market_ohlcv(date_str, market="ALL")
 
+        if '거래량' not in df_all.columns:
+            print("DEBUG: OHLCV 데이터에 '거래량' 컬럼이 없습니다.")
+            return []
+
+        # 거래량을 기준으로 내림차순 정렬하고 상위 50개 선택
+        top_stocks = df_all.sort_values(by='거래량', ascending=False).head(50)
+        
+        if GLOBAL_TICKER_NAME_MAP is None:
+            initialize_global_data()
+            
+        analysis_results = []
+        for ticker, row in top_stocks.iterrows():
+            analysis_results.append({
+                "code": ticker,
+                "name": GLOBAL_TICKER_NAME_MAP.get(ticker, "N/A"),
+                "value": int(row['거래량']),
+                "label": "거래량",
+                "end_price": int(row['종가']),
+                "start_price": int(row['시가']) # 테이블 형식 통일을 위해 추가
+            })
+        
+        print(f"DEBUG: 거래량 상위 {len(analysis_results)}개 종목 분석 완료.")
+        return analysis_results
+
+    except Exception as e:
+        print(f"거래량 분석 중 오류 발생: {e}")
+        traceback.print_exc()
+        return []
+    
 def handle_indicator_condition(condition_obj, period_tuple):
     """CPI, 금리 등 지표 조건을 만족하는 날짜 구간을 반환"""
     bok_api_key = os.getenv("ECOS_API_KEY")
