@@ -2,9 +2,8 @@
 flask
 Flask-SQLAlchemy
 pymysql
-flashtext
+
 # ----- Data Fetching & Analysis -----
-pandas
 pandas
 numpy
 pytz
@@ -14,23 +13,24 @@ pykrx
 dart-fss
 yfinance
 selenium
-seaborn
+readability-lxml
+
 # ----- AI & Machine Learning -----
 google-generativeai
-xgboost # 현재 미사용
+xgboost
+transformers
+torch
+sentencepiece
 scikit-learn
-# ----- 자연어 처리 helper -- 
+datasets
+evaluate
+
+# ----- 자연어 처리 helper --
 fuzzywuzzy
 python-Levenshtein
-transformers
-sentencepiece
-torch
-transformers[torch]
+flashtext
 
 # ----- Frontend & Utilities -----
 libsass
 python-dotenv
 beautifulsoup4
-
-readability-lxml
-joblib
