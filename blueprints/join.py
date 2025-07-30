@@ -1,54 +1,48 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from werkzeug.security import generate_password_hash
 from db.extensions import db
-from models import User
 
 
 join_bp = Blueprint('join', __name__, url_prefix='/join')
 
-@join_bp.route('/', methods=['GET', 'POST'])
+@join_bp.route('/', methods=['GET','POST'])
 def join():
-    if 'user' in session:
-        flash("이미 로그인된 상태입니다.", "warning")
-        return redirect(url_for('index'))
-
+    from app import User
     if request.method == 'POST':
-        first_name = request.form.get('firstName')
-        last_name = request.form.get('lastName')
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password_1 = request.form.get('password_1')
-        password_2 = request.form.get('password_2')
+        # 1) 폼에서 username으로 받은 값이 이제 이메일
+        em = request.form['username']  # 여기엔 you@example.com 이 들어옵니다.
+        pw1 = request.form['password_1']
+        pw2 = request.form['password_2']
+        notes = request.form.get('notes', '')
 
-        if not all([first_name, last_name, username, email, password_1, password_2]):
-            flash("모든 필드를 입력해주세요.", "warning")
-            return render_template('join.html', first_name=first_name, last_name=last_name, username=username, email=email)
+        # 2) 이메일 형식 검증
+        import re
+        if not re.match(r'^[^@]+@[^@]+\.[^@]+$', em):
+            flash('유효한 이메일 주소를 입력해주세요.', 'danger')
+            return redirect(url_for('join.join'))
 
-        if password_1 != password_2:
-            flash("비밀번호가 일치하지 않습니다.", "danger")
-            return render_template('join.html', first_name=first_name, last_name=last_name, username=username, email=email)
+        # 3) 비밀번호 확인
+        if pw1 != pw2:
+            flash('비밀번호가 일치하지 않습니다.', 'danger')
+            return redirect(url_for('join.join'))
 
-        # 중복 사용자 검사
-        existing_user = User.query.filter((User.username == username) | (User.email == email)).first()
-        if existing_user:
-            flash("이미 존재하는 사용자 이름 또는 이메일입니다.", "danger")
-            return render_template('join.html', first_name=first_name, last_name=last_name, username=username, email=email)
+        # 4) 중복 검사 (username과 email 컬럼 모두 확인)
+        if User.query.filter((User.username == em) | (User.email == em)).first():
+            flash('이미 등록된 이메일입니다.', 'danger')
+            return redirect(url_for('join.join'))
 
-        # 비밀번호 해시 생성
-        hashed_password = generate_password_hash(password_1)
-
-        # 새로운 사용자 생성
-        new_user = User(
-            first_name=first_name,
-            last_name=last_name,
-            username=username,
-            email=email,
-            password=hashed_password
+        # 5) 사용자 생성: username과 email에 같은 값을 넣음
+        user = User(
+            first_name=request.form['firstName'],
+            last_name =request.form['lastName'],
+            username  =em,
+            email     =em,
+            notes     =notes
         )
-        db.session.add(new_user)
+        user.set_password(pw1)
+        db.session.add(user)
         db.session.commit()
 
-        flash("회원가입이 완료되었습니다!", "success")
-        return redirect(url_for('index'))
+        flash('회원가입이 완료되었습니다!', 'success')
+        return redirect(url_for('auth.login'))
 
     return render_template('join.html')

@@ -36,14 +36,10 @@
           </div>
         </div>
         <div class="row">
-          <div class="col-md-6 margin-bottom-15">
-            <label>Username</label>
-            <input type="text" class="form-control" id="userName" name="username" placeholder="admin" value="{{username or ''}}">
-          </div>
-          <div class="col-md-6 margin-bottom-15">
-            <label>Email address</label>
-            <input type="text" class="form-control" id="email" name="email" placeholder="admin@naver.com" value="{{email or ''}}">
-          </div>
+          <div class="col-md-12 margin-bottom-15">
+           <label for="userEmail" class="control-label">이메일 (로그인 ID)</label>
+           <input type="email" class="form-control" id="userEmail" name="username"  placeholder="you@example.com" value="{{ username or '' }}"  required>
+         </div>
         </div>
         
         <div class="row">
@@ -59,7 +55,7 @@
       <div class="row">
         <div class="col-md-12 margin-bottom-15">
           <label for="notes">Notes</label>
-          <textarea class="form-control" rows="3" id="notes"></textarea>
+          <textarea class="form-control" rows="3" id="notes" name="notes"></textarea>
         </div>
       </div>
       

@@ -7,10 +7,6 @@
   <meta name="description" content="" />
   <meta name="viewport" content="width=device-width">        
   <link rel="stylesheet" href="{{ url_for('static', filename='template/css/templatemo_main.css') }}">
-<!-- 
-Dashboard Template 
-http://www.templatemo.com/preview/templatemo_415_dashboard
--->
 </head>
 <body>
   <div id="main-wrapper">
@@ -31,7 +27,10 @@ http://www.templatemo.com/preview/templatemo_415_dashboard
         {% endif %}
       {% endwith %}
       
-      <form class="form-horizontal templatemo-signin-form" role="form" action="{{ url_for('auth.login') }}" method="POST">
+      <form class="form-horizontal templatemo-signin-form" role="form"
+            action="{{ url_for('auth.login') }}" method="POST">
+
+        <!-- 사용자명 -->
         <div class="form-group">
           <div class="col-md-12">
             <label for="username" class="col-sm-2 control-label">Username</label>
@@ -40,6 +39,8 @@ http://www.templatemo.com/preview/templatemo_415_dashboard
             </div>
           </div>              
         </div>
+
+        <!-- 비밀번호 -->
         <div class="form-group">
           <div class="col-md-12">
             <label for="password" class="col-sm-2 control-label">Password</label>
@@ -48,24 +49,34 @@ http://www.templatemo.com/preview/templatemo_415_dashboard
             </div>
           </div>
         </div>
+
+        <!-- Remember me -->
         <div class="form-group">
           <div class="col-md-12">
             <div class="col-sm-offset-2 col-sm-10">
               <div class="checkbox">
                 <label>
-                  <input type="checkbox"> Remember me
+                  <input type="checkbox" name="remember"> Remember me
                 </label>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- 로그인 & 회원가입 버튼 -->
         <div class="form-group">
           <div class="col-md-12">
             <div class="col-sm-offset-2 col-sm-10">
+              <!-- 로그인 -->
               <input type="submit" value="Sign in" class="btn btn-default">
+              <!-- 회원가입 -->
+              <a href="{{ url_for('join.join') }}" class="btn btn-link">
+                회원가입
+              </a>
             </div>
           </div>
         </div>
+
       </form>
     </div>
   </div>
