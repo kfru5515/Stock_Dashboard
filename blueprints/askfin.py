@@ -400,14 +400,14 @@ def execute_comparison_analysis(intent_json):
 
 def execute_theme_ranking(intent_json, page, user_query, cache_key=None):
     """
-    [개선] 전체 테마 성과를 분석하고 캐시에 저장하여 페이지네이션을 지원하는 함수.
+    [개선] 상위 50개 테마의 성과를 분석하고 캐시에 저장하여 페이지네이션을 지원하는 함수.
     """
     try:
         if cache_key and cache_key in ANALYSIS_CACHE and 'full_result' in ANALYSIS_CACHE[cache_key]:
-            sorted_result = ANALYSIS_CACHE[cache_key]['full_result']
+            sorted_results = ANALYSIS_CACHE[cache_key]['full_result']
             analysis_subject = ANALYSIS_CACHE[cache_key]['analysis_subject']
             description = ANALYSIS_CACHE[cache_key]['description']
-            print(f" CACHE HIT: 테마 랭킹 전체 결과 {len(sorted_result)}개를 사용합니다.")
+            print(f" CACHE HIT: 테마 랭킹 전체 결과 {len(sorted_results)}개를 사용합니다.")
         else:
             print(f" CACHE MISS: 새로운 전체 테마 분석을 시작합니다.")
             period_str = intent_json.get("period")
@@ -424,8 +424,8 @@ def execute_theme_ranking(intent_json, page, user_query, cache_key=None):
                 return {"error": f"테마 목록 파일 로드 실패: {e}"}
 
             all_themes_results = []
-            # --- [핵심 수정] 테마 수 제한 제거 ---
-            for theme in themes_from_file.keys():
+            # 분석할 테마 수를 50개로 제한하여 속도 개선
+            for theme in list(themes_from_file.keys())[:50]:
                 target_stocks, _, _ = get_target_stocks(theme)
                 if target_stocks.empty: continue
 
@@ -440,10 +440,11 @@ def execute_theme_ranking(intent_json, page, user_query, cache_key=None):
             if not all_themes_results:
                 return {"error": "전체 테마의 수익률을 분석할 수 없었습니다."}
 
-            reverse_sort = "내린" not in action_str
-            sorted_results = sorted(all_themes_results, key=lambda x: x['average_return'], reverse=reverse_sort)
+            # "낮은" 또는 "내린" 키워드가 있으면 오름차순 정렬
+            reverse_sort = not any(keyword in action_str for keyword in ["낮은", "내린", "하락"])
+            sorted_results = sorted(all_themes_results, key=lambda x: x['average_return'], reverse=reverse_sort)[:10] # 상위/하위 10개만 선택
             
-            analysis_subject = "전체 테마 성과 순위"
+            analysis_subject = "상위/하위 테마 성과 순위"
             description = f"분석 기간: {analysis_period_info}"
             
             if not cache_key: cache_key = str(hash(user_query + str(intent_json)))
@@ -454,27 +455,16 @@ def execute_theme_ranking(intent_json, page, user_query, cache_key=None):
                 'full_result': sorted_results
             }
         
-        items_per_page = 20
-        total_items = len(sorted_results)
-        total_pages = (total_items + items_per_page - 1) // items_per_page
-        start_index = (page - 1) * items_per_page
-        end_index = start_index + items_per_page
-        paginated_result = sorted_results[start_index:end_index]
+        paginated_result = sorted_results # 10개만 보여주므로 페이지네이션 불필요
 
-        final_result_list = []
-        for item in paginated_result:
-            final_result_list.append({
-                "name": item['theme'],
-                "value": item['average_return'],
-                "label": "평균 수익률(%)"
-            })
+        final_result_list = [{"name": item['theme'], "value": item['average_return'], "label": "평균 수익률(%)"} for item in paginated_result]
 
         return {
             "query_intent": intent_json,
             "analysis_subject": analysis_subject,
             "description": description,
             "result": final_result_list,
-            "pagination": { "current_page": page, "total_pages": total_pages, "total_items": total_items },
+            "pagination": { "current_page": 1, "total_pages": 1, "total_items": len(final_result_list) },
             "cache_key": cache_key
         }
     except Exception as e:
@@ -743,17 +733,15 @@ def get_stock_profile(code):
 
 def get_target_stocks(target_str):
     """
-    [개선] FuzzyWuzzy와 Sector(업종) 기반 검색, 그리고 종목명 직접 검색 로직 강화
+    [개선] FuzzyWuzzy, Sector(업종) 및 종목명 직접 검색 로직 강화
     """
     global GLOBAL_KRX_LISTING
     if GLOBAL_KRX_LISTING is None:
         initialize_global_data()
-        if GLOBAL_KRX_LISTING is None:
-            return pd.DataFrame(), "초기화 실패", None
+        if GLOBAL_KRX_LISTING is None: return pd.DataFrame(), "초기화 실패", None
 
     krx = GLOBAL_KRX_LISTING
-    analysis_subject = "시장 전체"
-    disambiguation_candidates = None
+    analysis_subject, disambiguation_candidates = "시장 전체", None
     GENERIC_TARGETS = {"주식", "종목", "급등주", "우량주", "인기주", "전체"}
     
     if not target_str or target_str.strip() in GENERIC_TARGETS:
@@ -766,15 +754,13 @@ def get_target_stocks(target_str):
         themes_file_path = os.path.join(os.path.dirname(__file__), '..', 'cache', 'themes.json')
         with open(themes_file_path, 'r', encoding='utf-8') as f:
             themes_from_file = json.load(f)
-        
         best_match = process.extractOne(keyword, themes_from_file.keys(), scorer=fuzz.token_sort_ratio)
-        if best_match and best_match[1] > 80:
+        if best_match and best_match[1] > 85:
             matched_theme_name = best_match[0]
-            target_codes = [stock.get('code') for stock in themes_from_file[matched_theme_name] if stock.get('code')]
+            target_codes = [s.get('code') for s in themes_from_file[matched_theme_name] if s.get('code')]
             target_stocks = krx[krx['Code'].isin(target_codes)]
             if not target_stocks.empty:
-                analysis_subject = f"'{matched_theme_name}' 테마"
-                return target_stocks, analysis_subject, None
+                return target_stocks, f"'{matched_theme_name}' 테마", None
     except Exception as e:
         print(f"경고: 'themes.json' 파일 처리 중 오류: {e}")
 
@@ -782,14 +768,12 @@ def get_target_stocks(target_str):
     if 'Sector' in krx.columns:
         sector_matches = krx[krx['Sector'].str.contains(keyword, na=False)]
         if not sector_matches.empty:
-            analysis_subject = f"'{keyword}' 업종"
-            return sector_matches, analysis_subject, None
+            return sector_matches, f"'{keyword}' 업종", None
 
     # 3. 종목명 직접 검색
     partial_matches = krx[krx['Name'].str.contains(keyword, na=False)]
     if not partial_matches.empty:
-        analysis_subject = f"'{keyword}' 포함 종목"
-        return partial_matches, analysis_subject, None
+        return partial_matches, f"'{keyword}' 포함 종목", None
     
     return pd.DataFrame(), f"'{target_str}'", None
 

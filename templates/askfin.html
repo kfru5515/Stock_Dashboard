@@ -546,12 +546,9 @@
         function fetchAnalysis(query, page = 1) {
             if (!query) return;
 
-            if (query !== currentQuery || page === 1) {
+            if (query !== currentQuery) {
                 addMessageToChat('user', query);
                 queryInput.value = '';
-            }
-
-            if (query !== currentQuery || page === 1) {
                 currentQuery = query;
                 currentCacheKey = null;
                 currentAnalysisBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
@@ -578,8 +575,9 @@
                 if (data.description) { responseHtml += `<p class="text-muted small mb-3">${data.description}</p>`; }
 
                 if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'object') {
+                    // ... (기존 테이블 렌더링 로직은 동일)
                     let table = '';
-                    if (data.analysis_subject === "전체 테마 성과 순위") {
+                    if (data.query_intent.query_type === "theme_ranking") {
                         table = `<div class="table-responsive"><table class="table table-sm table-hover financial-table">
                                     <thead><tr><th>순위</th><th>테마명</th><th>${result[0].label || '결과값'}</th></tr></thead><tbody>`;
                         result.forEach((item, index) => {
@@ -589,9 +587,9 @@
                                         <td>${rank}</td>
                                         <td><a href="#" class="theme-rank-link">${item.name}</a></td>
                                         <td class="text-end ${valueColorClass}">${item.value.toFixed(2)}%</td>
-                                      </tr>`;
+                                    </tr>`;
                         });
-                    } else { // 일반 종목 분석
+                    } else {
                         table = `<div class="table-responsive"><table class="table table-sm table-hover financial-table">
                                     <thead><tr><th>순위</th><th>종목명</th><th>과거 가격</th><th>현재 가격</th><th>${result[0].label || '결과값'}</th></tr></thead><tbody>`;
                         result.forEach((item, index) => {
@@ -603,7 +601,7 @@
                                         <td>${item.start_price ? item.start_price.toLocaleString() + ' 원' : 'N/A'}</td>
                                         <td>${item.end_price ? item.end_price.toLocaleString() + ' 원' : 'N/A'}</td>
                                         <td class="text-end ${valueColorClass}">${item.value.toFixed(2)}</td>
-                                      </tr>`;
+                                    </tr>`;
                         });
                     }
                     table += `</tbody></table></div>`;
@@ -613,7 +611,44 @@
                     responseHtml += `<p>${result.join('<br>')}</p>`;
                 }
 
+                // --- [핵심 수정] 차트 데이터가 있으면 차트를 그리도록 로직 추가 ---
+                let chartCanvasId = null;
+                if (data.chart_data && Array.isArray(data.chart_data) && data.chart_data.length > 0) {
+                    chartCanvasId = `stockChart_${new Date().getTime()}`;
+                    responseHtml += `
+                        <div class="d-flex justify-content-end mt-2 mb-1">
+                            <div class="btn-group btn-group-sm askfin-chart-selector" role="group">
+                                <button type="button" class="btn btn-outline-secondary active" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="daily">일</button>
+                                <button type="button" class="btn btn-outline-secondary" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="weekly">주</button>
+                                <button type="button" class="btn btn-outline-secondary" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="monthly">월</button>
+                            </div>
+                        </div>
+                        <div class="chart-canvas-container" style="height: 250px;">
+                            <canvas id="${chartCanvasId}"></canvas>
+                        </div>
+                    `;
+                }
+                
                 currentAnalysisBubble.querySelector('.message').innerHTML = responseHtml;
+                
+                // 차트 ID가 생성되었으면 차트를 렌더링
+                if (chartCanvasId) {
+                    // renderSingleStockChart 함수는 이미 존재하므로 그대로 호출
+                    const chartApiData = data.chart_data.map(item => ({ Date: item.date, Close: item.price }));
+                    const parsedData = parseChartJsData(chartApiData, 'daily');
+                    
+                    const canvas = document.getElementById(chartCanvasId);
+                    if (chartInstances[chartCanvasId]) chartInstances[chartCanvasId].destroy();
+                    chartInstances[chartCanvasId] = new Chart(canvas, {
+                        type: 'line',
+                        data: {
+                            labels: parsedData.labels,
+                            datasets: [{ data: parsedData.closes, borderColor: 'var(--primary-color)', fill: false }]
+                        },
+                        options: chartDefaultOptions
+                    });
+                }
+
                 chatWindow.scrollTop = chatWindow.scrollHeight;
             })
             .catch(error => {
