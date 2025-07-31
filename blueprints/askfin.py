@@ -19,7 +19,7 @@ from pykrx import stock
 import re
 from bs4 import BeautifulSoup
 
-from fuzzywuzzy import fuzz
+from fuzzywuzzy import fuzz, process
 
 # --- Global Caches for Initial Loading ---
 GLOBAL_KRX_LISTING = None
@@ -146,6 +146,11 @@ You are a financial analyst. Your primary task is to analyze a user's query and 
     ```json
     {{"query_type": "stock_analysis", "period": null, "condition": {{"type": "fundamental", "indicator": "dividend_yield", "operator": ">", "value": "high"}}, "target": "통신주", "action": "배당수익률 높은 주식"}}
     ```
+16. User Query: "가장 많이 오른 테마들 나열해줘"
+    JSON Output:
+    ```json
+    {{"query_type": "theme_ranking", "period": null, "condition": null, "target": "테마", "action": "가장 많이 오른 테마"}}
+    ```
 
 ## Example (Plain Text Output):
 
@@ -213,7 +218,6 @@ def _load_ticker_maps():
         print("경고: _load_ticker_maps() 호출 시 글로벌 종목 맵이 초기화되지 않았습니다. 강제로 초기화 시도.")
         initialize_global_data()
 
-
 def analyze_institutional_buying(start_date, end_date):
     """
     주어진 기간 동안 기관의 순매수 대금을 기준으로 상위 종목을 분석합니다.
@@ -258,7 +262,6 @@ def analyze_institutional_buying(start_date, end_date):
         print(f"기관 순매수 분석 중 오류 발생: {e}")
         traceback.print_exc()
         return []
-    
 
 def _get_fdr_indicator(indicator_info, intent_json):
     """FinanceDataReader를 통해 일별 지표를 조회하고 결과를 반환하는 헬퍼 함수"""
@@ -341,7 +344,7 @@ def _get_bok_indicator(indicator_info, intent_json):
 
 def execute_comparison_analysis(intent_json):
     """
-    여러 테마를 비교 분석하여 가장 성과가 좋은/나쁜 테마를 찾아 반환하는 함수.
+    [수정됨] 여러 테마를 비교 분석하여 결과를 HTML 테이블로 생성하는 함수.
     """
     try:
         targets = intent_json.get("target", [])
@@ -356,32 +359,19 @@ def execute_comparison_analysis(intent_json):
         
         comparison_results = []
 
-        print(f"비교 분석 시작: {targets}")
         for theme in targets:
-            print(f"  - '{theme}' 테마 분석 중...")
-            target_stocks, _ = get_target_stocks(theme)
+            target_stocks, _, _ = get_target_stocks(theme)
             if target_stocks.empty:
-                print(f"    -> '{theme}'에 해당하는 종목을 찾을 수 없습니다. 건너뜁니다.")
                 continue
 
-
             performance_data = analyze_top_performers(target_stocks, [(start_date, end_date)], (start_date, end_date))
-            
             if not performance_data:
-                print(f"    -> '{theme}' 테마의 성과를 분석할 수 없습니다. 건너뜁니다.")
                 continue
 
             valid_returns = [item['value'] for item in performance_data if 'value' in item and pd.notna(item['value'])]
-            if not valid_returns:
-                continue
-
-            average_return = statistics.mean(valid_returns)
-            
-            comparison_results.append({
-                "theme": theme,
-                "average_return": round(average_return, 2)
-            })
-            print(f"    -> '{theme}' 테마 평균 수익률: {average_return:.2f}%")
+            if valid_returns:
+                average_return = statistics.mean(valid_returns)
+                comparison_results.append({"theme": theme, "average_return": round(average_return, 2)})
 
         if not comparison_results:
             return {"error": "요청하신 테마들의 수익률을 분석할 수 없었습니다."}
@@ -389,25 +379,109 @@ def execute_comparison_analysis(intent_json):
         reverse_sort = "내린" not in action_str
         sorted_results = sorted(comparison_results, key=lambda x: x['average_return'], reverse=reverse_sort)
         
-        result_text = f"**'{', '.join(targets)}' 테마 비교 분석 결과**<br><br>"
-        result_text += f"**분석 기간:** {analysis_period_info}<br><br>"
-        
-        result_text += "| 순위 | 테마 | 주요 종목 평균 수익률 |\n"
-        result_text += "| :--- | :--- | :--- |\n"
+        # --- HTML 테이블 구조로 직접 생성 ---
+        table_html = '<div class="table-responsive"><table class="table table-sm table-hover financial-table">'
+        table_html += '<thead><tr><th>순위</th><th>테마</th><th>주요 종목 평균 수익률</th></tr></thead><tbody>'
         for i, result in enumerate(sorted_results):
-            result_text += f"| {i+1} | **{result['theme']}** | **{result['average_return']:.2f}%** |\n"
+            table_html += f"<tr><td>{i+1}</td><td><strong>{result['theme']}</strong></td><td><strong>{result['average_return']:.2f}%</strong></td></tr>"
+        table_html += '</tbody></table></div>'
         
-        result_text += "<br>*본 분석은 각 테마에 포함된 시가총액 상위 종목들을 기준으로 계산되었으며, 실제 수익률과 다를 수 있습니다. 이 정보는 투자 추천이 아니며, 참고 자료로만 활용하시기 바랍니다.*"
+        result_text = table_html
+        result_text += f"<br><small><i>*분석 기간: {analysis_period_info}<br>*본 분석은 각 테마에 포함된 시가총액 상위 종목들을 기준으로 계산되었으며, 실제 수익률과 다를 수 있습니다. 이 정보는 투자 추천이 아니며, 참고 자료로만 활용하시기 바랍니다.</i></small>"
 
         return {
             "query_intent": intent_json,
-            "analysis_subject": "테마 비교 분석",
+            "analysis_subject": f"'{', '.join(targets)}' 테마 비교 분석",
             "result": [result_text]
         }
     except Exception as e:
         traceback.print_exc()
         return {"error": f"비교 분석 실행 중 오류 발생: {e}"}
-    
+
+def execute_theme_ranking(intent_json, page, user_query, cache_key=None):
+    """
+    [개선] 전체 테마 성과를 분석하고 캐시에 저장하여 페이지네이션을 지원하는 함수.
+    """
+    try:
+        if cache_key and cache_key in ANALYSIS_CACHE and 'full_result' in ANALYSIS_CACHE[cache_key]:
+            sorted_result = ANALYSIS_CACHE[cache_key]['full_result']
+            analysis_subject = ANALYSIS_CACHE[cache_key]['analysis_subject']
+            description = ANALYSIS_CACHE[cache_key]['description']
+            print(f" CACHE HIT: 테마 랭킹 전체 결과 {len(sorted_result)}개를 사용합니다.")
+        else:
+            print(f" CACHE MISS: 새로운 전체 테마 분석을 시작합니다.")
+            period_str = intent_json.get("period")
+            action_str = intent_json.get("action", "")
+            start_date, end_date = parse_period(period_str if period_str else "최근 1개월")
+            analysis_period_info = f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}"
+            
+            themes_from_file = {}
+            try:
+                themes_file_path = os.path.join(os.path.dirname(__file__), '..', 'cache', 'themes.json')
+                with open(themes_file_path, 'r', encoding='utf-8') as f:
+                    themes_from_file = json.load(f)
+            except Exception as e:
+                return {"error": f"테마 목록 파일 로드 실패: {e}"}
+
+            all_themes_results = []
+            # --- [핵심 수정] 테마 수 제한 제거 ---
+            for theme in themes_from_file.keys():
+                target_stocks, _, _ = get_target_stocks(theme)
+                if target_stocks.empty: continue
+
+                performance_data = analyze_top_performers(target_stocks, [(start_date, end_date)], (start_date, end_date))
+                if not performance_data: continue
+
+                valid_returns = [item['value'] for item in performance_data if 'value' in item and pd.notna(item['value'])]
+                if valid_returns:
+                    average_return = statistics.mean(valid_returns)
+                    all_themes_results.append({"theme": theme, "average_return": round(average_return, 2)})
+
+            if not all_themes_results:
+                return {"error": "전체 테마의 수익률을 분석할 수 없었습니다."}
+
+            reverse_sort = "내린" not in action_str
+            sorted_results = sorted(all_themes_results, key=lambda x: x['average_return'], reverse=reverse_sort)
+            
+            analysis_subject = "전체 테마 성과 순위"
+            description = f"분석 기간: {analysis_period_info}"
+            
+            if not cache_key: cache_key = str(hash(user_query + str(intent_json)))
+            ANALYSIS_CACHE[cache_key] = {
+                'intent_json': intent_json, 
+                'analysis_subject': analysis_subject,
+                'description': description,
+                'full_result': sorted_results
+            }
+        
+        items_per_page = 20
+        total_items = len(sorted_results)
+        total_pages = (total_items + items_per_page - 1) // items_per_page
+        start_index = (page - 1) * items_per_page
+        end_index = start_index + items_per_page
+        paginated_result = sorted_results[start_index:end_index]
+
+        final_result_list = []
+        for item in paginated_result:
+            final_result_list.append({
+                "name": item['theme'],
+                "value": item['average_return'],
+                "label": "평균 수익률(%)"
+            })
+
+        return {
+            "query_intent": intent_json,
+            "analysis_subject": analysis_subject,
+            "description": description,
+            "result": final_result_list,
+            "pagination": { "current_page": page, "total_pages": total_pages, "total_items": total_items },
+            "cache_key": cache_key
+        }
+    except Exception as e:
+        traceback.print_exc()
+        return {"error": f"테마 랭킹 분석 중 오류 발생: {e}"}
+            
+
 def execute_indicator_lookup(intent_json):
     """
     [최종 수정] 여러 소스의 경제 지표를 조회하고 챗봇 답변을 생성하는 메인 함수
@@ -669,147 +743,55 @@ def get_stock_profile(code):
 
 def get_target_stocks(target_str):
     """
-    [수정됨] 타겟 문자열에 해당하는 종목 리스트(DataFrame)를 반환하는 함수 (캐시된 데이터 사용)
+    [개선] FuzzyWuzzy와 Sector(업종) 기반 검색, 그리고 종목명 직접 검색 로직 강화
     """
-    global GLOBAL_KRX_LISTING, GLOBAL_NAME_TICKER_MAP
-
+    global GLOBAL_KRX_LISTING
     if GLOBAL_KRX_LISTING is None:
-        print("경고: get_target_stocks() 호출 시 GLOBAL_KRX_LISTING이 초기화되지 않았습니다. 강제로 초기화 시도.")
         initialize_global_data()
         if GLOBAL_KRX_LISTING is None:
-            return pd.DataFrame(columns=['Name', 'Code']), "초기화 실패"
+            return pd.DataFrame(), "초기화 실패", None
 
-    krx = GLOBAL_KRX_LISTING 
-
+    krx = GLOBAL_KRX_LISTING
+    analysis_subject = "시장 전체"
+    disambiguation_candidates = None
     GENERIC_TARGETS = {"주식", "종목", "급등주", "우량주", "인기주", "전체"}
     
-    analysis_subject = "시장 전체"
-    target_stocks = krx 
+    if not target_str or target_str.strip() in GENERIC_TARGETS:
+        return krx, analysis_subject, disambiguation_candidates
 
-    import os 
+    keyword = target_str.replace(" 관련주", "").replace(" 테마주", "").replace(" 테마", "").replace("주", "").strip()
 
-    if target_str and target_str.strip() and target_str not in GENERIC_TARGETS:
-        analysis_subject = f"'{target_str}'"
+    # 1. 테마 파일에서 Fuzzy Matching
+    try:
+        themes_file_path = os.path.join(os.path.dirname(__file__), '..', 'cache', 'themes.json')
+        with open(themes_file_path, 'r', encoding='utf-8') as f:
+            themes_from_file = json.load(f)
         
-        keyword = target_str.replace(" 관련주", "").replace(" 테마주", "").replace(" 테마", "").replace("주", "").strip()
-        lower_keyword = keyword.lower()
+        best_match = process.extractOne(keyword, themes_from_file.keys(), scorer=fuzz.token_sort_ratio)
+        if best_match and best_match[1] > 80:
+            matched_theme_name = best_match[0]
+            target_codes = [stock.get('code') for stock in themes_from_file[matched_theme_name] if stock.get('code')]
+            target_stocks = krx[krx['Code'].isin(target_codes)]
+            if not target_stocks.empty:
+                analysis_subject = f"'{matched_theme_name}' 테마"
+                return target_stocks, analysis_subject, None
+    except Exception as e:
+        print(f"경고: 'themes.json' 파일 처리 중 오류: {e}")
 
-        print(f"--- 디버그 시작 (get_target_stocks) ---")
-        print(f"디버그: 사용자 입력 키워드: '{keyword}' (소문자: '{lower_keyword}')")
+    # 2. Sector(업종) 기반 검색
+    if 'Sector' in krx.columns:
+        sector_matches = krx[krx['Sector'].str.contains(keyword, na=False)]
+        if not sector_matches.empty:
+            analysis_subject = f"'{keyword}' 업종"
+            return sector_matches, analysis_subject, None
 
-        themes_from_file = {}
-        try:
-            themes_file_path = os.path.join(os.path.dirname(__file__), '..', 'cache', 'themes.json')
-
-            print(f"디버그: themes.json을 찾을 경로: {themes_file_path}") # 디버그 출력 추가
-
-            with open(themes_file_path, 'r', encoding='utf-8') as f:
-                themes_from_file = json.load(f)
-            print(f"디버그: 'themes.json' 파일 로드 성공. 총 {len(themes_from_file)}개 테마.")
-            print(f"디버그: themes.json 키 목록 (상위 5개): {list(themes_from_file.keys())[:5]}...")
-        except FileNotFoundError:
-            print("경고: 'themes.json' 파일을 찾을 수 없습니다. 경로를 확인해주세요.")
-        except Exception as e:
-            print(f"경고: 'themes.json' 파일 로드 중 오류 발생: {e}")
-
-        found_by_theme_file = False
-        target_codes_from_theme = []
-
-        for theme_name_in_file, stock_list_in_file in themes_from_file.items():
-            print(f"디버그: '{lower_keyword}' vs '{theme_name_in_file.lower()}' 매칭 시도...")
-            
-            if (lower_keyword == theme_name_in_file.lower() or 
-                lower_keyword in theme_name_in_file.lower() or 
-                theme_name_in_file.lower() in lower_keyword): 
-                
-                print(f"디버그: themes.json에서 테마 '{theme_name_in_file}'를 찾았습니다.")
-                for stock_info in stock_list_in_file:
-                    if isinstance(stock_info, dict) and 'code' in stock_info:
-                        target_codes_from_theme.append(stock_info['code'])
-                    elif isinstance(stock_info, str) and len(stock_info) == 6 and stock_info.isdigit(): # 코드가 문자열로 직접 저장된 경우
-                        target_codes_from_theme.append(stock_info)
-                analysis_subject = f"'{theme_name_in_file}' 테마"
-                found_by_theme_file = True
-                break
-        
-        print(f"디버그: themes.json에서 추출된 종목 코드 수: {len(target_codes_from_theme)}")
-        if len(target_codes_from_theme) > 0:
-            print(f"디버그: 추출된 첫 5개 종목 코드: {target_codes_from_theme[:5]}")
-
-        if found_by_theme_file:
-
-            print(f"디버그: GLOBAL_KRX_LISTING의 첫 5개 행:\n{krx.head()}")
-
-            codes_in_krx_check = krx[krx['Code'].isin(target_codes_from_theme)]
-            print(f"디버그: GLOBAL_KRX_LISTING에 존재하는 테마 종목 코드 수: {len(codes_in_krx_check)}")
-            if len(codes_in_krx_check) == 0 and len(target_codes_from_theme) > 0:
-                print("디버그: 경고! themes.json의 종목 코드 중 GLOBAL_KRX_LISTING에 매칭되는 것이 없습니다. 코드 형식 불일치 가능성.")
-                if target_codes_from_theme:
-                    print(f"디버그: themes.json 첫 종목 코드: '{target_codes_from_theme[0]}'")
-                if not krx.empty:
-                    print(f"디버그: GLOBAL_KRX_LISTING 첫 종목 코드: '{krx.iloc[0]['Code']}'")
-
-
-            target_stocks = krx[krx['Code'].isin(target_codes_from_theme)]
-            print(f"디버그: 최종 필터링된 target_stocks 개수: {len(target_stocks)}")
-        
-        else:
-            # 2. 기존 FinanceDataReader 'Industry' 컬럼 (혹시 존재한다면)을 통한 검색 (테마 파일 없을 때의 폴백)
-            # 현재 로그에 'Industry' 컬럼이 없다고 나왔지만, 미래에 추가될 가능성을 고려하여 로직은 유지하되,
-            # 실제 컬럼이 없으면 건너뛰도록 조건문 추가
-            found_by_industry = False
-            if 'Industry' in krx.columns:
-                INDUSTRY_KEYWORD_MAP = {
-                    "제약": ["의약품 제조업", "의료용 물질 및 의약품 제조업", "생물학적 제제 제조업"], 
-                    "반도체": ["반도체 제조업", "전자부품 제조업", "반도체 및 평판디스플레이 제조업"],
-                    "자동차": ["자동차용 엔진 및 자동차 제조업", "자동차 부품 제조업"],
-                    "IT": ["소프트웨어 개발 및 공급업", "컴퓨터 프로그래밍, 시스템 통합 및 관리업", "정보서비스업"],
-                    "반도체": ["반도체 제조업", "전자부품 제조업", "반도체 및 평판디스플레이 제조업"],
-                    "게임": ["게임 소프트웨어 개발 및 공급업", "데이터베이스 및 온라인 정보 제공업"],
-                    "콘텐츠": ["영화, 비디오물, 방송프로그램 제작 및 배급업", "음악 및 기타 엔터테-인먼트업", "출판업"],
-                    "통신": ["통신업"],
-
-                    "자동차": ["자동차용 엔진 및 자동차 제조업", "자동차 부품 제조업"],
-                    "화학": ["화학물질 및 화학제품 제조업", "고무 및 플라스틱제품 제조업"],
-                    "철강": ["1차 철강 제조업", "금속 가-공제품 제조업"],
-                    "조선": ["선박 및 보트 건조업"],
-                    "기계": ["기계 장비 제조업"],
-                    "건설": ["종합 건설업", "건물 건설업", "토목 건설업"],
-                    "방산": ["항공기, 우주선 및 보조장비 제조업"],
-                    "해운": ["해상 운송업"],
-                    "항공": ["항공 운송업"],
-                    "에너지": ["전기, 가스, 증기 및 공기 조절 공급업", "석유 정제품 제조업"],
-
-                    "음식료": ["식료품 제조업", "음료 제조업", "담배 제조업"],
-                    "유통": ["종합 소매업", "전문 소매업", "무점포 소매업"],
-                    "화장품": ["화장품 제조업"],
-                    "의류": ["의복, 의복 액세서리 및 모피제품 제조업", "섬유제품 제조업; 의복 제외"],
-                    "제약": ["의약품 제조업", "의료용 물질 및 의약품 제조업", "생물학적 제제 제조업"],
-                    "바이오": ["의료용 물질 및 의약품 제조업", "생물학적 제제 제조업", "기초 의약물질 및 생물학적 제제 제조업"],
-                    "헬스케어": ["의료기기 제조업", "의료, 정밀, 광학 기기 및 시계 제조업"],
-
-                    "금융": ["금융업", "은행 및 저축기관", "금융 지주회사"],
-                    "은행": ["은행 및 저축기관"],
-                    "증권": ["증권 및 선물 중개업"],
-                    "보험": ["보험 및 연금업"]
-                }
-                for industry_key, industry_names in INDUSTRY_KEYWORD_MAP.items():
-                    if lower_keyword == industry_key.lower() or any(name.lower() in lower_keyword for name in industry_names):
-                        print(f"디버그: 업종 '{industry_key}'에 해당하는 종목을 검색합니다.")
-                        target_stocks = krx[krx['Industry'].isin(industry_names)]
-                        analysis_subject = f"'{industry_key}' 업종"
-                        found_by_industry = True
-                        break
-            
-            if not found_by_industry:
-                print(f"디버그: 종목명에 '{keyword}' 키워드가 포함된 종목을 검색합니다. (최종 폴백)")
-                target_stocks = krx[krx['Name'].str.contains(keyword, na=False)]
+    # 3. 종목명 직접 검색
+    partial_matches = krx[krx['Name'].str.contains(keyword, na=False)]
+    if not partial_matches.empty:
+        analysis_subject = f"'{keyword}' 포함 종목"
+        return partial_matches, analysis_subject, None
     
-    elif target_str in GENERIC_TARGETS:
-        analysis_subject = "시장 전체"
-    
-    print(f"--- 디버그 종료 (get_target_stocks) ---")
-    return target_stocks, analysis_subject
+    return pd.DataFrame(), f"'{target_str}'", None
 
 
 def parse_period(period_str):
@@ -820,13 +802,17 @@ def parse_period(period_str):
 
     try:
         if "오늘" in period_str:
-            return today.replace(hour=0, minute=0, second=0, microsecond=0), today
+            return today - timedelta(days=1), today
         if "어제" in period_str:
             yesterday = today - timedelta(days=1)
             return yesterday.replace(hour=0, minute=0, second=0, microsecond=0), yesterday.replace(hour=23, minute=59, second=59)
         if "이번주" in period_str:
             start_of_week = today - timedelta(days=today.weekday()) # 이번 주 월요일
             return start_of_week, today
+        if "지난주" in period_str:
+            end_of_last_week = today - timedelta(days=today.weekday() + 1)
+            start_of_last_week = end_of_last_week - timedelta(days=6)
+            return start_of_last_week.replace(hour=0, minute=0), end_of_last_week.replace(hour=23, minute=59)
         if "지난 달" in period_str or "지난달" in period_str:
             first_day_of_current_month = today.replace(day=1)
             last_day_of_last_month = first_day_of_current_month - timedelta(days=1)
@@ -1016,7 +1002,7 @@ def execute_single_stock_price(intent_json):
         
 def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
     """
-    [거래량 분석 추가] '순매수', '거래량', '수익률/변동성'을 분기 처리하는 최종 함수.
+    [개선] 재무 지표 필터링 및 캐싱 로직 강화
     """
     try:
         action_str = intent_json.get("action", "")
@@ -1029,46 +1015,37 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
             print(f" CACHE MISS: 새로운 분석을 시작합니다.")
             target_str = intent_json.get("target")
             condition_obj = intent_json.get("condition")
-            target_stocks, analysis_subject = get_target_stocks(target_str)
-            if target_stocks.empty: return {"result": [f"{analysis_subject}에 해당하는 종목을 찾을 수 없습니다."]}
+            target_stocks, analysis_subject, disambiguation_candidates = get_target_stocks(target_str)
+            
+            if disambiguation_candidates:
+                return {"analysis_subject": f"'{target_str}' 종목 명확화 필요", "result_type": "disambiguation", "candidates": disambiguation_candidates, "result": []}
+
+            if target_stocks.empty:
+                return {"analysis_subject": analysis_subject, "result": [f"{analysis_subject}에 해당하는 종목을 찾을 수 없습니다."]}
+
+            if isinstance(condition_obj, dict) and condition_obj.get("type") == "fundamental":
+                today_str = stock.get_nearest_business_day_in_a_week()
+                funda_df = stock.get_market_fundamental(today_str, market="ALL")
+                target_stocks = pd.merge(target_stocks, funda_df, left_on='Code', right_index=True, how='inner')
+                if not target_stocks.empty:
+                    indicator = condition_obj.get("indicator", "").upper()
+                    operator = condition_obj.get("operator")
+                    value = float(condition_obj.get("value"))
+                    if indicator in target_stocks.columns:
+                        if operator == "<": target_stocks = target_stocks[target_stocks[indicator] < value]
+                        elif operator == ">": target_stocks = target_stocks[target_stocks[indicator] > value]
+                        analysis_subject += f" ({indicator} {operator} {value})"
+
+            if target_stocks.empty: return {"analysis_subject": analysis_subject, "result": ["조건을 만족하는 종목이 없습니다."]}
 
             start_date, end_date = parse_period(intent_json.get("period"))
             
-            result_data = []
-
-            if "순매수" in action_str and isinstance(condition_obj, dict) and condition_obj.get('who') == '기관':
-                result_data = analyze_institutional_buying(start_date.strftime('%Y%m%d'), end_date.strftime('%Y%m%d'))
-                reverse_sort = True
-            
-            elif "거래량" in action_str:
-                result_data = analyze_top_volume_stocks(start_date.strftime('%Y%m%d'))
-                reverse_sort = True 
-
-            else:
-                event_periods = []
-                if isinstance(condition_obj, str) and any(s in condition_obj for s in ["여름", "겨울"]):
-                    season = "여름" if "여름" in condition_obj else "겨울"
-                    event_periods = handle_season_condition((start_date, end_date), season)
-                elif isinstance(condition_obj, dict) and condition_obj.get("type") == "indicator":
-                    event_periods = handle_indicator_condition(condition_obj, (start_date, end_date))
-                else:
-                    event_periods = [(start_date, end_date)]
-                
-                if "오른" in action_str or "내린" in action_str:
-                    result_data = analyze_top_performers(target_stocks, event_periods, (start_date, end_date))
-                elif "변동성" in action_str or "변동" in action_str:
-                    result_data = analyze_volatility(target_stocks, (start_date, end_date))
-                elif "목표주가" in action_str:
-                    result_data = analyze_target_price_upside(target_stocks)
-                
-                reverse_sort = False if "내린" in action_str else True
-
+            result_data = analyze_top_performers(target_stocks, [(start_date, end_date)], (start_date, end_date))
+            reverse_sort = False if "내린" in action_str else True
             sorted_result = sorted(result_data, key=lambda x: x.get('value', -99999), reverse=reverse_sort)
             
-            if not cache_key: cache_key = str(hash(json.dumps(intent_json, sort_keys=True)))
-            ANALYSIS_CACHE[cache_key] = {
-                'intent_json': intent_json, 'analysis_subject': analysis_subject, 'full_result': sorted_result
-            }
+            if not cache_key: cache_key = str(hash(user_query + str(intent_json)))
+            ANALYSIS_CACHE[cache_key] = {'intent_json': intent_json, 'analysis_subject': analysis_subject, 'full_result': sorted_result}
             print(f"새로운 분석 결과 {len(sorted_result)}개를 캐시에 저장했습니다. (키: {cache_key})")
         
         items_per_page = 20
@@ -1077,21 +1054,10 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
         start_index = (page - 1) * items_per_page
         end_index = start_index + items_per_page
         paginated_result = sorted_result[start_index:end_index]
-        
-        condition_str = intent_json.get("condition")
-        description = ""
-        if isinstance(condition_str, str):
-            if "여름" in condition_str:
-                description = "여름(6월1일~8월 31일) 기간의 평균 수익률을 분석한 결과입니다. \n 현재 나오는 과거가격과 현재가격의 수익률이 아닙니다."
-            elif "겨울" in condition_str:
-                description = "겨울(12월1일~3월1) 기간의 평균 수익률을 분석한 결과입니다. \n 현재 나오는 과거가격과 현재가격의 수익률이 아닙니다."
-        elif isinstance(condition_str, dict) and condition_str.get("type") == "indicator":
-            description = f"{condition_str.get('name')} 지표가 {condition_str.get('value')}{condition_str.get('operator')} 조건 기간의 평균 수익률을 분석한 결과입니다."
 
         return {
             "query_intent": intent_json,
             "analysis_subject": analysis_subject,
-            "description": description,
             "result": paginated_result,
             "pagination": { "current_page": page, "total_pages": total_pages, "total_items": total_items },
             "cache_key": cache_key
@@ -1099,7 +1065,6 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
     except Exception as e:
         traceback.print_exc()
         return {"error": f"분석 실행 중 오류 발생: {e}"}
-    
 
 def handle_season_condition(period_tuple, season):
     """'여름' 또는 '겨울' 조건에 맞는 날짜 구간 리스트를 반환하는 함수 (최적화)"""
@@ -1326,6 +1291,7 @@ def analyze_top_volume_stocks(date_str):
         traceback.print_exc()
         return []
     
+
 def handle_indicator_condition(condition_obj, period_tuple):
     """CPI, 금리 등 지표 조건을 만족하는 날짜 구간을 반환"""
     bok_api_key = os.getenv("ECOS_API_KEY")
@@ -1387,17 +1353,21 @@ def get_bok_data(bok_api_key, stats_code, item_code, start_date, end_date):
     except Exception as e:
         print(f"데이터 처리 중 오류: {e}")
         return None
-    
+
+QUERY_HANDLERS = {
+    "stock_analysis": execute_stock_analysis,
+    "comparison_analysis": execute_comparison_analysis,
+    "indicator_lookup": execute_indicator_lookup,
+    "single_stock_price": execute_single_stock_price,
+    "theme_ranking": execute_theme_ranking  
+}
+
 @askfin_bp.route('/')
 def askfin_page():
     return render_template('askfin.html')
 
 @askfin_bp.route('/analyze', methods=['POST'])
 def analyze_query():
-    """
-    [최종 개선] AI가 종목명을 인식했지만 query_type을 잘못 판단한 경우,
-    백엔드에서 재분류하여 처리하는 로직이 추가된 버전.
-    """
     if not model:
         return jsonify({"error": "모델이 초기화되지 않았습니다. API 키를 확인하세요."}), 500
     
@@ -1409,74 +1379,53 @@ def analyze_query():
     if not user_query:
         return jsonify({"error": "잘못된 요청입니다."}), 400
 
-    intent_json = None
-    final_result = None
-
-    if cache_key and cache_key in ANALYSIS_CACHE:
-        print(f"✅ CACHE HIT: 캐시된 분석 결과를 사용합니다. (키: {cache_key})")
-        intent_json = ANALYSIS_CACHE[cache_key]['intent_json']
-        if intent_json.get("query_type") == "stock_analysis":
-             final_result = execute_stock_analysis(intent_json, page, user_query, cache_key)
-             return jsonify(final_result)
-
-
+    raw_text = ""
     try:
+        if cache_key and cache_key in ANALYSIS_CACHE:
+            print(f"✅ CACHE HIT: 캐시된 분석 결과를 사용합니다. (키: {cache_key})")
+            intent_json = ANALYSIS_CACHE[cache_key]['intent_json']
+            query_type = intent_json.get("query_type") # 캐시에서 query_type 가져오기
+            handler = QUERY_HANDLERS.get(query_type)
+            if handler:
+                 # 캐시를 사용할 때는 페이지 정보만 넘겨서 재계산
+                 return jsonify(handler(intent_json, page, user_query, cache_key))
+        
         print(f"🔥 CACHE MISS: '{user_query}'에 대해 Gemini API 분석을 요청합니다.")
         prompt = PROMPT_TEMPLATE.format(user_query=user_query)
         response = model.generate_content(prompt)
         raw_text = response.text.strip()
-
         try:
             start = raw_text.find('{')
             end = raw_text.rfind('}') + 1
             cleaned_response = raw_text[start:end]
             intent_json = json.loads(cleaned_response)
-            
-            query_type = intent_json.get("query_type")
-            
-            if query_type == "stock_analysis":
-                final_result = execute_stock_analysis(intent_json, page, user_query)
-            elif query_type == "comparison_analysis":
-                final_result = execute_comparison_analysis(intent_json)
-            elif query_type == "indicator_lookup":
-                final_result = execute_indicator_lookup(intent_json)
-            elif query_type == "single_stock_price":
-                final_result = execute_single_stock_price(intent_json)
-            else:
-                # --- ▼▼▼ [핵심] AI가 잘못 판단했을 때를 대비한 방어 코드 ▼▼▼ ---
-                # AI가 general_inquiry로 판단했지만, target이 실제 주식 종목명인지 확인
-                if query_type == "general_inquiry" and intent_json.get("target"):
-                    target_name = intent_json.get("target")
-                    if GLOBAL_NAME_TICKER_MAP is None: initialize_global_data()
-                    
-                    if target_name in GLOBAL_NAME_TICKER_MAP:
-                        print(f"DEBUG: General inquiry를 single_stock_price로 재분류합니다. (Target: {target_name})")
-                        # single_stock_price 유형으로 강제 변환하여 실행
-                        new_intent = {"query_type": "single_stock_price", "target": target_name, "action": "현재가 조회"}
-                        final_result = execute_single_stock_price(new_intent)
-                    else:
-                        final_result = {"analysis_subject": "일반 답변", "result": ["죄송합니다, 해당 질문에 대해서는 답변을 드릴 수 없습니다. 금융 관련 질문을 해주세요."]}
-                else:
-                    final_result = {"analysis_subject": "알림", "result": ["해당 유형의 분석은 아직 지원되지 않습니다."]}
-
-            if final_result and (not final_result.get('result') or final_result.get("error")):
-                 final_result = {
-                    "analysis_subject": "결과 없음",
-                    "result": [f"요청하신 '{user_query}'에 대한 데이터를 찾을 수 없거나 분석에 실패했습니다."]
-                 }
-
         except (json.JSONDecodeError, IndexError):
-            final_result = {
-                "analysis_subject": "일반 답변",
-                "result": [raw_text.replace('\n', '<br>')]
-            }
+            print("DEBUG: JSON 파싱 실패. 일반 텍스트로 처리합니다.")
+            return jsonify({"analysis_subject": "일반 답변", "result": [raw_text.replace('\n', '<br>')]} )
+
+        query_type = intent_json.get("query_type")
+        
+        if not query_type and intent_json.get("target") and intent_json.get("condition"):
+            query_type = "stock_analysis"
+            intent_json["query_type"] = query_type
+        
+        handler = QUERY_HANDLERS.get(query_type)
+
+        if handler:
+            if query_type in ["stock_analysis", "theme_ranking"]:
+                final_result = handler(intent_json, page, user_query)
+            else:
+                final_result = handler(intent_json)
+        else:
+            final_result = {"analysis_subject": "일반 답변", "result": [raw_text.replace('\n', '<br>')]}
         
         return jsonify(final_result)
 
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": f"분석 중 심각한 오류 발생: {str(e)}"}), 500
-        
+    
+            
 @askfin_bp.route('/new_chat', methods=['POST'])
 def new_chat():
     """대화 기록(세션)을 초기화합니다."""

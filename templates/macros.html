@@ -1,63 +1,111 @@
-{% macro render_rank_table(market_prefix, market_name, volume_data, value_data, gainer_data, loser_data, today) %}
+{% macro render_rank_table(prefix, market_name, volume_data, value_data, gainers_data, losers_data, today_date) %}
 <div class="card">
     <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-            <h5 class="card-title mb-0" id="{{ market_prefix }}-rank-title">{{ today }} {{ market_name }} 거래대금 상위</h5>
-            <div id="{{ market_prefix }}-rank-selector" class="btn-group btn-group-sm">
-                <button type="button" class="btn btn-outline-secondary" data-target="volume">거래량</button>
-                <button type="button" class="btn btn-outline-secondary active" data-target="value">거래대금</button>
-                <button type="button" class="btn btn-outline-secondary" data-target="gainer">상승률</button>
-                <button type="button" class="btn btn-outline-secondary" data-target="loser">하락률</button>
-            </div>
+        <h5 class="card-title mb-3" id="{{ prefix }}-rank-title">
+            {{ today_date }} {{ market_name }} 거래량 상위
+        </h5>
+        <div class="btn-group btn-group-sm mb-3" id="{{ prefix }}-rank-selector">
+            <button type="button" class="btn btn-outline-secondary active" data-target="volume">거래량</button>
+            <button type="button" class="btn btn-outline-secondary" data-target="value">거래대금</button>
+            <button type="button" class="btn btn-outline-secondary" data-target="gainer">상승률</button>
+            <button type="button" class="btn btn-outline-secondary" data-target="loser">하락률</button>
         </div>
-        
-        <div id="{{ market_prefix }}-volume-table" class="table-responsive" style="display: none;">
-            {{ render_table_content(volume_data, market_prefix) }}
+
+        <div class="table-responsive" id="{{ prefix }}-volume-table">
+            <table class="table rank-table">
+                <thead>
+                    <tr>
+                        <th class="stock-name-header">종목명</th>
+                        <th class="text-end">현재가</th>
+                        <th class="text-end">등락률</th>
+                        <th class="text-end">거래량</th>
+                        <th class="text-end">거래대금</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in volume_data %}
+                    <tr>
+                        <td class="stock-name" data-code="{{ item.Code }}">{{ item.Name }}</td>
+                        <td class="text-end">{{ item.Close | format_price }}</td>
+                        <td class="text-end {% if item.ChangeRatio > 0 %}text-danger{% elif item.ChangeRatio < 0 %}text-primary{% endif %}">{{ item.ChangeRatio | round(2) }}%</td>
+                        <td class="text-end">{{ item.Volume | format_kr }}</td>
+                        <td class="text-end">{{ item.TradingValue | format_value }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-        <div id="{{ market_prefix }}-value-table" class="table-responsive" style="display: none;">
-            {{ render_table_content(value_data, market_prefix) }}
+
+        <div class="table-responsive" id="{{ prefix }}-value-table" style="display: none;">
+            <table class="table rank-table">
+                <thead>
+                    <tr>
+                        <th class="stock-name-header">종목명</th>
+                        <th class="text-end">현재가</th>
+                        <th class="text-end">등락률</th>
+                        <th class="text-end">거래량</th>
+                        <th class="text-end">거래대금</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in value_data %}
+                    <tr>
+                        <td class="stock-name" data-code="{{ item.Code }}">{{ item.Name }}</td>
+                        <td class="text-end">{{ item.Close | format_price }}</td>
+                        <td class="text-end {% if item.ChangeRatio > 0 %}text-danger{% elif item.ChangeRatio < 0 %}text-primary{% endif %}">{{ item.ChangeRatio | round(2) }}%</td>
+                        <td class="text-end">{{ item.Volume | format_kr }}</td>
+                        <td class="text-end">{{ item.TradingValue | format_value }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-        <div id="{{ market_prefix }}-gainer-table" class="table-responsive" style="display: none;">
-            {{ render_table_content(gainer_data, market_prefix) }}
+
+        <div class="table-responsive" id="{{ prefix }}-gainer-table" style="display: none;">
+            <table class="table rank-table">
+                <thead>
+                    <tr>
+                        <th>순위</th>
+                        <th class="stock-name-header">종목명</th>
+                        <th class="text-end">현재가</th>
+                        <th class="text-end">등락률</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in gainers_data %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td class="stock-name" data-code="{{ item.Code }}">{{ item.Name }}</td>
+                        <td class="text-end">{{ item.Close | format_price }}</td>
+                        <td class="text-end {% if item.ChangeRatio > 0 %}text-danger{% else %}text-primary{% endif %}">{{ item.ChangeRatio | round(2) }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-        <div id="{{ market_prefix }}-loser-table" class="table-responsive" style="display: none;">
-            {{ render_table_content(loser_data, market_prefix) }}
+
+        <div class="table-responsive" id="{{ prefix }}-loser-table" style="display: none;">
+            <table class="table rank-table">
+                <thead>
+                    <tr>
+                        <th>순위</th>
+                        <th class="stock-name-header">종목명</th>
+                        <th class="text-end">현재가</th>
+                        <th class="text-end">등락률</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in losers_data %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td class="stock-name" data-code="{{ item.Code }}">{{ item.Name }}</td>
+                        <td class="text-end">{{ item.Close | format_price }}</td>
+                        <td class="text-end {% if item.ChangeRatio < 0 %}text-primary{% else %}text-danger{% endif %}">{{ item.ChangeRatio | round(2) }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
-{% endmacro %}
-
-{% macro render_table_content(data, market_prefix) %}
-<table class="table table-hover table-sm rank-table">
-    <thead>
-        <tr>
-            <th class="text-start">종목명</th>
-            <th class="text-end">현재가</th>
-            <th class="text-end">등락률</th>
-            <th class="text-end">거래량</th>
-            <th class="text-end">거래대금</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for item in data %}
-        <tr>
-            <td class="text-start">
-                <a href="#" class="stock-name" data-code="{{ item.Code }}">{{ item.Name }}</a>
-            </td>
-            <td class="text-end {% if item.ChangeRatio > 0 %}text-danger{% elif item.ChangeRatio < 0 %}text-primary{% else %}text-white{% endif %}">
-                {{ item.Close | format_price }}
-            </td>
-            <td class="text-end {% if item.ChangeRatio > 0 %}text-danger{% elif item.ChangeRatio < 0 %}text-primary{% else %}text-white{% endif %}">
-                {{ "%.2f"|format(item.ChangeRatio) }}%
-            </td>
-            <td class="text-end">{{ item.Volume | format_kr }}</td>
-            <td class="text-end">{{ item.TradingValue | format_value }}</td>
-        </tr>
-        {% else %}
-        <tr>
-            <td colspan="5" class="text-center text-muted">데이터가 없습니다.</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
 {% endmacro %}

@@ -1,7 +1,7 @@
 # ----- Core Web & App -----
 flask
-Flask-SQLAlchemy
-pymysql
+gunicorn
+firebase-admin
 
 # ----- Data Fetching & Analysis -----
 pandas
@@ -12,25 +12,31 @@ finance-datareader
 pykrx
 dart-fss
 yfinance
-selenium
+selenium              # 아마안쓸듯
 readability-lxml
+lxml                  
+html5lib             
 
 # ----- AI & Machine Learning -----
 google-generativeai
-xgboost
-transformers
-torch
-sentencepiece
-scikit-learn
-datasets
-evaluate
+xgboost               
+lightgbm           
+scikit-learn       
+transformers          
+torch                 
+sentencepiece         
+datasets              
+evaluate             
+seaborn              
+matplotlib           
+Pillow                
 
 # ----- 자연어 처리 helper --
 fuzzywuzzy
-python-Levenshtein
+python-Levenshtein    
 flashtext
 
 # ----- Frontend & Utilities -----
-libsass
+libsass               
 python-dotenv
-beautifulsoup4
+beautifulsoup4       

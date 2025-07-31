@@ -38,6 +38,25 @@
             -moz-osx-font-smoothing: grayscale;
             text-rendering: optimizeLegibility;
         }
+
+        .rank-table th, .rank-table td {
+            white-space: normal; /* 모든 셀에서 줄바꿈을 기본으로 허용 */
+            word-break: break-word; /* 긴 단어는 강제 줄바꿈 */
+            vertical-align: middle;
+            text-align: center; /* 기본 정렬은 가운데로 */
+        }
+        /* 종목명 컬럼은 왼쪽 정렬 및 최소 너비 지정 */
+        .rank-table .stock-name-header, .rank-table .stock-name {
+            text-align: left;
+            min-width: 120px;
+        }
+        /* 숫자 관련 컬럼은 오른쪽 정렬 및 줄바꿈 방지 */
+        .rank-table th.text-end, .rank-table td.text-end {
+            text-align: right !important;
+            min-width: 80px;
+            white-space: nowrap;
+        }
+
         .font-monospace {
             font-family: 'Roboto Mono', monospace;
         }
@@ -48,74 +67,50 @@
             border-bottom: 1px solid var(--border-color);
             box-shadow: var(--box-shadow-light);
             
-            height: 50px !important;
-            padding-top: 35px !important; 
-            padding-bottom: 25px !important; 
-            display: flex !important;
-            align-items: center !important;
+            padding: 0.5rem 1rem; /* 기본 패딩으로 변경 */
             position: relative;
             z-index: 1000;
-
-            .container-fluid {
-                height: 100% !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: space-between !important;
-            }
-            .navbar-collapse {
-                height: 100% !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: space-between !important;
-                padding: 0 !important;
-                margin: 0 !important;
-            }
         }
+        .navbar .container-fluid {
+            padding: 0; /* 컨테이너 패딩 기본값으로 변경 */
+            display: flex; /* flex 컨테이너로 설정 */
+            justify-content: space-between; /* 로고와 토글러 양쪽 끝 정렬 */
+            align-items: center; /* 세로 중앙 정렬 */
+        }
+        
+        /* 로고와 토글러 정렬 */
         .navbar-brand {
             color: var(--text-color) !important;
-            padding-top: 0.5rem !important; 
-            padding-bottom: 0.5rem !important; 
+            padding-top: 0; /* 패딩 조정 */
+            padding-bottom: 0; /* 패딩 조정 */
             line-height: 1.5;
             height: auto; 
+            /* margin-right: auto; // 모바일에서 로고 중앙 정렬을 위해 제거 */
         }
-        /* New style for the 'Fin' part */
         .navbar-brand .fin-color {
-            color: var(--primary-color) !important; /* Apply the primary color */
+            color: var(--primary-color) !important;
         }
+        .navbar-toggler {
+            padding: 0.25rem 0.75rem;
+            font-size: 1.25rem;
+            line-height: 1;
+            background-color: transparent;
+            border: 1px solid rgba(255,255,255,.1);
+            border-radius: 0.25rem;
+        }
+        .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+
+
         .nav-link {
             color: var(--text-color) !important;
-            padding-top: 0.5rem !important; 
-            padding-bottom: 0.5rem !important; 
-            line-height: 1.5;
-            height: auto; 
-        }
-        .navbar .d-flex {
-            align-items: center !important;
-            gap: 10px; 
-            margin-top: 0 !important; 
-            margin-bottom: 0 !important; 
-            height: 100% !important;
-            
-            flex-wrap: nowrap !important; 
-        }
-        .navbar-nav {
-            
-            margin-bottom: 0 !important;
-            height: 100% !important; 
-            align-items: center !important; 
-        }
-        .navbar-nav .nav-item {
-            display: flex !important; 
-            align-items: center !important; 
-            height: 100% !important; 
-        }
-        .navbar-nav .dropdown-menu {
-            margin-top: 0;
+            padding: 0.5rem 1rem !important; /* 패딩 조정 */
         }
         .navbar .form-control, .navbar .btn {
             height: 35px !important;
-            padding: 0.375rem 1.75rem !important;
-            font-size: 1rem !important;
+            padding: 0.375rem 1rem !important; /* 패딩 조정 */
+            font-size: 0.9rem !important; /* 폰트 크기 조정 */
             line-height: 1.5 !important;
         }
        
@@ -139,7 +134,8 @@
             color: var(--primary-color);
         }
         .btn-outline-info {
-            width: 120px;
+            width: auto; /* 너비 auto로 변경 */
+            min-width: 80px; /* 최소 너비 지정 */
             color: var(--primary-color);
             border-color: var(--primary-color);
         }
@@ -282,6 +278,244 @@
             border-color: #8c939b;
             color: white;
         }
+
+        /* Firebase Auth Modal Styles */
+        #authModal .modal-content {
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+        #authModal .modal-header {
+            background-color: var(--primary-color);
+            color: var(--dark-bg);
+            border-bottom: 1px solid var(--border-color);
+        }
+        #authModal .modal-title {
+            color: var(--dark-bg);
+        }
+        #authModal .btn-close {
+            filter: invert(0.7); /* Adjust for dark background */
+        }
+        #authModal .form-control {
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            border-color: var(--border-color);
+        }
+        #authModal .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(0, 170, 255, 0.25);
+        }
+        #authModal .btn-primary, #authModal .btn-secondary {
+            color: var(--dark-bg); /* Ensure dark text on primary/secondary buttons */
+        }
+        #authModal .btn-primary:hover, #authModal .btn-secondary:hover {
+             color: white; /* Ensure white text on hover */
+        }
+        #authStatus {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        /* Google 로그인 버튼 스타일 (옵션) */
+        #googleLoginBtn {
+            background-color: #4285F4; /* Google Blue */
+            color: white;
+            border: none;
+            width: 100%; /* 너비를 100%로 설정하여 모달 내에서 보기 좋게 함 */
+        }
+        #googleLoginBtn:hover {
+            background-color: #357ae8;
+        }
+
+        /* ----- 모바일 헤더 레이아웃 최적화 CSS ----- */
+        /* 모바일 (lg 미만)에서 .container-fluid 내부의 로고, 토글러, 메뉴들이 정렬되는 방식 */
+        @media (max-width: 991.98px) { /* Bootstrap 'lg' breakpoint 미만 */
+            .navbar .container-fluid {
+                flex-wrap: wrap; /* 내용이 넘칠 때 줄바꿈 허용 */
+                justify-content: space-between; /* 로고-토글러 */
+                padding: 0 15px; /* 모바일 컨테이너 좌우 패딩 */
+            }
+
+            .navbar-brand {
+                order: 1; /* 로고를 첫 번째 순서로 */
+                flex-grow: 1; /* 로고가 남은 공간을 채우도록 (중앙 정렬 위해) */
+                text-align: center; /* 로고 텍스트 가운데 정렬 */
+                margin-right: 0 !important; /* 기본 마진 제거 */
+            }
+            .navbar-toggler {
+                order: 2; /* 토글러를 두 번째 순서로 */
+                margin-left: auto; /* 오른쪽으로 밀기 */
+            }
+
+            .navbar-collapse {
+                order: 3; /* collapse 메뉴를 가장 아래 순서로 */
+                flex-basis: 100%; /* 너비 100% */
+                flex-grow: 0 !important; /* 불필요한 늘어남 방지 */
+                background-color: var(--card-bg);
+                padding: 15px;
+                position: absolute; /* 절대 위치로 다른 요소와 겹치지 않게 */
+                top: 100%; /* 내비게이션 바 바로 아래 */
+                left: 0;
+                right: 0;
+                z-index: 999;
+                border-bottom-left-radius: 8px;
+                border-bottom-right-radius: 8px;
+                box-shadow: var(--box-shadow-medium);
+                text-align: center; /* 메뉴 아이템 중앙 정렬 */
+            }
+
+            /* 메인 내비게이션 링크 */
+            .navbar-nav.me-auto {
+                flex-direction: column !important; /* 항상 세로 정렬 */
+                align-items: center !important; /* 가운데 정렬 */
+                width: 100%; /* 너비 100% */
+                margin-bottom: 15px !important; /* 검색 폼 위에 여백 */
+            }
+            .navbar-nav.me-auto .nav-item {
+                width: 100%; /* 메뉴 아이템 너비 100% */
+                margin-bottom: 5px; /* 메뉴 아이템 간 여백 */
+            }
+
+            /* 검색 폼과 로그인 섹션 컨테이너 */
+            .d-flex.align-items-center { /* .navbar-collapse 바로 아래의 d-flex */
+                flex-direction: column !important; /* 항상 세로로 정렬 */
+                align-items: stretch !important; /* 너비를 꽉 채우도록 */
+                width: 100%; /* 너비 100% */
+                gap: 10px; /* 요소들 간 간격 */
+            }
+
+            /* 검색 폼 */
+            .d-flex.align-items-center form.d-flex {
+                width: 100% !important; /* 검색 폼 너비 100% */
+                flex-direction: row !important; /* 검색 입력창과 버튼 가로 정렬 */
+                justify-content: space-between !important; /* 양 끝 정렬 */
+                gap: 10px; /* 입력창과 버튼 사이 간격 */
+                margin-right: 0 !important; /* 기존 마진 제거 */
+                margin-bottom: 0 !important; /* 기존 마진 제거 */
+            }
+            .d-flex.align-items-center form.d-flex input.form-control {
+                flex-grow: 1; /* 입력창이 남은 공간을 채우도록 */
+                margin-right: 0 !important; /* 입력창 오른쪽 마진 제거 */
+                margin-bottom: 0 !important; /* 입력창 아래 여백 제거 */
+                width: auto !important; /* 너비 자동 (flex-grow에 의해 조절) */
+            }
+            .d-flex.align-items-center form.d-flex button.btn {
+                width: auto !important; /* 버튼 너비 자동 */
+                flex-shrink: 0; /* 버튼이 축소되지 않도록 */
+            }
+
+            /* 로그인/최근조회 섹션 (ul.navbar-nav) */
+            .navbar-nav.ms-2 {
+                margin-left: 0 !important; /* 왼쪽 마진 제거 */
+                flex-direction: column !important; /* 세로 정렬 */
+                align-items: stretch !important; /* 너비를 꽉 채우도록 */
+                width: 100% !important; /* 너비 100% */
+            }
+            .navbar-nav.ms-2 .nav-item {
+                width: 100% !important; /* 아이템 너비 100% */
+                margin-bottom: 5px; /* 아이템 간 여백 */
+            }
+            .navbar-nav.ms-2 .nav-item:last-child {
+                margin-bottom: 0;
+            }
+
+            /* 드롭다운 메뉴 (최근조회) */
+            .navbar-nav.ms-2 .nav-item.dropdown .dropdown-menu {
+                position: static !important; /* 팝업 대신 인라인으로 표시 */
+                width: 100% !important; /* 드롭다운 메뉴 너비 100% */
+                margin-top: 5px !important; /* 위 여백 */
+            }
+
+            /* 텍스트가 긴 경우 줄바꿈 처리 (로그인 이메일 등) */
+            #loggedInUserEmail {
+                white-space: normal; /* 줄바꿈 허용 */
+                word-break: break-all; /* 긴 단어 강제 줄바꿈 */
+                max-width: none; /* 최대 너비 제한 해제 */
+            }
+        }
+
+        /* 데스크톱 (lg 이상)에서 다시 원래대로 */
+        @media (min-width: 992px) { /* Bootstrap 'lg' breakpoint 이상 */
+            .navbar .container-fluid {
+                flex-wrap: nowrap; /* 줄바꿈 허용 안 함 */
+                justify-content: space-between; /* 로고, 메뉴, 오른쪽 섹션 */
+            }
+            .navbar-brand {
+                order: unset; /* 순서 재설정 */
+                flex-grow: 0; /* 늘어남 방지 */
+                text-align: left; /* 왼쪽 정렬 */
+                margin-right: 1rem; /* 오른쪽 마진 */
+            }
+            .navbar-toggler {
+                display: none; /* 데스크톱에서 토글러 숨김 */
+            }
+
+            .navbar-collapse {
+                background-color: transparent; /* 배경색 투명하게 */
+                padding: 0; /* 패딩 제거 */
+                position: relative; /* 상대 위치로 변경 */
+                box-shadow: none; /* 그림자 제거 */
+                text-align: left; /* 텍스트 왼쪽 정렬 */
+                flex-grow: 1 !important; /* 다시 공간 채우도록 */
+                display: flex !important; /* 항상 보이도록 */
+                flex-direction: row !important; /* 가로 정렬 */
+                justify-content: space-between; /* 요소들 간 공간 배분 */
+                align-items: center; /* 세로 중앙 정렬 */
+            }
+
+            .navbar-nav.me-auto {
+                flex-direction: row !important; /* 가로 정렬 */
+                align-items: center !important; /* 가운데 정렬 */
+                width: auto !important; /* 너비 자동 */
+                margin-bottom: 0 !important; /* 여백 제거 */
+            }
+            .navbar-nav.me-auto .nav-item {
+                width: auto !important;
+                margin-bottom: 0 !important;
+            }
+
+            .d-flex.align-items-center { /* 검색 폼과 로그인 섹션 컨테이너 */
+                flex-direction: row !important; /* 가로 정렬 */
+                align-items: center !important; /* 가운데 정렬 */
+                width: auto !important; /* 너비 자동 */
+                gap: 10px; /* 요소들 간 간격 */
+            }
+
+            .d-flex.align-items-center form.d-flex {
+                width: auto !important; /* 검색 폼 너비 자동 */
+                flex-direction: row !important; /* 검색 입력창과 버튼 가로 정렬 */
+                justify-content: flex-start !important; /* 왼쪽 정렬 */
+                gap: 10px; /* 입력창과 버튼 사이 간격 */
+                margin-right: 1rem !important; /* 오른쪽 마진 (부트스트랩 me-2 대체) */
+                margin-bottom: 0 !important; /* 여백 제거 */
+            }
+            .d-flex.align-items-center form.d-flex input.form-control {
+                flex-grow: 0; /* 입력창이 공간을 채우지 않도록 */
+                width: 180px; /* 데스크톱에서 검색 입력창 고정 너비 (조정 가능) */
+                margin-right: 0 !important; /* 오른쪽 마진 제거 */
+                margin-bottom: 0 !important; /* 여백 제거 */
+            }
+            .d-flex.align-items-center form.d-flex button.btn {
+                width: auto !important; /* 버튼 너비 자동 */
+            }
+
+            .navbar-nav.ms-2 {
+                flex-direction: row !important; /* 가로 정렬 */
+                align-items: center !important; /* 가운데 정렬 */
+                width: auto !important; /* 너비 자동 */
+                margin-left: 0.5rem !important; /* 왼쪽 마진 */
+            }
+            .navbar-nav.ms-2 .nav-item {
+                width: auto !important;
+                margin-bottom: 0 !important;
+            }
+
+            .navbar-nav.ms-2 .nav-item.dropdown .dropdown-menu {
+                position: absolute !important; /* 다시 절대 위치 (팝업처럼) */
+                width: auto !important; /* 너비 자동 */
+                margin-top: 0 !important; /* 위 여백 제거 */
+            }
+        }
     </style>
 
     {% block head %}{% endblock %}
@@ -290,7 +524,7 @@
 
     <nav class="navbar navbar-expand-lg navbar-dark shadow-sm">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('index_main') }}">Ask<span class="fin-color">Fin</span></a> {# <-- Here's the change #}
+            <a class="navbar-brand" href="{{ url_for('index_main') }}">Ask<span class="fin-color">Fin</span></a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -327,15 +561,8 @@
                                 {% endif %}
                             </ul>
                         </li>
-                        {% if session.get('user') %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('auth.logout') }}" onclick="return confirm('로그아웃 하시겠어요?');">로그아웃</a>
+                        <li class="nav-item" id="auth-nav-item">
                             </li>
-                        {% else %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('auth.login') }}">로그인</a>
-                            </li>
-                        {% endif %}
                     </ul>
                 </div>
 
@@ -357,9 +584,46 @@
         </div>
     </footer>
 
+    <div class="modal fade" id="authModal" tabindex="-1" aria-labelledby="authModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="authModalLabel">로그인 / 회원가입</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <p class="mb-4">소셜 계정으로 간편하게 로그인하고<br>모든 서비스를 이용해 보세요.</p>
+                    <button type="button" class="btn btn-lg w-100" id="googleLoginBtn">
+                        <i class="fab fa-google me-2"></i> Google 계정으로 계속하기
+                    </button>
+                    <div id="authStatus" class="mt-3 text-danger small"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-analytics-compat.js"></script> 
     <script>
+        // Flask 백엔드에서 주입된 Firebase 구성 정보 사용
+        // Jinja2 tojson 필터를 사용하여 Python 딕셔너리를 JavaScript 객체로 안전하게 변환
+        const firebaseConfig = {{ firebase_config | tojson }};
+
+        // Firebase 초기화
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        // Google Analytics 측정 ID (measurementId)가 있다면 Analytics 초기화 (선택 사항)
+        let analytics;
+        if (firebaseConfig.measurementId) {
+             analytics = firebase.analytics(); // firebase.analytics() 호출
+        }
+        // const db = firebase.firestore(); // Firestore 사용 시
+
+        // Toast 메시지 함수 (기존과 동일)
         function showToast(message) {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -386,6 +650,104 @@
                 });
             {% endif %}
         {% endwith %}
+
+        // Firebase 인증 로직
+        document.addEventListener('DOMContentLoaded', function() {
+            const authModal = new bootstrap.Modal(document.getElementById('authModal'));
+            const googleLoginBtn = document.getElementById('googleLoginBtn');
+            const authStatusDiv = document.getElementById('authStatus');
+            const authNavItem = document.getElementById('auth-nav-item');
+
+            // --- 인증 상태 변경 감지 ---
+            auth.onAuthStateChanged((user) => {
+                if (user) {
+                    // 사용자 로그인 상태
+                    authNavItem.innerHTML = `
+                        <a class="nav-link" href="#" id="loggedInUserEmail">${user.email || user.displayName || '사용자'}</a>
+                        <a class="nav-link" href="#" id="logoutButton">로그아웃</a>
+                    `;
+                    // 로그인 모달이 열려있으면 닫기
+                    if (authModal._isShown) {
+                        authModal.hide();
+                    }
+                    showToast(`로그인되었습니다: ${user.email || user.displayName || '사용자'}`);
+
+                } else {
+                    // 사용자 로그아웃 상태
+                    authNavItem.innerHTML = `
+                        <a class="nav-link" href="#" id="loginRegisterButton">로그인/회원가입</a>
+                    `;
+                }
+            });
+
+            // --- 로그인/회원가입/로그아웃 버튼 클릭 이벤트 ---
+            // 동적으로 생성된 요소에 이벤트를 바인딩하기 위해 Document Delegation 사용
+            document.addEventListener('click', function(event) {
+                if (event.target && event.target.id === 'loginRegisterButton') {
+                    event.preventDefault();
+                    // 모달 초기화 (상태 메시지 초기화)
+                    authStatusDiv.textContent = '';
+                    authModal.show();
+                }
+
+                if (event.target && event.target.id === 'logoutButton') {
+                    event.preventDefault();
+                    auth.signOut().then(() => {
+                        // 로그아웃 성공: onAuthStateChanged에서 UI 업데이트됨
+                        showToast('로그아웃 되었습니다.');
+                    }).catch((error) => {
+                        console.error("로그아웃 오류:", error);
+                        showToast('로그아웃 중 오류가 발생했습니다.');
+                    });
+                }
+            });
+
+            // --- Google 로그인 버튼 이벤트 ---
+            if (googleLoginBtn) {
+                googleLoginBtn.addEventListener('click', () => {
+                    const provider = new firebase.auth.GoogleAuthProvider();
+                    auth.signInWithPopup(provider)
+                        .then((result) => {
+                            // Google 계정으로 성공적으로 로그인
+                            // onAuthStateChanged에서 이미 토스트 메시지 및 UI 업데이트 처리
+
+                            // 필요한 경우 Flask 백엔드로 ID 토큰 전송 (선택 사항 - API 보호 등)
+                            // result.user.getIdToken().then(idToken => {
+                            //     fetch('/auth/verify-google-login', { // Flask 백엔드의 엔드포인트
+                            //         method: 'POST',
+                            //         headers: {
+                            //             'Content-Type': 'application/json',
+                            //         },
+                            //         body: JSON.stringify({ idToken: idToken }),
+                            //     })
+                            //     .then(response => response.json())
+                            //     .then(data => {
+                            //         if (data.error) {
+                            //             console.error("백엔드 로그인 처리 오류:", data);
+                            //         } else {
+                            //             console.log("백엔드 로그인 처리 성공:", data);
+                            //         }
+                            //     })
+                            //     .catch(error => {
+                            //         console.error("백엔드 통신 오류:", error);
+                            //     });
+                            // });
+
+                        })
+                        .catch((error) => {
+                            let errorMessage = 'Google 로그인 오류: ' + error.message;
+                            if (error.code === 'auth/popup-closed-by-user') {
+                                errorMessage = 'Google 로그인 팝업이 닫혔습니다.';
+                            } else if (error.code === 'auth/cancelled-popup-request') {
+                                errorMessage = 'Google 로그인 팝업 요청이 취소되었습니다. 팝업이 이미 열려 있을 수 있습니다.';
+                            }
+                            authStatusDiv.textContent = errorMessage;
+                            console.error("Google 로그인 오류:", error);
+                            showToast('Google 로그인 중 오류가 발생했습니다.');
+                        });
+                });
+            }
+        });
     </script>
     
     {% block scripts %}{% endblock %}

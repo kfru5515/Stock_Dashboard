@@ -30,28 +30,45 @@
         margin: 1.5rem auto;
     }
     .hero-section .btn-lg {
-        padding: 0.9rem 2.2rem; /* Larger button padding */
-        font-size: 1.2rem; /* Larger button font */
-        border-radius: 50px; /* Pill-shaped button */
-        background-color: var(--primary-color);
-        border-color: var(--primary-color);
-        color: var(--dark-bg); /* Dark text on button for contrast */
+        padding: 0.9rem 2.2rem;
+        font-size: 1.2rem;
+        border-radius: 50px;
+        background-color: var(--card-bg);
+        border: 2px solid var(--primary-color);
+        color: white;
         font-weight: 700;
         transition: all 0.3s ease;
     }
     .hero-section .btn-lg:hover {
-        background-color: #0088cc; /* Darker primary on hover */
-        border-color: #0088cc;
-        color: white; /* White text on hover */
-        transform: translateY(-3px); /* Subtle lift on hover */
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+        color: var(--dark-bg);
+        transform: translateY(-3px);
         box-shadow: var(--box-shadow-medium);
     }
-    /* New style for the 'Fin' part inside the button */
     .hero-section .btn-lg .fin-color {
-        color: var(--dark-bg); /* Text color for 'Fin' inside the button in normal state */
+        color: var(--primary-color);
     }
     .hero-section .btn-lg:hover .fin-color {
-        color: white; /* Text color for 'Fin' inside the button on hover */
+        color: var(--dark-bg);
+    }
+
+    /* Styles for mobile devices */
+    @media (max-width: 767.98px) {
+        .hero-section {
+            min-height: 60vh;
+            padding: 0 15px;
+        }
+        .hero-section h1 {
+            font-size: 2.5rem;
+        }
+        .hero-section p {
+            font-size: 1.1rem;
+        }
+        .hero-section .btn-lg {
+            padding: 0.7rem 1.8rem;
+            font-size: 1rem;
+        }
     }
 </style>
 {% endblock %}
@@ -66,7 +83,7 @@
                 데이터에 기반한 심층적인 인사이트를 얻을 수 있습니다.
             </p>
             <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg mt-4">
-              Ask<span class="fin-color">Fin</span> 시작하기 {# <-- Here's the change #}
+              Ask<span class="fin-color">Fin</span> 시작하기
             </a>
         </div>
     </div>

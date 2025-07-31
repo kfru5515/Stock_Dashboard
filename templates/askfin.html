@@ -4,7 +4,6 @@
 
 {% block head %}
 <style>
-    /* Use variables defined in base.html for consistency */
     body {
         background-color: var(--dark-bg); /* Ensure dark background */
         color: var(--text-color); /* Light text on dark background */
@@ -336,6 +335,51 @@
     .modal-body .list-group-item a:hover {
         color: var(--primary-color) !important;
     }
+    
+    /* Styles for the financial table inside the modal */
+    .modal-financial-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+    .modal-financial-table th,
+    .modal-financial-table td {
+        white-space: normal !important;
+        word-wrap: break-word;
+        vertical-align: middle;
+        padding: 0.75rem;
+    }
+    .modal-financial-table th:first-child,
+    .modal-financial-table td:first-child {
+        width: 40%;
+        text-align: left;
+    }
+    .modal-financial-table td {
+        text-align: right;
+    }
+    .modal-financial-table th {
+        text-align: center;
+        font-weight: 600;
+    }
+    
+    /* NEW CSS FOR MOBILE MODAL/CHAT TABLES */
+    @media (max-width: 575.98px) {
+        .modal-body .table-responsive,
+        .ai-message .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .modal-body .modal-financial-table,
+        .ai-message .financial-table {
+            width: auto; /* Let the table be as wide as its content */
+            min-width: 500px; /* Set a minimum width to prevent squashing */
+        }
+        .modal-body .modal-financial-table th,
+        .modal-body .modal-financial-table td,
+        .ai-message .financial-table th,
+        .ai-message .financial-table td {
+            white-space: nowrap; /* Prevent wrapping inside the scrollable table */
+        }
+    }
 </style>
 {% endblock %}
 
@@ -502,134 +546,78 @@
         function fetchAnalysis(query, page = 1) {
             if (!query) return;
 
-            if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
+            if (query !== currentQuery || page === 1) {
                 addMessageToChat('user', query);
                 queryInput.value = '';
             }
 
-            if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
+            if (query !== currentQuery || page === 1) {
                 currentQuery = query;
                 currentCacheKey = null;
                 currentAnalysisBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
             } else {
-                if (currentAnalysisBubble) {
-                    currentAnalysisBubble.querySelector('.message').innerHTML = '<div class="spinner d-block mx-auto"></div>';
-                } else {
-                    currentAnalysisBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
-                }
-            }
-            
-            let fetchCacheKey = currentCacheKey;
-            if (query !== currentQuery && page === 1) { 
-                fetchCacheKey = null;
+                currentAnalysisBubble.querySelector('.message').innerHTML = '<div class="spinner d-block mx-auto"></div>';
             }
 
             fetch("/askfin/analyze", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: currentQuery, page: page, cache_key: fetchCacheKey })
+                body: JSON.stringify({ query: currentQuery, page: page, cache_key: currentCacheKey })
             })
             .then(response => response.ok ? response.json() : Promise.reject(response))
             .then(data => {
                 if (data.cache_key) { currentCacheKey = data.cache_key; }
-    
+
                 if (data.error) {
-                    if (currentAnalysisBubble) {
-                        currentAnalysisBubble.querySelector('.message').innerHTML = `<p class="text-danger">오류: ${data.error}</p>`;
-                    }
+                    currentAnalysisBubble.querySelector('.message').innerHTML = `<p class="text-danger">오류: ${data.error}</p>`;
                     return;
                 }
-    
+
                 const result = data.result;
-                let responseHtml = `<h5 class="mb-2" style="color: var(--heading-color);">분석 결과: ${data.analysis_subject}</h5>`;
+                let responseHtml = `<h5 class="mb-2" style="color: var(--heading-color);">${data.analysis_subject}</h5>`;
                 if (data.description) { responseHtml += `<p class="text-muted small mb-3">${data.description}</p>`; }
-    
+
                 if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'object') {
-                    const valueLabel = result[0].label || '결과값';
-                    let table = `<div class="table-responsive"><table class="table table-sm table-hover financial-table">
-                                    <thead>
-                                        <tr>
-                                            <th>순위</th><th>종목명</th><th>과거 가격</th><th>현재 가격</th><th>${valueLabel}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>`;
-                    
-                    result.forEach((item, index) => {
-                        const itemsPerPage = 20;
-                        const rank = ((data.pagination.current_page - 1) * itemsPerPage) + index + 1;
-                        
-                        const itemName = item?.name || 'N/A';
-                        const itemCode = item?.code || 'N/A';
-                        const startPrice = item?.start_price ? `${parseInt(item.start_price).toLocaleString()} 원` : 'N/A';
-                        const endPrice = item?.end_price ? `${parseInt(item.end_price).toLocaleString()} 원` : 'N/A';
-                        const displayValue = (item?.value !== null && item?.value !== undefined) ? item.value.toFixed(2) : 'N/A';
-                        
-                        let valueColorClass = '';
-                        if (item?.value > 0) {
-                            valueColorClass = 'text-danger'; 
-                        } else if (item?.value < 0) {
-                            valueColorClass = 'text-primary'; 
-                        }
-    
-                        table += `<tr>
-                                    <td>${rank}</td>
-                                    <td><a href="#" class="stock-name" data-code="${itemCode}" data-name="${itemName}">${itemName}</a></td>
-                                    <td>${startPrice}</td>
-                                    <td>${endPrice}</td>
-                                    <td style="font-weight: bold;" class="${valueColorClass}">${displayValue}</td>
-                                  </tr>`;
-                    });
+                    let table = '';
+                    if (data.analysis_subject === "전체 테마 성과 순위") {
+                        table = `<div class="table-responsive"><table class="table table-sm table-hover financial-table">
+                                    <thead><tr><th>순위</th><th>테마명</th><th>${result[0].label || '결과값'}</th></tr></thead><tbody>`;
+                        result.forEach((item, index) => {
+                            const rank = ((data.pagination.current_page - 1) * 20) + index + 1;
+                            const valueColorClass = item.value > 0 ? 'text-danger' : 'text-primary';
+                            table += `<tr>
+                                        <td>${rank}</td>
+                                        <td><a href="#" class="theme-rank-link">${item.name}</a></td>
+                                        <td class="text-end ${valueColorClass}">${item.value.toFixed(2)}%</td>
+                                      </tr>`;
+                        });
+                    } else { // 일반 종목 분석
+                        table = `<div class="table-responsive"><table class="table table-sm table-hover financial-table">
+                                    <thead><tr><th>순위</th><th>종목명</th><th>과거 가격</th><th>현재 가격</th><th>${result[0].label || '결과값'}</th></tr></thead><tbody>`;
+                        result.forEach((item, index) => {
+                            const rank = ((data.pagination.current_page - 1) * 20) + index + 1;
+                            const valueColorClass = item.value > 0 ? 'text-danger' : 'text-primary';
+                            table += `<tr>
+                                        <td>${rank}</td>
+                                        <td><a href="#" class="stock-name" data-code="${item.code}" data-name="${item.name}">${item.name}</a></td>
+                                        <td>${item.start_price ? item.start_price.toLocaleString() + ' 원' : 'N/A'}</td>
+                                        <td>${item.end_price ? item.end_price.toLocaleString() + ' 원' : 'N/A'}</td>
+                                        <td class="text-end ${valueColorClass}">${item.value.toFixed(2)}</td>
+                                      </tr>`;
+                        });
+                    }
                     table += `</tbody></table></div>`;
                     responseHtml += table;
                     responseHtml += renderPagination(data.pagination);
-                
-                } else if (Array.isArray(result) && result.length > 0) {
-                    let resultText = result.join('<br>');
-                    
-                    if (data.stock_code && data.stock_name) {
-                        const linkHtml = `<a href="#" class="stock-name" data-code="${data.stock_code}" data-name="${data.stock_name}">${data.stock_name}(${data.stock_code})</a>`;
-                        const originalText = `${data.stock_name}(${data.stock_code})`;
-                        resultText = resultText.replace(originalText, linkHtml);
-                    }
-
-                    responseHtml += `<p>${resultText}</p>`;
-                } else {
-                     responseHtml += `<p class="text-muted">분석 결과가 없습니다.</p>`;
-                }
-                
-                let chartCanvasId = null;
-                if (data.chart_data && Array.isArray(data.chart_data) && data.chart_data.length > 0) {
-                    chartCanvasId = `stockChart_${new Date().getTime()}`;
-                    responseHtml += `
-                        <div class="d-flex justify-content-end mt-2 mb-1">
-                            <div class="btn-group btn-group-sm askfin-chart-selector" role="group">
-                                <button type="button" class="btn btn-outline-secondary active" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="daily">일</button>
-                                <button type="button" class="btn btn-outline-secondary" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="weekly">주</button>
-                                <button type="button" class="btn btn-outline-secondary" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="monthly">월</button>
-                            </div>
-                        </div>
-                        <div class="chart-canvas-container" style="height: 250px;">
-                            <canvas id="${chartCanvasId}"></canvas>
-                        </div>
-                    `;
-                }
-                
-                if (currentAnalysisBubble) {
-                    currentAnalysisBubble.querySelector('.message').innerHTML = responseHtml;
-                }
-                
-                if (chartCanvasId) {
-                    renderSingleStockChart(chartCanvasId, data.chart_data, 'daily');
+                } else if (Array.isArray(result)) {
+                    responseHtml += `<p>${result.join('<br>')}</p>`;
                 }
 
+                currentAnalysisBubble.querySelector('.message').innerHTML = responseHtml;
                 chatWindow.scrollTop = chatWindow.scrollHeight;
             })
             .catch(error => {
-                if (currentAnalysisBubble) {
-                    currentAnalysisBubble.querySelector('.message').innerHTML = '<p class="text-danger">분석 중 심각한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</p>';
-                } else {
-                    addMessageToChat('ai', '<p class="text-danger">분석 중 심각한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</p>');
-                }
+                currentAnalysisBubble.querySelector('.message').innerHTML = '<p class="text-danger">분석 중 오류가 발생했습니다.</p>';
                 console.error('Fetch error:', error);
             });
         }
@@ -658,7 +646,7 @@
             const index = data.index;
             const tableData = data.data;
 
-            let html = '<div class="table-responsive"><table class="table table-bordered table-hover financial-table">';
+            let html = '<div class="table-responsive"><table class="table table-bordered table-hover modal-financial-table">';
             html += '<thead><tr><th>항목명</th>';
             columns.forEach(col => {
                 html += `<th>${col}</th>`;
@@ -719,8 +707,15 @@
             if (target.matches('.page-btn') && !target.classList.contains('active')) {
                 event.preventDefault();
                 const page = parseInt(target.dataset.page, 10);
-                
                 fetchAnalysis(currentQuery, page);
+            }
+
+            if (target.matches('.theme-rank-link')) {
+                event.preventDefault();
+                const themeName = target.textContent.trim();
+                const newQuery = `${themeName} 관련주 알려줘`;
+                queryInput.value = newQuery;
+                submitBtn.click();
             }
 
             if (target.matches('.stock-name')) {

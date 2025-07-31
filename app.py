@@ -14,44 +14,26 @@ from urllib.parse import urljoin
 from readability import Document
 import pickle
 import re
-
+import sys
 from run import EnhancedStockPredictor
 
 from transformers import AutoTokenizer, pipeline
 from blueprints.analysis import analysis_bp
 from blueprints.tables import tables_bp
-from blueprints.join import join_bp
 from blueprints.data import data_bp
 from blueprints.auth import auth_bp
 from blueprints import askfin
-from blueprints.askfin import askfin_bp, initialize_global_data, GLOBAL_TICKER_NAME_MAP #
+from blueprints.askfin import askfin_bp, initialize_global_data, GLOBAL_TICKER_NAME_MAP
 from blueprints.search import search_bp
 from dotenv import load_dotenv
 
-from db.extensions import db
-from werkzeug.security import generate_password_hash
+# from db.extensions import db # 이 줄은 제거하거나 주석 처리해야 합니다.
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-class User(db.Model):
-    __tablename__  = 'users'
-    __table_args__ = {'extend_existing': True}
-    id         = db.Column(db.Integer, primary_key=True)
-    first_name = db.Column(db.String(30), nullable=False)
-    last_name  = db.Column(db.String(30), nullable=False)
-    username   = db.Column(db.String(30), unique=True, nullable=False)
-    email      = db.Column(db.String(120), unique=True, nullable=False)
-    password   = db.Column(db.String(200), nullable=False)
-    notes      = db.Column(db.Text)
-
-    def set_password(self, raw_pw):
-        self.password = generate_password_hash(raw_pw)
-
-
-
-# ── 금융 키워드 세트 (data‑files/finance.csv) ─────────────────────────
+# ── 금융 키워드 세트 (data-files/finance.csv) ─────────────────────────
 finance_df = pd.read_csv(
     os.path.join(os.path.dirname(__file__), "data_files", "finance.csv"),
     encoding="utf-8-sig"
@@ -66,20 +48,16 @@ FINANCE_KEYWORDS = set(
 )
 
 # ── Sentiment model & pipelines 로딩 ─────────────────────────
-SAVED_MODEL_DIR = "data_files/saved_model"
+SAVED_MODEL_DIR = os.path.join(os.path.dirname(__file__), "data_files", "saved_model")
 tokenizer = AutoTokenizer.from_pretrained(
-    SAVED_MODEL_DIR, 
-    use_fast=True, 
-    trust_remote_code=True,
-    local_files_only=False
+    SAVED_MODEL_DIR, use_fast=True, trust_remote_code=True
 )
 sentiment_pipeline = pipeline(
     'sentiment-analysis',
     model=SAVED_MODEL_DIR,
     tokenizer=SAVED_MODEL_DIR,
     return_all_scores=False,
-    device=-1,
-    local_files_only=False
+    device=-1
 )
 
 # 불용 문자/토큰 제거용 (필요시 더 추가)
@@ -118,7 +96,7 @@ def extract_companies(text: str) -> list[str]:
     filtered = []
     for w in uniq:
         # 1) 기본 필터
-        if w in STOPWORDS: 
+        if w in STOPWORDS:
             continue
         if w not in COMPANY_SET:
             continue
@@ -134,8 +112,8 @@ def fetch_body(url: str) -> str:
         resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
         resp.raise_for_status()
         html = resp.text
-        doc = Document(html) #
-        content_html = doc.summary() #
+        doc = Document(html)
+        content_html = doc.summary()
         soup = BeautifulSoup(content_html, "html.parser")
         for tag in soup(["script", "style"]):
             tag.decompose()
@@ -223,58 +201,52 @@ def calculate_change_info(df, name):
     return {'name': name, 'value': f"{value:,.2f}", 'change': f"{change:,.2f}", 'change_pct': f"{change_pct:+.2f}%", 'raw_change': change}
 
 def get_fdr_or_yf_data(ticker, start, end, interval='1d'):
-    # ticker가 '.KS' 또는 '.KQ'로 끝나는 한국 주식 코드일 경우, yfinance 티커 맵에서 제거하고 직접 사용
-    # 왜냐하면 'KS11'이나 'KQ11' 같은 지수 티커와 '005930.KS' 같은 개별 주식 티커를 구분해야 하기 때문
     yf_ticker_map = {'USD/KRW': 'KRW=X', 'KS11': '^KS11', 'KQ11': '^KQ11', 'CL=F': 'CL=F'}
-    
-    # 한국 개별 주식은 yf_ticker_map에 없으므로 직접 ticker 사용
+    actual_yf_ticker = yf_ticker_map.get(ticker, ticker)
     if ticker.endswith(('.KS', '.KQ')):
         actual_yf_ticker = ticker
-    else:
-        actual_yf_ticker = yf_ticker_map.get(ticker, ticker) # 매핑된 이름 사용
 
-    if interval != '1d':
-        try:
-            print(f"Attempting to fetch '{actual_yf_ticker}' with yfinance (interval: {interval})...")
-            yf_df = yf.download(actual_yf_ticker, start=start, end=end, interval=interval, auto_adjust=True, show_errors=True) # show_errors=True 추가
-            if not yf_df.empty:
-                yf_df = yf_df.reset_index()
-                if 'index' in yf_df.columns:
-                    yf_df.rename(columns={'index': 'Date'}, inplace=True)
-                elif 'Datetime' in yf_df.columns:
-                    yf_df.rename(columns={'Datetime': 'Date'}, inplace=True)
-                print("yfinance fetch successful.")
-                return yf_df[['Date', 'Close']].copy()
-            raise ValueError("yfinance returned empty dataframe or ticker not in map")
-        except Exception as yf_e:
-            print(f"yfinance (interval) failed for '{actual_yf_ticker}': {yf_e}. Falling back to fdr.")
-
+    # Method 1: yfinance with specified interval (generally most reliable)
     try:
-        print(f"Attempting to fetch '{ticker}' with fdr...")
-        df = fdr.DataReader(ticker, start, end)
-        if df.empty: raise ValueError("FDR returned empty dataframe")
-        print("FDR fetch successful.")
-        df = df.reset_index()
-        if 'Date' not in df.columns:
-            if 'index' in df.columns:
-                df.rename(columns={'index': 'Date'}, inplace=True)
-        return df[['Date', 'Close']].copy()
+        print(f"Method 1: Attempting yfinance fetch for '{actual_yf_ticker}' with interval '{interval}'...")
+        df = yf.download(actual_yf_ticker, start=start, end=end, interval=interval, auto_adjust=True, progress=False)
+        if not df.empty:
+            print("yfinance fetch successful.")
+            df = df.reset_index()
+            date_col = next((col for col in ['Date', 'Datetime', 'index'] if col in df.columns), None)
+            if date_col:
+                df.rename(columns={date_col: 'Date'}, inplace=True)
+            return df[['Date', 'Close']].copy()
     except Exception as e:
-        print(f"FDR failed for '{ticker}': {e}. Falling back to yfinance (daily).")
-        try:
-            # yfinance 일별 데이터 폴백
-            yf_df = yf.download(actual_yf_ticker, start=start, end=end, interval='1d', auto_adjust=True, show_errors=True) # show_errors=True 추가
-            if yf_df.empty: return pd.DataFrame()
-            print("yfinance (daily) fetch successful.")
-            yf_df = yf_df.reset_index()
-            if 'index' in yf_df.columns:
-                yf_df.rename(columns={'index': 'Date'}, inplace=True)
-            elif 'Datetime' in yf_df.columns:
-                yf_df.rename(columns={'Datetime': 'Date'}, inplace=True)
-            return yf_df[['Date', 'Close']].copy()
-        except Exception as yf_e:
-            print(f"yfinance (daily) also failed for '{actual_yf_ticker}': {yf_e}")
-            return pd.DataFrame()
+        print(f"Method 1 failed: {e}")
+
+    # Method 2: fdr (daily) fetch as a primary source for daily requests
+    try:
+        print(f"Method 2: Attempting fdr (daily) fetch for '{ticker}'...")
+        df = fdr.DataReader(ticker, start, end)
+        if not df.empty:
+            # If a non-daily interval was requested, resample the daily data
+            if interval != '1d':
+                print(f"Resampling daily FDR data to interval '{interval}'...")
+                df.index.name = 'Date'
+                rule = {'1wk': 'W', '1mo': 'M'}.get(interval)
+                if rule:
+                    resampled_df = df['Close'].resample(rule).last().reset_index()
+                    resampled_df.dropna(inplace=True)
+                    if not resampled_df.empty:
+                        print(f"FDR+resample to '{rule}' successful.")
+                        return resampled_df[['Date', 'Close']].copy()
+            else: # For daily requests
+                print("FDR (daily) fetch successful.")
+                df = df.reset_index()
+                if 'index' in df.columns:
+                    df.rename(columns={'index': 'Date'}, inplace=True)
+                return df[['Date', 'Close']].copy()
+    except Exception as e:
+        print(f"Method 2 failed: {e}")
+        
+    print(f"All methods failed for ticker '{ticker}' with interval '{interval}'. Returning empty DataFrame.")
+    return pd.DataFrame()
 
 @app.route('/news/<string:code>')
 def get_news(code):
@@ -283,11 +255,10 @@ def get_news(code):
     code는 '005930.KS'와 같은 yfinance 형식일 수 있습니다.
     """
     formatted_news = []
-    # yfinance 코드에서 6자리 순수 종목 코드 추출 (네이버 API용)
     stock_code_6_digit = code.split('.')[0]
     print(f"DEBUG: '{code}' (6자리: {stock_code_6_digit}) 종목 코드에 대해 네이버 모바일 API에서 뉴스 가져오기 시도.")
     try:
-        url = f"https://m.stock.naver.com/api/news/stock/{stock_code_6_digit}?pageSize=10&page=1" # 6자리 코드 사용
+        url = f"https://m.stock.naver.com/api/news/stock/{stock_code_6_digit}?pageSize=10&page=1"
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=5)
         response.raise_for_status()
@@ -311,17 +282,15 @@ def get_news(code):
 
         if not formatted_news:
             print(f"DEBUG: '{code}'에 대한 뉴스를 API에서 가져왔으나 항목이 0개입니다.")
-            return jsonify({"error": "관련 뉴스가 없습니다. (API 결과 없음)"}), 200 # 500 대신 200으로 변경
+            return jsonify({"error": "관련 뉴스가 없습니다. (API 결과 없음)"}), 200
         
-        # 뉴스 감성 분석 및 기업명 추출 (뉴스 컨텐츠 크롤링이 필요하므로 시간이 걸릴 수 있음)
         processed_news = []
-        for news_item in formatted_news[:5]: # 너무 많은 뉴스 본문 분석은 비효율적이므로 상위 5개만
+        for news_item in formatted_news[:5]:
             body = fetch_body(news_item["url"])
             sentiment = "없음"
             companies = []
 
-            # 본문이 비어있지 않고 길이가 충분할 때만 감성 분석 및 기업명 추출 시도
-            if body and len(body.strip()) > 50: # 최소 길이 설정
+            if body and len(body.strip()) > 50:
                 title_clean = clean_for_sentiment(news_item["title"])
                 target_text = title_clean if title_clean.strip() else clean_for_sentiment(body)[:256]
 
@@ -331,13 +300,13 @@ def get_news(code):
                         sentiment = sentiment_result if sentiment_result else "없음"
                     except Exception as sentiment_e:
                         print(f"DEBUG: 감성 분석 오류: {sentiment_e}")
-                        sentiment = "오류" # 감성 분석 실패 시
+                        sentiment = "오류"
 
                 try:
                     companies = extract_companies(body)
                 except Exception as company_e:
                     print(f"DEBUG: 기업명 추출 오류: {company_e}")
-                    companies = [] # 기업명 추출 실패 시
+                    companies = []
             
             processed_news.append({
                 'title': news_item['title'],
@@ -381,7 +350,7 @@ def _get_news_from_naver_scraping():
         press_items = soup.select('.main_news .newsList .articleSummary .press')
         date_items = soup.select('.main_news .newsList .articleSummary .wdate')
 
-        for i in range(min(len(news_items), 10)):
+        for i in range(min(len(news_items), 20)):
             title = news_items[i].get_text(strip=True)
             link = news_items[i]['href']
             press = press_items[i].get_text(strip=True) if i < len(press_items) else 'N/A'
@@ -403,12 +372,7 @@ def _get_news_from_naver_scraping():
         news_list.append({'title': '일반 시장 뉴스를 불러오는 데 실패했습니다 (크롤링 오류).', 'press': 'N/A', 'date': 'N/A', 'url': '#'})
     return news_list
 
-# ECOS 주요 통계 지표 현황 데이터를 가져오는 함수
 def get_key_statistic_current_data():
-    """
-    한국은행 ECOS '주요 통계 지표 현황' 데이터를 가져옵니다.
-    (KeyStatisticList API를 사용하며, CLASS_NAME, KEYSTAT_NAME, DATA_VALUE 등을 포함)
-    """
     ecos_api_key = os.getenv("ECOS_API_KEY")
     if not ecos_api_key:
         print("ECOS API 키가 설정되지 않아 주요 통계 현황 데이터를 가져올 수 없습니다.")
@@ -458,14 +422,9 @@ def get_key_statistic_current_data():
 
 
 def get_general_market_news():
-    """
-    한국 시장 주요 뉴스를 가져와
-    본문(fetch) → 금융 키워드 필터 → 감성분석(제목만) & 기업명추출 후 반환합니다.
-    """
     news_api_key = os.getenv("NEWS_API_KEY")
     raw_list = []
 
-    # 1) NewsAPI로 한국 시장 뉴스 시도
     if news_api_key:
         try:
             query = (
@@ -476,7 +435,7 @@ def get_general_market_news():
             api_url = (
                 f"https://newsapi.org/v2/everything?"
                 f"q={query}&language=ko&sortBy=publishedAt"
-                f"&apiKey={news_api_key}&pageSize=10"
+                f"&apiKey={news_api_key}&pageSize=50"
             )
             resp = requests.get(api_url, timeout=7)
             resp.raise_for_status()
@@ -497,30 +456,26 @@ def get_general_market_news():
             traceback.print_exc()
             raw_list = _get_news_from_naver_scraping()
     else:
-        # API 키 없으면 네이버 스크래핑으로
         raw_list = _get_news_from_naver_scraping()
 
-    # 2) 본문(fetch) → 금융 키워드 필터 → 감성분석(제목만) & 기업명추출
     processed = []
+    news_count_limit = 10
     for item in raw_list:
+        if len(processed) >= news_count_limit:
+            break
         body = fetch_body(item["url"])
 
-        # ← 이 부분 바로 아래에 금융 키워드 필터 삽입
         combined = (item["title"] + " " + item["press"] + " " + body).lower()
         if not any(kw in combined for kw in FINANCE_KEYWORDS):
             continue
-        # → 여기까지 필터링 구간
 
-        # —— 감성분석(제목만) & 기업명추출 —— 
         title_clean = clean_for_sentiment(item["title"])
-        # 제목이 너무 짧거나 비어있을 경우 대비: 본문 일부로 백업
         if not title_clean.strip():
             backup_text = clean_for_sentiment(body)[:256]
             target_text = backup_text if backup_text else "내용없음"
         else:
             target_text = title_clean
 
-        # sentiment_pipeline 로딩 확인 추가
         sentiment = "없음"
         if 'sentiment_pipeline' in globals() and sentiment_pipeline is not None:
             try:
@@ -546,11 +501,10 @@ def get_general_market_news():
     return processed
 
 def get_international_market_news():
-    """해외 시장 뉴스를 가져옵니다 (NewsAPI.org - 미국 비즈니스 헤드라인)."""
     news_api_key = os.getenv("NEWS_API_KEY")
     if not news_api_key:
         print("DEBUG: NEWS_API_KEY 없음. 해외 뉴스 가져오기 건너뜜니다.")
-        return [] # API 키 없으면 해외 뉴스는 가져오지 않음
+        return []
     try:
         api_url = f"https://newsapi.org/v2/top-headlines?country=us&category=business&apiKey={news_api_key}&pageSize=10"
         print("DEBUG: NewsAPI.org로 해외 시장 뉴스 (미국 비즈니스) 검색 시도...")
@@ -570,7 +524,6 @@ def get_international_market_news():
         return []
 
 def run_and_cache_quant_report():
-    """서버 시작 시 퀀트 분석을 실행하고 결과를 반환하는 함수"""
     print("🚀 최초 퀀트 리포트 생성 및 캐싱 시작...")
     try:
         predictor = EnhancedStockPredictor(start_date='2015-01-01')
@@ -579,25 +532,20 @@ def run_and_cache_quant_report():
         patterns = predictor.analyze_patterns()
         predictor.detect_anomalies()
         
-        # calculate_economic_risks_detailed()가 내부적으로 risk_history를 계산함
-        current_risks = predictor.calculate_economic_risks_detailed() 
+        current_risks = predictor.calculate_economic_risks_detailed()
         predictions = predictor.predict_weekly_enhanced()
         
-        # --- 수정된 부분 시작 ---
-        # DataFrame을 JSON 친화적인 형태로 변환
         if 'monthly' in patterns and isinstance(patterns.get('monthly'), pd.DataFrame):
             patterns['monthly'] = patterns['monthly'].reset_index().to_dict('records')
         if 'daily' in patterns and isinstance(patterns.get('daily'), pd.DataFrame):
             patterns['daily'] = patterns['daily'].reset_index().to_dict('records')
         
-        # risk_history도 JSON으로 변환
         risk_history_data = None
         if hasattr(predictor, 'risk_history') and not predictor.risk_history.empty:
             df = predictor.risk_history.reset_index()
             df['index'] = df['index'].dt.strftime('%Y-%m-%d')
             risk_history_data = df.to_dict('records')
 
-        # 주요 모니터링 지표 생성 로직 추가
         monitoring_indicators = []
         if current_risks['inflation']['risk'] > 40:
             monitoring_indicators.extend(["원자재 가격", "달러 인덱스", "장기 금리"])
@@ -607,9 +555,7 @@ def run_and_cache_quant_report():
             monitoring_indicators.extend(["환율", "공급망 지표", "임금 상승률"])
         if not monitoring_indicators:
             monitoring_indicators.extend(["전반적 시장 동향", "기술적 지표", "거래량"])
-        # 중복 제거 및 정렬
         monitoring_indicators = sorted(list(set(monitoring_indicators)))
-        # --- 수정된 부분 끝 ---
 
         report_data = {
             "current_risks": current_risks,
@@ -619,7 +565,7 @@ def run_and_cache_quant_report():
             "anomalies": predictor.anomalies,
             "overall_risk": current_risks.get('overall', 0),
             "risk_history": risk_history_data,
-            "monitoring_indicators": monitoring_indicators # <-- 모니터링 지표 추가
+            "monitoring_indicators": monitoring_indicators
         }
         print(" 최초 퀀트 리포트 캐싱 완료.")
         return report_data
@@ -637,21 +583,41 @@ def get_latest_data():
         data = {}
         for ticker, name in [('KS11', 'kospi'), ('KQ11', 'kosdaq'), ('USD/KRW', 'usdkrw')]:
             df = get_fdr_or_yf_data(ticker, start_date, end_date)
+            
+            if isinstance(df.columns, pd.MultiIndex):
+                print(f"DEBUG: Flattening MultiIndex columns for {name} in latest-data")
+                df.columns = df.columns.get_level_values(0)
+                df = df.loc[:,~df.columns.duplicated()]
+
             if ticker == 'USD/KRW' and 'Close' not in df.columns and 'USD/KRW' in df.columns:
                 df.rename(columns={'USD/KRW': 'Close'}, inplace=True)
-            df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
-            df.set_index('Date', inplace=True)
-            data[name] = calculate_change_info(df.copy(), name.upper())
+            
+            if 'Close' in df.columns and 'Date' in df.columns:
+                df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
+                df.set_index('Date', inplace=True)
+                if not df.empty and len(df) >= 2:
+                    data[name] = calculate_change_info(df.copy(), name.upper())
+                else:
+                    data[name] = {'name': name.upper(), 'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
+            else:
+                print(f"ERROR: 'Close' or 'Date' column not found for {name} in latest-data.")
+                data[name] = {'name': name.upper(), 'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
 
         wti_df = get_wti_data(10)
         if not wti_df.empty: wti_df.set_index('Date', inplace=True)
-        data['wti'] = calculate_change_info(wti_df, 'WTI')
+        if not wti_df.empty and len(wti_df) >= 2:
+            data['wti'] = calculate_change_info(wti_df, 'WTI')
+        else:
+            data['wti'] = {'name': 'WTI', 'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
+            print(f"DEBUG: WTI 데이터 부족 또는 유효하지 않음. 변화량 계산 건너뜀.")
 
         return jsonify(data)
     except Exception as e:
         print(f"Error in /api/latest-data: {e}")
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return jsonify({"error": str(e)}), 500
-
+    
 @app.route('/')
 def index_main():
     return render_template('index_main.html')
@@ -682,7 +648,7 @@ def index():
             filtered_key_stats = [item for item in current_key_stats_full if item.get('DATA_VALUE') not in ['N/A', '', None]]
             important_key_stats = filtered_key_stats[:20]
 
-            korean_news = get_general_market_news() # 한국 뉴스 담당 함수
+            korean_news = get_general_market_news()
             international_news = get_international_market_news()
 
             new_cache.update({
@@ -723,17 +689,34 @@ def index():
     for ticker, name in [('KS11', 'kospi'), ('KQ11', 'kosdaq'), ('USD/KRW', 'usdkrw')]:
         try:
             df = get_fdr_or_yf_data(ticker, start_date, end_date)
-            if not df.empty and 'Date' in df.columns:
+            if df is not None and not df.empty and 'Date' in df.columns:
+                
+                if isinstance(df.columns, pd.MultiIndex):
+                    print(f"DEBUG: Flattening MultiIndex columns for {name}")
+                    df.columns = df.columns.get_level_values(0)
+                    df = df.loc[:,~df.columns.duplicated()]
+                
+                if 'Close' not in df.columns:
+                    print(f"ERROR: 'Close' column not found for {name} after processing. Columns are: {df.columns.tolist()}")
+                    context[f'{name}_data'], context[f'{name}_info'] = [], {'value': 'N/A'}
+                    continue
+
                 df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
                 df.set_index('Date', inplace=True)
-                context[f'{name}_info'] = calculate_change_info(df.copy(), name.upper())
                 df_for_chart = df.reset_index().copy()
                 df_for_chart['Date'] = pd.to_datetime(df_for_chart['Date']).dt.strftime('%Y-%m-%d')
                 context[f'{name}_data'] = df_for_chart.tail(30).to_dict('records')
+                if len(df) >= 2:
+                    context[f'{name}_info'] = calculate_change_info(df.copy(), name.upper())
+                else:
+                    context[f'{name}_info'] = {'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
+                    print(f"DEBUG: {name.upper()} 차트/정보 데이터 부족. 정보 계산 건너뜀.")
             else:
                 context[f'{name}_data'], context[f'{name}_info'] = [], {'value': 'N/A'}
+                print(f"DEBUG: {name.upper()} 차트/정보 데이터 로드 실패 또는 비어 있음.")
         except Exception as e:
             print(f"Error processing {name} data: {e}")
+            traceback.print_exc(file=sys.stderr)
             context[f'{name}_data'], context[f'{name}_info'] = [], {'value': 'N/A'}
 
 
@@ -742,14 +725,20 @@ def index():
         if not wti_df.empty and 'Date' in wti_df.columns:
             wti_df['Close'] = pd.to_numeric(wti_df['Close'], errors='coerce')
             wti_df.set_index('Date', inplace=True)
-            context['wti_info'] = calculate_change_info(wti_df.copy(), 'WTI')
             wti_df_for_chart = wti_df.reset_index().copy()
             wti_df_for_chart['Date'] = pd.to_datetime(wti_df_for_chart['Date']).dt.strftime('%Y-%m-%d')
             context['wti_data'] = wti_df_for_chart.tail(30).to_dict('records')
+            if len(wti_df) >= 2:
+                context['wti_info'] = calculate_change_info(wti_df.copy(), 'WTI')
+            else:
+                context['wti_info'] = {'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
+                print(f"DEBUG: WTI 차트/정보 데이터 부족. 정보 계산 건너뜀.")
         else:
             context['wti_data'], context['wti_info'] = [], {'value': 'N/A'}
+            print(f"DEBUG: WTI 차트/정보 데이터 로드 실패 또는 비어 있음.")
     except Exception as e:
         print(f"Error processing WTI data: {e}")
+        traceback.print_exc(file=sys.stderr)
         context['wti_data'], context['wti_info'] = [], {'value': 'N/A'}
 
     kospi_all_data = cache.get('kospi_all_data', [])
@@ -769,44 +758,65 @@ def index():
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(analysis_bp)
 app.register_blueprint(tables_bp)
-app.register_blueprint(join_bp)
 app.register_blueprint(data_bp)
 app.register_blueprint(askfin_bp)
 app.register_blueprint(search_bp)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://humanda5:humanda5@localhost/final_join'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-
-db.init_app(app)
 
 with app.app_context():
-    db.create_all()
-    initialize_global_data()
-    app.config['QUANT_REPORT_CACHE'] = run_and_cache_quant_report()
-    print("--- 모든 초기 데이터 로딩 완료 ---")
+    try:
+        initialize_global_data()
+        app.config['QUANT_REPORT_CACHE'] = run_and_cache_quant_report()
+        print("--- 모든 초기 데이터 로딩 완료 ---", flush=True)
+    except Exception as e:
+        print(f"CRITICAL ERROR during app initialization: {e}", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
 
 @app.context_processor
 def inject_current_year():
     return {'current_year': datetime.utcnow().year}
 
+@app.context_processor
+def inject_firebase_config():
+    """
+    모든 템플릿에 Firebase 구성 정보를 주입합니다.
+    """
+    return {
+        'firebase_config': {
+            'apiKey': os.getenv('FIREBASE_API_KEY'),
+            'authDomain': os.getenv('FIREBASE_AUTH_DOMAIN'),
+            'projectId': os.getenv('FIREBASE_PROJECT_ID'),
+            'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET'),
+            'messagingSenderId': os.getenv('FIREBASE_MESSAGING_SENDER_ID'),
+            'appId': os.getenv('FIREBASE_APP_ID'),
+            'measurementId': os.getenv('FIREBASE_MEASUREMENT_ID')
+        }
+    }
+
+
 @app.route('/api/chart_data/<string:ticker>/<string:interval>')
 def get_chart_data(ticker, interval):
     try:
         end_date = datetime.now()
-        yf_interval = '1d'
+        # Map front-end interval names to yfinance interval codes
+        interval_map = {'daily': '1d', 'weekly': '1wk', 'monthly': '1mo'}
+        yf_interval = interval_map.get(interval)
+
+        if not yf_interval:
+            return jsonify({"error": "Invalid interval"}), 400
+
+        # Determine start date based on interval
         if interval == 'daily':
             start_date = end_date - timedelta(days=90)
         elif interval == 'weekly':
-            yf_interval = '1wk'
             start_date = end_date - timedelta(days=365 * 3)
-        elif interval == 'monthly':
-            yf_interval = '1mo'
+        else: # monthly
             start_date = end_date - timedelta(days=365 * 10)
-        else:
-            return jsonify({"error": "Invalid interval"}), 400
+        
+        # Call the new robust data fetching function
+        raw_df = get_fdr_or_yf_data(ticker, start=start_date, end=end_date, interval=yf_interval)
 
-        raw_df = get_fdr_or_yf_data(ticker, start=start_date, end=end_date, interval=yf_interval) # start, end 인자 이름 명시
         if raw_df.empty:
             return jsonify({"error": "No data found for ticker"}), 404
 
@@ -816,10 +826,16 @@ def get_chart_data(ticker, interval):
         raw_df = raw_df.loc[:, ~raw_df.columns.duplicated()]
 
         date_col_name = next((col for col in ['Date', 'Datetime', 'index'] if col in raw_df.columns), None)
-        close_col_name = next((col for col in ['Close', 'Adj Close', ticker] if col in raw_df.columns), None)
+
+        possible_close_cols = ['Close', 'Adj Close']
+        if ticker == 'USD/KRW':
+            possible_close_cols.insert(0, 'USD/KRW')
+            possible_close_cols.insert(0, 'KRW=X')
+
+        close_col_name = next((col for col in possible_close_cols if col in raw_df.columns), None)
 
         if not date_col_name or not close_col_name:
-            print(f"DEBUG: Could not find Date or Close column in {raw_df.columns}")
+            print(f"DEBUG: Could not find Date ({date_col_name}) or Close ({close_col_name}) column in {raw_df.columns} for ticker {ticker}")
             return jsonify({"error": "Could not identify Date or Close column"}), 500
 
         clean_df = pd.DataFrame({
@@ -839,7 +855,8 @@ def get_chart_data(ticker, interval):
         import traceback
         print(f"Error in get_chart_data for {ticker}/{interval}: {e}")
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)})
+
 
 @app.route('/stock-model')
 def stock_model():
@@ -848,4 +865,3 @@ def stock_model():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
-

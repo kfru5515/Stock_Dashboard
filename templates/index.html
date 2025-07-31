@@ -74,11 +74,12 @@
 
     .widget-container {
         position: fixed;
-        bottom: 100px;
+        bottom: 30px; /* FAB 버튼과 겹치지 않도록 조정 */
         right: 30px;
-        width: 400px;
-        height: 600px;
-        max-height: 80vh;
+        width: 360px; /* 모바일에서 보기 적합한 너비 */
+        max-width: calc(100vw - 60px); /* 뷰포트 너비에서 여백을 뺀 최대 너비 */
+        height: 500px; /* 모바일에서 보기 적합한 높이 */
+        max-height: calc(100vh - 60px); /* 뷰포트 높이에서 여백을 뺀 최대 높이 */
         background-color: var(--card-bg);
         border: 1px solid var(--border-color);
         border-radius: 15px;
@@ -98,6 +99,28 @@
         opacity: 1;
         visibility: visible;
     }
+
+    /* 모바일 화면에서 위젯 위치 및 크기 조정 */
+    @media (max-width: 575.98px) { /* Bootstrap 'sm' breakpoint 미만 */
+        .widget-container {
+            bottom: 15px;
+            right: 15px;
+            width: calc(100vw - 30px); /* 화면 너비에 거의 꽉 차게 */
+            height: calc(100vh - 100px); /* FAB 공간 고려하여 높이 조정 */
+            max-width: none;
+            max-height: none;
+        }
+        .fab {
+            bottom: 15px;
+            right: 15px;
+            padding: 10px 20px; /* FAB 버튼 크기 줄임 */
+            font-size: 1.1rem;
+        }
+        .fab-text {
+            font-size: 1.1rem;
+        }
+    }
+
 
     .widget-header {
         background-color: var(--card-bg); 
@@ -141,7 +164,7 @@
     /* askfin.html의 메시지 스타일 재사용 */
     .widget-chat-window .message-row { margin-bottom: 15px; display: flex; align-items: flex-start; }
     .widget-chat-window .user-message-row { justify-content: flex-end; }
-    .widget-chat-window .message { padding: 10px 15px; border-radius: 18px; max-width: 80%; line-height: 1.5; font-size: 0.95rem; }
+    .widget-chat-window .message { padding: 10px 15px; border-radius: 18px; max-width: 90%; line-height: 1.5; font-size: 0.95rem; }
     .widget-chat-window .user-message { background-color: var(--primary-color); color: var(--dark-bg); }
     .widget-chat-window .ai-message { background-color: var(--light-bg); color: var(--text-color); }
     .widget-chat-window .ai-message-row::before, .widget-chat-window .user-message-row::after { content: ''; display: none; } /* 위젯에서는 아바타 숨김 */
@@ -170,6 +193,41 @@
         align-items: center;
         justify-content: center;
     }
+
+    .widget-chat-window .page-btn {
+        padding: 4px 10px;
+        font-size: 0.8rem;
+    }
+    .widget-chat-window .ai-message .table-responsive {
+        overflow-x: auto;
+    }
+    .widget-chat-window .ai-message .financial-table {
+        font-size: 0.85rem;
+        margin-top: 10px;
+        width: 100%;
+        min-width: 450px;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .widget-chat-window .ai-message .financial-table th,
+    .widget-chat-window .ai-message .financial-table td {
+        padding: 6px 10px;
+        text-align: right;
+        border-top: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
+    .widget-chat-window .ai-message .financial-table th {
+        background-color: var(--primary-color);
+        color: var(--dark-bg);
+        font-weight: 600;
+    }
+    .widget-chat-window .ai-message .financial-table th:first-child,
+    .widget-chat-window .ai-message .financial-table td:first-child {
+        text-align: left;
+        background-color: var(--light-bg);
+        color: var(--heading-color);
+    }
+
     .card {
         border: none;
         border-radius: 12px;
@@ -262,6 +320,7 @@
         vertical-align: middle;
         padding: 12px 15px;
         border-top: 1px solid var(--border-color);
+        word-break: break-word; /* 긴 텍스트 줄바꿈 */
     }
 
     .rank-table th {
@@ -309,10 +368,8 @@
         list-style: none;
         padding: 0;
         margin: 0;
-        overflow-y: auto; /* 내용이 넘칠 때 스크롤바 생성 */
         border-radius: 8px;
         border: 1px solid var(--border-color);
-        flex-grow: 1; /* flex 컨테이너에서 남은 공간을 채우도록 함 */
     }
     .news-list-item {
         border-bottom: 1px solid var(--border-color);
@@ -336,10 +393,76 @@
         color: var(--muted-text-color);
         font-size: 0.8rem;
     }
+
+    /* News card and list specific styles */
+    .news-card-body {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    .news-container {
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+        min-height: 0;
+        height: 400px;
+    }
+    .news-list-wrapper {
+        overflow-y: auto;
+    }
+    .korean-news {
+        flex-basis: 0;
+        flex-grow: 1;
+    }
+    .international-news {
+        flex-basis: 0;
+        flex-grow: 1;
+    }
+
+
     .table-responsive {
         max-height: 400px; /* 주요 경제 지표 테이블의 최대 높이 */
         overflow-y: auto; /* 내용이 넘칠 때 스크롤바 생성 */
     }
+    /* Main page financial table */
+    .financial-table th, .financial-table td {
+        word-break: break-word; /* 모든 셀에 줄바꿈 허용 */
+    }
+    .financial-table th:first-child, .financial-table td:first-child {
+        width: 25% !important; /* '구분' 컬럼 너비 조정 */
+        text-align: left; /* 왼쪽 정렬 유지 */
+    }
+    .financial-table th:nth-child(2), .financial-table td:nth-child(2) {
+        width: 40% !important; /* '지표명' 컬럼 너비 조정 */
+    }
+    .financial-table th:nth-child(3), .financial-table td:nth-child(3) {
+        width: 20% !important; /* '값' 컬럼 너비 조정 */
+    }
+    .financial-table th:nth-child(4), .financial-table td:nth-child(4) {
+        width: 15% !important; /* '시점' 컬럼 너비 조정 */
+    }
+    @media (max-width: 575.98px) { /* Extra small devices (portrait phones) */
+        .financial-table th:first-child, .financial-table td:first-child,
+        .financial-table th:nth-child(2), .financial-table td:nth-child(2),
+        .financial-table th:nth-child(3), .financial-table td:nth-child(3),
+        .financial-table th:nth-child(4), .financial-table td:nth-child(4) {
+            width: auto !important; /* 모바일에서 너비 자동 (flex-grow처럼) */
+            font-size: 0.8rem !important;
+        }
+        .financial-table td {
+            text-align: center; 
+            white-space: normal;
+            word-break: break-word;
+        }
+        .financial-table th {
+            white-space: normal;
+            word-break: break-word;
+        }
+        .financial-table td:first-child, .financial-table td:nth-child(2) {
+            text-align: left;
+        }
+    }
+
 
     /* Modal Enhancements (Dark Theme) */
     .modal-content {
@@ -378,16 +501,53 @@
     .nav-tabs .nav-link:hover:not(.active) {
         color: var(--primary-color);
     }
-    .financial-table th, .financial-table td {
-        font-size: 13px;
-        padding: 8px 12px;
-        color: var(--text-color); /* Ensure text is light in modal tables */
-    }
     .financial-table th:first-child, .financial-table td:first-child {
         background-color: var(--light-bg); /* Lighter dark background for first column */
         font-weight: 500;
         color: var(--heading-color); /* White for heading text in first col */
     }
+
+    /* Styles for the financial table inside the modal */
+    .modal-financial-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+    .modal-financial-table th,
+    .modal-financial-table td {
+        white-space: normal !important;
+        word-wrap: break-word;
+        vertical-align: middle;
+        padding: 0.75rem;
+    }
+    .modal-financial-table th:first-child,
+    .modal-financial-table td:first-child {
+        width: 40%;
+        text-align: left;
+    }
+    .modal-financial-table td {
+        text-align: right;
+    }
+    .modal-financial-table th {
+        text-align: center;
+        font-weight: 600;
+    }
+    
+    /* NEW CSS FOR MOBILE MODAL TABLE */
+    @media (max-width: 575.98px) {
+        .modal-body .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .modal-body .modal-financial-table {
+            width: auto; /* Let the table be as wide as its content */
+            min-width: 500px; /* Set a minimum width to prevent squashing */
+        }
+        .modal-body .modal-financial-table th,
+        .modal-body .modal-financial-table td {
+            white-space: nowrap; /* Prevent wrapping inside the scrollable table */
+        }
+    }
+
 
     .container-fluid {
         padding-bottom: 30px;
@@ -548,7 +708,7 @@
                         주요 경제 지표 현황 <span class="text-muted" style="font-size: 0.8em;">({{ formatted_today_date }})</span>
                     </h5>
                     <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                        <table class="table table-bordered table-sm" style="color: var(--text-color);">
+                        <table class="table table-bordered table-sm financial-table" style="color: var(--text-color);">
                             <thead>
                                 <tr>
                                     <th style="background-color: var(--primary-color); color: #fff; width: 15%;">구분</th>
@@ -585,13 +745,13 @@
         </div>
 
         <div class="col-lg-6">
-            <div class="card" style="height: 100%;">
-                <div class="card-body d-flex flex-column">
+            <div class="card">
+                <div class="card-body news-card-body">
                     <h5 class="card-title mb-3">시장 주요 뉴스</h5>
-                    <div class="row flex-grow-1 g-3">
-                        <div class="col-md-6 d-flex flex-column">
-                            <h6 class="text-white mb-2" style="font-size: 0.95rem;">한국 주요 뉴스</h6>
-                            <ul class="news-list flex-grow-1" style="max-height: 350px;">
+                    <div class="news-container">
+                        <div class="korean-news news-list-wrapper">
+                            <h6 class="text-white mb-2 ps-3" style="font-size: 0.95rem;">한국 주요 뉴스</h6>
+                            <ul class="news-list">
                                 {% for news_item in korean_market_news %}
                                 <li class="news-list-item">
                                     <a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer">
@@ -620,19 +780,20 @@
                                     </div>
                                 </li>
                                 {% else %}
-                                <li><p class="text-muted">한국 주요 뉴스를 불러오는 데 실패했습니다.</p></li>
+                                <li><p class="text-muted p-3">한국 주요 뉴스를 불러오는 데 실패했습니다.</p></li>
                                 {% endfor %}
                             </ul>
                         </div>
-                        <div class="col-md-6 d-flex flex-column">
-                            <h6 class="text-white mb-2" style="font-size: 0.95rem;">해외 주요 뉴스</h6>
-                            <ul class="news-list flex-grow-1" style="max-height: 350px;"> {% for news_item in international_market_news %}
+                        <div class="international-news news-list-wrapper mt-3">
+                             <h6 class="text-white mb-2 ps-3" style="font-size: 0.95rem;">해외 주요 뉴스</h6>
+                            <ul class="news-list">
+                                {% for news_item in international_market_news %}
                                 <li class="news-list-item">
                                     <a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer">{{ news_item.title }}</a>
                                     <div class="d-block mt-1"><small>{{ news_item.press }} - {{ news_item.date }}</small></div>
                                 </li>
                                 {% else %}
-                                <li><p class="text-muted">해외 주요 뉴스를 불러올 수 없습니다.</p></li>
+                                <li><p class="text-muted p-3">해외 주요 뉴스를 불러올 수 없습니다.</p></li>
                                 {% endfor %}
                             </ul>
                         </div>
@@ -831,19 +992,34 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         try {
             const stmt = JSON.parse(statementJson);
-            let table = '<div class="table-responsive"><table class="table table-bordered table-hover financial-table">';
+            let table = '<div class="table-responsive"><table class="table table-bordered table-hover modal-financial-table">';
             table += '<thead><tr><th>항목</th>';
             stmt.columns.forEach(col => { table += `<th>${col}</th>`; });
             table += '</tr></thead><tbody>';
             stmt.data.forEach((rowData, rowIndex) => {
                 table += `<tr><td><strong>${stmt.index[rowIndex]}</strong></td>`;
-                rowData.forEach(cellData => { cellData = (typeof cellData === 'number') ? cellData.toLocaleString() : (cellData || ' '); table += `<td>${cellData}</td>`; });
+                rowData.forEach(cellData => {
+                    let formattedValue = '';
+                    if (typeof cellData === 'number') {
+                        if (Math.abs(cellData) >= 1000000000000) {
+                            formattedValue = `${(cellData / 1000000000000).toFixed(2)} 조`;
+                        } else if (Math.abs(cellData) >= 100000000) {
+                            formattedValue = `${(cellData / 100000000).toFixed(2)} 억`;
+                        } else {
+                            formattedValue = cellData.toLocaleString();
+                        }
+                    } else {
+                        formattedValue = cellData || ' ';
+                    }
+                    table += `<td>${formattedValue}</td>`;
+                });
                 table += '</tr>';
             });
             table += '</tbody></table></div>';
             targetElement.innerHTML = table;
         } catch (e) {
             targetElement.innerHTML = '<p class="text-danger">정보를 표시할 수 없습니다.</p>';
+            console.error("Error rendering financial table:", e);
         }
     }
 
@@ -973,60 +1149,101 @@ document.addEventListener('DOMContentLoaded', function() {
         return rowDiv;
     }
 
+    // This function is now a full-featured version copied from askfin.html
     function fetchWidgetAnalysis(query, page = 1) {
         if (!query) return;
 
-        if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
+        if (query !== currentQuery || page === 1) {
             addMessageToWidget('user', query);
             queryInput.value = '';
         }
 
-        if (query !== currentQuery || (page === 1 && !currentCacheKey)) {
+        if (query !== currentQuery || page === 1) {
             currentQuery = query;
             currentCacheKey = null;
             currentAnalysisBubble = addMessageToWidget('ai', '<div class="spinner d-block mx-auto"></div>');
         } else {
-            if (currentAnalysisBubble) {
-                currentAnalysisBubble.querySelector('.message').innerHTML = '<div class="spinner d-block mx-auto"></div>';
-            } else {
-                currentAnalysisBubble = addMessageToWidget('ai', '<div class="spinner d-block mx-auto"></div>');
-            }
+            currentAnalysisBubble.querySelector('.message').innerHTML = '<div class="spinner d-block mx-auto"></div>';
         }
-        
-        let fetchCacheKey = (query === currentQuery) ? currentCacheKey : null;
 
         fetch("/askfin/analyze", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: currentQuery, page: page, cache_key: fetchCacheKey })
+            body: JSON.stringify({ query: currentQuery, page: page, cache_key: currentCacheKey })
         })
-        .then(response => response.ok ? response.json() : Promise.reject('Server error'))
+        .then(response => response.ok ? response.json() : Promise.reject(response))
         .then(data => {
             if (data.cache_key) { currentCacheKey = data.cache_key; }
+
             if (data.error) {
                 currentAnalysisBubble.querySelector('.message').innerHTML = `<p class="text-danger">오류: ${data.error}</p>`;
                 return;
             }
-            
-            let responseHtml = '';
-            if (Array.isArray(data.result) && data.result.length > 0) {
-                responseHtml = data.result.join('<br>'); // 간단하게 줄바꿈으로 표시
-            } else {
-                responseHtml = '<p class="text-muted">분석 결과가 없습니다.</p>';
+
+            const result = data.result;
+            let responseHtml = `<h5 class="mb-2" style="font-size: 1rem;">${data.analysis_subject}</h5>`;
+            if (data.description) { responseHtml += `<p class="text-muted small mb-2">${data.description}</p>`; }
+
+            if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'object') {
+                const valueLabel = result[0].label || '결과값';
+                let table = `<div class="table-responsive"><table class="table table-sm table-hover financial-table">
+                                <thead>
+                                    <tr><th>순위</th><th>종목명</th><th>${valueLabel}</th></tr>
+                                </thead>
+                                <tbody>`;
+                result.forEach((item, index) => {
+                    const rank = ((data.pagination.current_page - 1) * 20) + index + 1;
+                    const displayValue = (item?.value !== null && item?.value !== undefined) ? item.value.toFixed(2) : 'N/A';
+                    let valueColorClass = item.value > 0 ? 'text-danger' : 'text-primary';
+                    table += `<tr>
+                                <td>${rank}</td>
+                                <td><a href="#" class="stock-name" data-code="${item.code}" data-name="${item.name}">${item.name}</a></td>
+                                <td class="text-end ${valueColorClass}">${displayValue}</td>
+                              </tr>`;
+                });
+                table += `</tbody></table></div>`;
+                responseHtml += table;
+                if(data.pagination && data.pagination.total_pages > 1) {
+                     responseHtml += renderWidgetPagination(data.pagination);
+                }
+            } else if (Array.isArray(result)) {
+                responseHtml += `<p>${result.join('<br>')}</p>`;
             }
+
             currentAnalysisBubble.querySelector('.message').innerHTML = responseHtml;
+            chatWindow.scrollTop = chatWindow.scrollHeight;
         })
         .catch(error => {
             currentAnalysisBubble.querySelector('.message').innerHTML = '<p class="text-danger">분석 중 오류가 발생했습니다.</p>';
             console.error('Widget Fetch error:', error);
         });
     }
+    
+    function renderWidgetPagination(pagination) {
+        if (!pagination || pagination.total_pages <= 1) return '';
+        let paginationHtml = '<div id="pagination-container" class="mt-2 text-center">';
+        for (let i = 1; i <= pagination.total_pages; i++) {
+            const activeClass = (i === pagination.current_page) ? 'active' : '';
+            paginationHtml += `<button class="page-btn ${activeClass}" data-page="${i}">${i}</button>`;
+        }
+        paginationHtml += '</div>';
+        return paginationHtml;
+    }
+
 
     submitBtn.addEventListener('click', () => fetchWidgetAnalysis(queryInput.value.trim(), 1));
     queryInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
             submitBtn.click();
+        }
+    });
+
+    widgetContainer.addEventListener('click', function(event) {
+        if (event.target.matches('.page-btn') && !event.target.classList.contains('active')) {
+            event.preventDefault();
+            const page = parseInt(event.target.dataset.page, 10);
+            fetchWidgetAnalysis(currentQuery, page);
         }
     });
 });
