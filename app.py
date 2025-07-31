@@ -66,16 +66,20 @@ FINANCE_KEYWORDS = set(
 )
 
 # ── Sentiment model & pipelines 로딩 ─────────────────────────
-SAVED_MODEL_DIR = os.path.join(os.path.dirname(__file__), "data_files", "saved_model")
+SAVED_MODEL_DIR = "data_files/saved_model"
 tokenizer = AutoTokenizer.from_pretrained(
-    SAVED_MODEL_DIR, use_fast=True, trust_remote_code=True
+    SAVED_MODEL_DIR, 
+    use_fast=True, 
+    trust_remote_code=True,
+    local_files_only=False
 )
 sentiment_pipeline = pipeline(
     'sentiment-analysis',
     model=SAVED_MODEL_DIR,
     tokenizer=SAVED_MODEL_DIR,
     return_all_scores=False,
-    device=-1
+    device=-1,
+    local_files_only=False
 )
 
 # 불용 문자/토큰 제거용 (필요시 더 추가)

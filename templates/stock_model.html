@@ -54,6 +54,7 @@
         <li><strong>상승:</strong> 종가 - 시가 > 0.07</li>
         <li><strong>하락:</b> 종가 - 시가 < -0.07</li>
         <li><strong>횡보:</strong> 나머지 구간</li>
+        <li><strong>Threshold 수치 근거:</strong>0.05~0.08의 구간에서 각 구간의 분포 균형도를 표준편차로 비교하였을때, 0.07의 분표 균형도가 가장 균형있었고, 동시에 예측정확도도 1.00으로 유지되어 0.07을 Threshold로 채택</li>
     </ul>
 
     <h2>3. 특징(feature) 목록</h2>
@@ -69,16 +70,8 @@
     <p>
         <strong>모델:</strong> XGBoost Classifier<br>
         <strong>주요 하이퍼파라미터:</strong> max_depth=4, learning_rate=0.1, n_estimators=100
+        <strong>모델 채택 사유:</strong>총 4개의 모델을 비교 분석하였을때(XGBoost, Random Forest, LogisticRegression, SVM) XGBOOST와 Random Forest의 정확도가 가장 높게 나왔고,<br>
+        이중 Boosting 기반 주조로 더 정밀하게 오차 보정과 과적합 억제조절이 가능하여 더 실전성이 높다고 생각하여 XGBoost를 채택
     </p>
-
-    <h2>5. 저장 결과</h2>
-    <ul>
-        <li><code>models/trend_model.pkl</code> - 학습된 모델</li>
-        <li><code>models/label_encoder.pkl</code> - 라벨 인코더</li>
-        <li><code>models/feature_list.pkl</code> - 피처 목록</li>
-    </ul>
-
-    <hr>
-    <p><small>이 페이지는 train_trend_model.py 파일을 기반으로 작성되었습니다.</small></p>
 </body>
 </html>
