@@ -400,7 +400,7 @@ def execute_comparison_analysis(intent_json):
 
 def execute_theme_ranking(intent_json, page, user_query, cache_key=None):
     """
-    [개선] 상위 50개 테마의 성과를 분석하고 캐시에 저장하여 페이지네이션을 지원하는 함수.
+    [개선] 주요 테마 50개를 분석하고, 그 전체 결과에 대한 페이지네이션을 지원하는 함수.
     """
     try:
         if cache_key and cache_key in ANALYSIS_CACHE and 'full_result' in ANALYSIS_CACHE[cache_key]:
@@ -409,7 +409,7 @@ def execute_theme_ranking(intent_json, page, user_query, cache_key=None):
             description = ANALYSIS_CACHE[cache_key]['description']
             print(f" CACHE HIT: 테마 랭킹 전체 결과 {len(sorted_results)}개를 사용합니다.")
         else:
-            print(f" CACHE MISS: 새로운 전체 테마 분석을 시작합니다.")
+            print(f" CACHE MISS: 새로운 상위/하위 테마 분석을 시작합니다.")
             period_str = intent_json.get("period")
             action_str = intent_json.get("action", "")
             start_date, end_date = parse_period(period_str if period_str else "최근 1개월")
@@ -438,11 +438,10 @@ def execute_theme_ranking(intent_json, page, user_query, cache_key=None):
                     all_themes_results.append({"theme": theme, "average_return": round(average_return, 2)})
 
             if not all_themes_results:
-                return {"error": "전체 테마의 수익률을 분석할 수 없었습니다."}
+                return {"error": "테마 수익률을 분석할 수 없었습니다."}
 
-            # "낮은" 또는 "내린" 키워드가 있으면 오름차순 정렬
             reverse_sort = not any(keyword in action_str for keyword in ["낮은", "내린", "하락"])
-            sorted_results = sorted(all_themes_results, key=lambda x: x['average_return'], reverse=reverse_sort)[:10] # 상위/하위 10개만 선택
+            sorted_results = sorted(all_themes_results, key=lambda x: x['average_return'], reverse=reverse_sort)
             
             analysis_subject = "상위/하위 테마 성과 순위"
             description = f"분석 기간: {analysis_period_info}"
@@ -454,8 +453,14 @@ def execute_theme_ranking(intent_json, page, user_query, cache_key=None):
                 'description': description,
                 'full_result': sorted_results
             }
-        
-        paginated_result = sorted_results # 10개만 보여주므로 페이지네이션 불필요
+
+        # --- [핵심] 페이지네이션 로직 수정 ---
+        items_per_page = 20
+        total_items = len(sorted_results)
+        total_pages = (total_items + items_per_page - 1) // items_per_page
+        start_index = (page - 1) * items_per_page
+        end_index = start_index + items_per_page
+        paginated_result = sorted_results[start_index:end_index] # 10개가 아닌 20개씩 자르기
 
         final_result_list = [{"name": item['theme'], "value": item['average_return'], "label": "평균 수익률(%)"} for item in paginated_result]
 
@@ -464,12 +469,12 @@ def execute_theme_ranking(intent_json, page, user_query, cache_key=None):
             "analysis_subject": analysis_subject,
             "description": description,
             "result": final_result_list,
-            "pagination": { "current_page": 1, "total_pages": 1, "total_items": len(final_result_list) },
+            "pagination": { "current_page": page, "total_pages": total_pages, "total_items": total_items },
             "cache_key": cache_key
         }
     except Exception as e:
         traceback.print_exc()
-        return {"error": f"테마 랭킹 분석 중 오류 발생: {e}"}
+        return {"error": f"테마 랭킹 분석 중 오류 발생: {e}"}    
             
 
 def execute_indicator_lookup(intent_json):
@@ -733,7 +738,7 @@ def get_stock_profile(code):
 
 def get_target_stocks(target_str):
     """
-    [개선] FuzzyWuzzy, Sector(업종) 및 종목명 직접 검색 로직 강화
+    [개선] FuzzyWuzzy와 Sector(업종) 및 종목명 직접 검색 로직 강화
     """
     global GLOBAL_KRX_LISTING
     if GLOBAL_KRX_LISTING is None:
@@ -755,7 +760,7 @@ def get_target_stocks(target_str):
         with open(themes_file_path, 'r', encoding='utf-8') as f:
             themes_from_file = json.load(f)
         best_match = process.extractOne(keyword, themes_from_file.keys(), scorer=fuzz.token_sort_ratio)
-        if best_match and best_match[1] > 85:
+        if best_match and best_match[1] > 85: # 유사도 기준 85점으로 상향
             matched_theme_name = best_match[0]
             target_codes = [s.get('code') for s in themes_from_file[matched_theme_name] if s.get('code')]
             target_stocks = krx[krx['Code'].isin(target_codes)]
@@ -1049,7 +1054,7 @@ def execute_stock_analysis(intent_json, page, user_query, cache_key=None):
     except Exception as e:
         traceback.print_exc()
         return {"error": f"분석 실행 중 오류 발생: {e}"}
-
+    
 def handle_season_condition(period_tuple, season):
     """'여름' 또는 '겨울' 조건에 맞는 날짜 구간 리스트를 반환하는 함수 (최적화)"""
     start_date, end_date = period_tuple

@@ -2,7 +2,7 @@
 flask
 gunicorn
 firebase-admin
-
+Flask-APScheduler # 서버장기간 실행시 캐시 주기적으로 업데이트용 
 # ----- Data Fetching & Analysis -----
 pandas
 numpy

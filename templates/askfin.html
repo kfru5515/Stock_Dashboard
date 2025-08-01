@@ -546,13 +546,16 @@
         function fetchAnalysis(query, page = 1) {
             if (!query) return;
 
+            // --- [핵심 수정] 캐시 초기화 로직 변경 ---
             if (query !== currentQuery) {
+                // 새로운 질문일 때만 메시지 추가 및 캐시 초기화
                 addMessageToChat('user', query);
                 queryInput.value = '';
                 currentQuery = query;
                 currentCacheKey = null;
                 currentAnalysisBubble = addMessageToChat('ai', '<div class="spinner d-block mx-auto"></div>');
             } else {
+                // 페이지 이동일 경우, 기존 메시지 버블에 스피너 표시
                 currentAnalysisBubble.querySelector('.message').innerHTML = '<div class="spinner d-block mx-auto"></div>';
             }
 
@@ -575,13 +578,13 @@
                 if (data.description) { responseHtml += `<p class="text-muted small mb-3">${data.description}</p>`; }
 
                 if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'object') {
-                    // ... (기존 테이블 렌더링 로직은 동일)
                     let table = '';
+                    // --- 테마 랭킹일 경우와 일반 분석일 경우를 분기 ---
                     if (data.query_intent.query_type === "theme_ranking") {
                         table = `<div class="table-responsive"><table class="table table-sm table-hover financial-table">
                                     <thead><tr><th>순위</th><th>테마명</th><th>${result[0].label || '결과값'}</th></tr></thead><tbody>`;
                         result.forEach((item, index) => {
-                            const rank = ((data.pagination.current_page - 1) * 20) + index + 1;
+                            const rank = ((data.pagination.current_page - 1) * 20) + index + 1; // 페이지당 20개 기준
                             const valueColorClass = item.value > 0 ? 'text-danger' : 'text-primary';
                             table += `<tr>
                                         <td>${rank}</td>
@@ -589,7 +592,7 @@
                                         <td class="text-end ${valueColorClass}">${item.value.toFixed(2)}%</td>
                                     </tr>`;
                         });
-                    } else {
+                    } else { // 일반 종목 분석
                         table = `<div class="table-responsive"><table class="table table-sm table-hover financial-table">
                                     <thead><tr><th>순위</th><th>종목명</th><th>과거 가격</th><th>현재 가격</th><th>${result[0].label || '결과값'}</th></tr></thead><tbody>`;
                         result.forEach((item, index) => {
@@ -606,49 +609,12 @@
                     }
                     table += `</tbody></table></div>`;
                     responseHtml += table;
-                    responseHtml += renderPagination(data.pagination);
+                    responseHtml += renderPagination(data.pagination); // 페이지 버튼 생성
                 } else if (Array.isArray(result)) {
                     responseHtml += `<p>${result.join('<br>')}</p>`;
                 }
 
-                // --- [핵심 수정] 차트 데이터가 있으면 차트를 그리도록 로직 추가 ---
-                let chartCanvasId = null;
-                if (data.chart_data && Array.isArray(data.chart_data) && data.chart_data.length > 0) {
-                    chartCanvasId = `stockChart_${new Date().getTime()}`;
-                    responseHtml += `
-                        <div class="d-flex justify-content-end mt-2 mb-1">
-                            <div class="btn-group btn-group-sm askfin-chart-selector" role="group">
-                                <button type="button" class="btn btn-outline-secondary active" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="daily">일</button>
-                                <button type="button" class="btn btn-outline-secondary" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="weekly">주</button>
-                                <button type="button" class="btn btn-outline-secondary" data-ticker="${data.stock_code}" data-chart-id="${chartCanvasId}" data-interval="monthly">월</button>
-                            </div>
-                        </div>
-                        <div class="chart-canvas-container" style="height: 250px;">
-                            <canvas id="${chartCanvasId}"></canvas>
-                        </div>
-                    `;
-                }
-                
                 currentAnalysisBubble.querySelector('.message').innerHTML = responseHtml;
-                
-                // 차트 ID가 생성되었으면 차트를 렌더링
-                if (chartCanvasId) {
-                    // renderSingleStockChart 함수는 이미 존재하므로 그대로 호출
-                    const chartApiData = data.chart_data.map(item => ({ Date: item.date, Close: item.price }));
-                    const parsedData = parseChartJsData(chartApiData, 'daily');
-                    
-                    const canvas = document.getElementById(chartCanvasId);
-                    if (chartInstances[chartCanvasId]) chartInstances[chartCanvasId].destroy();
-                    chartInstances[chartCanvasId] = new Chart(canvas, {
-                        type: 'line',
-                        data: {
-                            labels: parsedData.labels,
-                            datasets: [{ data: parsedData.closes, borderColor: 'var(--primary-color)', fill: false }]
-                        },
-                        options: chartDefaultOptions
-                    });
-                }
-
                 chatWindow.scrollTop = chatWindow.scrollHeight;
             })
             .catch(error => {
@@ -659,60 +625,36 @@
     
         function renderFinancialTable(jsonData, targetElementId, notFoundMessage = '정보 없음') {
             const targetElement = document.getElementById(targetElementId);
-            if (!targetElement) {
-                console.error(`Target element with ID '${targetElementId}' not found.`);
-                return;
-            }
-
+            if (!targetElement) { console.error(`Target element with ID '${targetElementId}' not found.`); return; }
             let data;
-            try {
-                data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
-            } catch (e) {
-                targetElement.innerHTML = `<p class="text-danger text-center p-4">재무정보 표시 중 오류가 발생했습니다.</p>`;
-                return;
-            }
-
+            try { data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData; }
+            catch (e) { targetElement.innerHTML = `<p class="text-danger text-center p-4">재무정보 표시 중 오류가 발생했습니다.</p>`; return; }
             if (!data || !data.columns || !data.index || !data.data || data.data.length === 0) {
-                targetElement.innerHTML = `<p class="text-muted text-center p-4">${notFoundMessage}</p>`;
-                return;
+                targetElement.innerHTML = `<p class="text-muted text-center p-4">${notFoundMessage}</p>`; return;
             }
-
             const columns = data.columns;
             const index = data.index;
             const tableData = data.data;
-
             let html = '<div class="table-responsive"><table class="table table-bordered table-hover modal-financial-table">';
             html += '<thead><tr><th>항목명</th>';
-            columns.forEach(col => {
-                html += `<th>${col}</th>`;
-            });
+            columns.forEach(col => { html += `<th>${col}</th>`; });
             html += '</tr></thead><tbody>';
-
             index.forEach((rowName, i) => {
                 html += `<tr><td><strong>${rowName}</strong></td>`;
                 if (tableData[i]) {
                     tableData[i].forEach(value => {
                         let formattedValue = '';
                         if (typeof value === 'number') {
-                            if (Math.abs(value) >= 1_0000_0000_0000) {
-                                formattedValue = `${(value / 1_0000_0000_0000).toFixed(2)} 조원`;
-                            } else if (Math.abs(value) >= 1_0000_0000) {
-                                formattedValue = `${(value / 1_0000_0000).toFixed(2)} 억원`;
-                            } else {
-                                formattedValue = value.toLocaleString();
-                            }
-                        } else {
-                            formattedValue = value;
-                        }
+                            if (Math.abs(value) >= 1_0000_0000_0000) formattedValue = `${(value / 1_0000_0000_0000).toFixed(2)} 조원`;
+                            else if (Math.abs(value) >= 1_0000_0000) formattedValue = `${(value / 1_0000_0000).toFixed(2)} 억원`;
+                            else formattedValue = value.toLocaleString();
+                        } else { formattedValue = value; }
                         html += `<td>${formattedValue}</td>`;
                     });
-                } else {
-                    html += `<td>데이터 없음</td>`.repeat(columns.length);
-                }
+                } else { html += `<td>데이터 없음</td>`.repeat(columns.length); }
                 html += '</tr>';
             });
             html += '</tbody></table></div>';
-            
             targetElement.innerHTML = html;
         }
 

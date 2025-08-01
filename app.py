@@ -17,6 +17,8 @@ import re
 import sys
 from run import EnhancedStockPredictor
 
+from flask_apscheduler import APScheduler # <-- 추가
+
 from transformers import AutoTokenizer, pipeline
 from blueprints.analysis import analysis_bp
 from blueprints.tables import tables_bp
@@ -33,6 +35,9 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
 # ── 금융 키워드 세트 (data-files/finance.csv) ─────────────────────────
 finance_df = pd.read_csv(
     os.path.join(os.path.dirname(__file__), "data_files", "finance.csv"),
@@ -69,6 +74,7 @@ def clean_for_sentiment(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
+
 # ── 기업명 추출기 로딩 ────────────────────────────────────
 with open(os.path.join(os.path.dirname(__file__), 'data_files', 'keyword_processor.pkl'), 'rb') as f:
     keyword_processor = pickle.load(f)
@@ -80,6 +86,43 @@ COMPANY_SET = set(corp_df['corp_name'].astype(str))
 STOPWORDS = {"ETF", "ETN", "신탁", "SPAC", "펀드", "리츠"}
 
 BOUNDARY = r"[가-힣A-Za-z0-9]"   # 단어로 취급할 문자들
+
+
+@scheduler.task('cron', id='update_market_cache_job', hour='*')
+def update_market_cache():
+    """
+    [신규] 1시간마다 주기적으로 실행되어 시장 데이터 캐시를 최신화하는 함수.
+    """
+    with app.app_context(): # 스케줄러가 Flask 앱의 컨텍스트 안에서 실행되도록 설정
+        print("⏰ 주기적인 캐시 업데이트 작업을 시작합니다...")
+        try:
+            latest_bday = get_latest_business_day()
+            
+            new_cache_data = {'date': latest_bday}
+            
+            kospi_all, kosdaq_all = get_market_rank_data(latest_bday)
+            key_stats_full = get_key_statistic_current_data()
+            important_key_stats = [item for item in key_stats_full if item.get('DATA_VALUE') not in ['N/A', '', None]][:20]
+            korean_news = get_general_market_news()
+            international_news = get_international_market_news()
+
+            if not kospi_all or not kosdaq_all or not korean_news:
+                 raise ValueError("필수 데이터(시장 순위, 뉴스) 수집에 실패했습니다.")
+
+            new_cache_data.update({
+                'kospi_all_data': kospi_all,
+                'kosdaq_all_data': kosdaq_all,
+                'korean_market_news': korean_news,
+                'international_market_news': international_news,
+                'key_statistic_current_data': important_key_stats
+            })
+            
+            with open(CACHE_PATH, 'w', encoding='utf-8') as f:
+                json.dump(new_cache_data, f, ensure_ascii=False, indent=2)
+            print("✅ 주기적인 캐시 업데이트 작업 성공.")
+
+        except Exception as e:
+            print(f"❌ 주기적인 캐시 업데이트 작업 실패: {e}")
 
 def is_standalone(word: str, text: str) -> bool:
     """
@@ -163,7 +206,26 @@ CACHE_PATH = 'cache/market_data.json'
 CACHE_DIR = 'cache'
 
 def get_latest_business_day():
-    return stock.get_nearest_business_day_in_a_week()
+    """
+    [개선] KRX 데이터 조회 실패 시에도 안정적으로 최신 영업일을 반환하는 함수.
+    """
+    try:
+        latest_bday = stock.get_nearest_business_day_in_a_week()
+        print(f"✅ pykrx를 통해 최신 영업일 조회 성공: {latest_bday}")
+        return latest_bday
+    except IndexError:
+        print("⚠️ pykrx 영업일 조회 실패. 직접 계산을 시도합니다.")
+        today = datetime.now()
+        if today.weekday() == 5:
+            latest_bday = today - timedelta(days=1)
+        elif today.weekday() == 6:
+            latest_bday = today - timedelta(days=2)
+        else:
+            latest_bday = today
+        
+        bday_str = latest_bday.strftime("%Y%m%d")
+        print(f"✅ 직접 계산된 최신 영업일: {bday_str}")
+        return bday_str
 
 def get_market_rank_data(date_str):
     kospi_df = stock.get_market_ohlcv(date_str, market="KOSPI").reset_index()
@@ -624,65 +686,31 @@ def index_main():
 
 @app.route('/index')
 def index():
-    os.makedirs(CACHE_DIR, exist_ok=True)
+    """
+    [수정됨] 캐시 파일을 직접 읽기만 하도록 단순화된 함수.
+    """
     try:
         with open(CACHE_PATH, 'r', encoding='utf-8') as f:
             cache = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        cache = {}
+        # 캐시 파일이 없으면 비어있는 정보로 페이지를 우선 보여줌
+        cache = {
+            'date': datetime.now().strftime('%Y%m%d'),
+            'kospi_all_data': [], 'kosdaq_all_data': [],
+            'korean_market_news': [], 'international_market_news': [],
+            'key_statistic_current_data': []
+        }
 
-    latest_bday = get_latest_business_day()
+    latest_bday = cache.get('date', datetime.now().strftime('%Y%m%d'))
     formatted_today_date = datetime.strptime(latest_bday, '%Y%m%d').strftime('%m월 %d일')
-
-    if cache.get('date') != latest_bday:
-        print(f"DEBUG: 캐시 업데이트 필요. 현재 영업일: {latest_bday}, 캐시된 날짜: {cache.get('date')}")
-        new_cache = {'date': latest_bday}
-        
-        kospi_all_data = []
-        kosdaq_all_data = []
-
-        try:
-            kospi_all_data, kosdaq_all_data = get_market_rank_data(latest_bday)
-            
-            current_key_stats_full = get_key_statistic_current_data()
-            filtered_key_stats = [item for item in current_key_stats_full if item.get('DATA_VALUE') not in ['N/A', '', None]]
-            important_key_stats = filtered_key_stats[:20]
-
-            korean_news = get_general_market_news()
-            international_news = get_international_market_news()
-
-            new_cache.update({
-                'kospi_all_data': kospi_all_data,
-                'kosdaq_all_data': kosdaq_all_data,
-                'korean_market_news': korean_news,
-                'international_market_news': international_news,
-                'key_statistic_current_data': important_key_stats
-            })
-        except Exception as e:
-            print(f"Error creating cache: {e}")
-            traceback.print_exc()
-            new_cache.update({
-                'kospi_all_data': [],
-                'kosdaq_all_data': [],
-                'korean_market_news': [],
-                'international_market_news': [],
-                'key_statistic_current_data': []
-            })
-        cache = new_cache
-        with open(CACHE_PATH, 'w', encoding='utf-8') as f:
-            json.dump(cache, f, ensure_ascii=False, indent=2)
-    else:
-        print(f"DEBUG: 캐시 최신 상태 유지. 날짜: {latest_bday}")
-
-
+    
     context = {
         'today': datetime.strptime(latest_bday, '%Y%m%d').strftime('%Y-%m-%d'),
         'formatted_today_date': formatted_today_date,
-        **cache,
-        'key_statistic_current_data': cache.get('key_statistic_current_data', []),
-        'korean_market_news': cache.get('korean_market_news', []),
-        'international_market_news': cache.get('international_market_news', [])
+        **cache
     }
+
+    # ... (이하 차트 데이터 로드 부분은 기존과 동일) ...
     days_to_fetch = 60
     start_date, end_date = datetime.now() - timedelta(days=days_to_fetch), datetime.now()
 
@@ -692,53 +720,44 @@ def index():
             if df is not None and not df.empty and 'Date' in df.columns:
                 
                 if isinstance(df.columns, pd.MultiIndex):
-                    print(f"DEBUG: Flattening MultiIndex columns for {name}")
                     df.columns = df.columns.get_level_values(0)
                     df = df.loc[:,~df.columns.duplicated()]
                 
                 if 'Close' not in df.columns:
-                    print(f"ERROR: 'Close' column not found for {name} after processing. Columns are: {df.columns.tolist()}")
                     context[f'{name}_data'], context[f'{name}_info'] = [], {'value': 'N/A'}
                     continue
 
                 df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
                 df.set_index('Date', inplace=True)
-                df_for_chart = df.reset_index().copy()
+                df_for_chart = df.reset_index()
                 df_for_chart['Date'] = pd.to_datetime(df_for_chart['Date']).dt.strftime('%Y-%m-%d')
                 context[f'{name}_data'] = df_for_chart.tail(30).to_dict('records')
                 if len(df) >= 2:
                     context[f'{name}_info'] = calculate_change_info(df.copy(), name.upper())
                 else:
                     context[f'{name}_info'] = {'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
-                    print(f"DEBUG: {name.upper()} 차트/정보 데이터 부족. 정보 계산 건너뜀.")
             else:
                 context[f'{name}_data'], context[f'{name}_info'] = [], {'value': 'N/A'}
-                print(f"DEBUG: {name.upper()} 차트/정보 데이터 로드 실패 또는 비어 있음.")
         except Exception as e:
             print(f"Error processing {name} data: {e}")
-            traceback.print_exc(file=sys.stderr)
             context[f'{name}_data'], context[f'{name}_info'] = [], {'value': 'N/A'}
-
 
     try:
         wti_df = get_wti_data(days_to_fetch)
         if not wti_df.empty and 'Date' in wti_df.columns:
             wti_df['Close'] = pd.to_numeric(wti_df['Close'], errors='coerce')
             wti_df.set_index('Date', inplace=True)
-            wti_df_for_chart = wti_df.reset_index().copy()
+            wti_df_for_chart = wti_df.reset_index()
             wti_df_for_chart['Date'] = pd.to_datetime(wti_df_for_chart['Date']).dt.strftime('%Y-%m-%d')
             context['wti_data'] = wti_df_for_chart.tail(30).to_dict('records')
             if len(wti_df) >= 2:
                 context['wti_info'] = calculate_change_info(wti_df.copy(), 'WTI')
             else:
                 context['wti_info'] = {'value': 'N/A', 'change': 'N/A', 'change_pct': 'N/A', 'raw_change': 0}
-                print(f"DEBUG: WTI 차트/정보 데이터 부족. 정보 계산 건너뜀.")
         else:
             context['wti_data'], context['wti_info'] = [], {'value': 'N/A'}
-            print(f"DEBUG: WTI 차트/정보 데이터 로드 실패 또는 비어 있음.")
     except Exception as e:
         print(f"Error processing WTI data: {e}")
-        traceback.print_exc(file=sys.stderr)
         context['wti_data'], context['wti_info'] = [], {'value': 'N/A'}
 
     kospi_all_data = cache.get('kospi_all_data', [])
@@ -752,8 +771,8 @@ def index():
     context['kosdaq_top_gainers'] = sorted(kosdaq_all_data, key=lambda x: x.get('ChangeRatio', -1000), reverse=True)[:10]
     context['kosdaq_top_losers'] = sorted(kosdaq_all_data, key=lambda x: x.get('ChangeRatio', 1000))[:10]
 
-
     return render_template('index.html', **context)
+
 
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(analysis_bp)
