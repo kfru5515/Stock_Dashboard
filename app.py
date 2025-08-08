@@ -17,7 +17,7 @@ import re
 import sys
 from run import EnhancedStockPredictor
 
-from flask_apscheduler import APScheduler # <-- 추가
+
 
 from transformers import AutoTokenizer, pipeline
 from blueprints.analysis import analysis_bp
@@ -35,9 +35,6 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-scheduler = APScheduler()
-scheduler.init_app(app)
-scheduler.start()
 # ── 금융 키워드 세트 (data-files/finance.csv) ─────────────────────────
 finance_df = pd.read_csv(
     os.path.join(os.path.dirname(__file__), "data_files", "finance.csv"),
@@ -88,41 +85,71 @@ STOPWORDS = {"ETF", "ETN", "신탁", "SPAC", "펀드", "리츠"}
 BOUNDARY = r"[가-힣A-Za-z0-9]"   # 단어로 취급할 문자들
 
 
-@scheduler.task('cron', id='update_market_cache_job', hour='*')
-def update_market_cache():
+def check_and_update_market_cache():
     """
-    [신규] 1시간마다 주기적으로 실행되어 시장 데이터 캐시를 최신화하는 함수.
+    [완전 수정] 서버 시작 시 캐시의 유효성을 검사하고, 필요할 때만 데이터를 업데이트하는 함수.
+    On-demand 서버 환경에 최적화되었습니다.
     """
-    with app.app_context(): # 스케줄러가 Flask 앱의 컨텍스트 안에서 실행되도록 설정
-        print("⏰ 주기적인 캐시 업데이트 작업을 시작합니다...")
-        try:
-            latest_bday = get_latest_business_day()
-            
-            new_cache_data = {'date': latest_bday}
-            
-            kospi_all, kosdaq_all = get_market_rank_data(latest_bday)
-            key_stats_full = get_key_statistic_current_data()
-            important_key_stats = [item for item in key_stats_full if item.get('DATA_VALUE') not in ['N/A', '', None]][:20]
-            korean_news = get_general_market_news()
-            international_news = get_international_market_news()
+    print("⚙️ 캐시 유효성 검사를 시작합니다...")
+    try:
+        # 1. 실제 최신 영업일 확인
+        latest_bday = get_latest_business_day()
 
-            if not kospi_all or not kosdaq_all or not korean_news:
-                 raise ValueError("필수 데이터(시장 순위, 뉴스) 수집에 실패했습니다.")
+        # 2. 기존 캐시 파일 확인
+        if os.path.exists(CACHE_PATH):
+            with open(CACHE_PATH, 'r', encoding='utf-8') as f:
+                try:
+                    cached_data = json.load(f)
+                    cached_date = cached_data.get('date')
+                    # 3. 캐시가 이미 최신이면 함수 종료
+                    if cached_date == latest_bday:
+                        print(f"✅ 캐시가 이미 최신입니다. (날짜: {latest_bday})")
+                        return
+                except json.JSONDecodeError:
+                    print("⚠️ 캐시 파일이 손상되었습니다. 새로 생성합니다.")
 
-            new_cache_data.update({
-                'kospi_all_data': kospi_all,
-                'kosdaq_all_data': kosdaq_all,
-                'korean_market_news': korean_news,
-                'international_market_news': international_news,
-                'key_statistic_current_data': important_key_stats
-            })
-            
-            with open(CACHE_PATH, 'w', encoding='utf-8') as f:
-                json.dump(new_cache_data, f, ensure_ascii=False, indent=2)
-            print("✅ 주기적인 캐시 업데이트 작업 성공.")
+        print(f"🔄 캐시가 오래되었거나 없습니다. 업데이트를 시작합니다. (목표 날짜: {latest_bday})")
 
-        except Exception as e:
-            print(f"❌ 주기적인 캐시 업데이트 작업 실패: {e}")
+        # 4. 캐시가 최신이 아닐 경우, 데이터 조회 및 업데이트 (기존의 안정적인 조회 로직 사용)
+        kospi_all, kosdaq_all = None, None
+        target_date_str_success = None
+
+        for i in range(5): # 최대 5일 전까지 시도
+            try:
+                target_date_str = stock.get_nearest_business_day_in_a_week((datetime.now() - timedelta(days=i)).strftime('%Y%m%d'))
+                kospi_all, kosdaq_all = get_market_rank_data(target_date_str)
+                if kospi_all and kosdaq_all:
+                    print(f"✅ 데이터 조회 성공 (날짜: {target_date_str})")
+                    target_date_str_success = target_date_str
+                    break
+            except Exception:
+                continue
+
+        if not target_date_str_success:
+            print("❌ 최근 5일간의 시장 순위 데이터를 가져오는 데 실패했습니다.")
+            return # 캐시 업데이트 실패 시, 기존 캐시 유지
+
+        # 5. 새로운 데이터로 캐시 파일 쓰기
+        key_stats_full = get_key_statistic_current_data()
+        important_key_stats = [item for item in key_stats_full if item.get('DATA_VALUE') not in ['N/A', '', None]][:20]
+        korean_news = get_general_market_news()
+        international_news = get_international_market_news()
+
+        new_cache_data = {
+            'date': target_date_str_success,
+            'kospi_all_data': kospi_all,
+            'kosdaq_all_data': kosdaq_all,
+            'korean_market_news': korean_news or [],
+            'international_market_news': international_news or [],
+            'key_statistic_current_data': important_key_stats
+        }
+
+        with open(CACHE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(new_cache_data, f, ensure_ascii=False, indent=2)
+        print("✅ 새로운 데이터로 캐시 파일을 성공적으로 업데이트했습니다.")
+
+    except Exception as e:
+        print(f"❌ 캐시 업데이트 작업 중 심각한 오류 발생: {e}")
 
 def is_standalone(word: str, text: str) -> bool:
     """
@@ -785,6 +812,7 @@ app.register_blueprint(search_bp)
 with app.app_context():
     try:
         initialize_global_data()
+        check_and_update_market_cache() 
         app.config['QUANT_REPORT_CACHE'] = run_and_cache_quant_report()
         print("--- 모든 초기 데이터 로딩 완료 ---", flush=True)
     except Exception as e:
