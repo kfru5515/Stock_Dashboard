@@ -85,6 +85,7 @@ NEWS_API_KEY="YOUR_NEWS_API_KEY"
 4. 애플리케이션 실행
 flask run
 
+app.py 실행 전 bkp.py, learn.py 먼저 실행
 
 작성자
 전현준 kfru5514@gmail.com

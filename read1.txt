@@ -1,1 +1,0 @@
-app.py 실행 전 bkp.py, learn.py 먼저 실행
