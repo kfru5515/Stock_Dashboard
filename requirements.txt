@@ -30,6 +30,7 @@ evaluate
 seaborn              
 matplotlib           
 Pillow                
+accelerate>=0.26.0
 
 # ----- 자연어 처리 helper --
 fuzzywuzzy
